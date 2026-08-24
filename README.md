@@ -25,6 +25,18 @@ Veluna is a native desktop music application that treats `mpv` as its audio engi
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/ss1.png" alt="Veluna Home Dashboard" width="100%" />
+</p>
+
+<p align="center">
+  <img src="screenshots/ss2.png" alt="Veluna Immersive Full-Screen Synced Lyrics" width="100%" />
+</p>
+
+---
+
 ## Features
 
 ### 🔍 Streaming & Search
@@ -378,6 +390,9 @@ veluna/
 │   └── binaries/                 # Windows-only bundled executables
 ├── docs/                         # Landing page & installer script
 ├── packaging/                    # Arch Linux PKGBUILD & .SRCINFO
+├── screenshots/                  # Preview screenshots
+│   ├── ss1.png                   # Home dashboard & discovery
+│   └── ss2.png                   # Immersive full-screen synced lyrics
 ├── public/
 ├── index.html
 ├── package.json
