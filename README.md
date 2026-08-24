@@ -7,6 +7,14 @@
 > A free, open-source desktop music player built for people who actually listen.
 > Stream from YouTube. Download for offline use. Own your music — no accounts, no ads, no subscriptions.
 
+<p align="center">
+  <img src="screenshots/ss1.png" alt="Veluna Home Dashboard" width="100%" />
+</p>
+
+<p align="center">
+  <img src="screenshots/ss2.png" alt="Veluna Immersive Full-Screen Synced Lyrics" width="100%" />
+</p>
+
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational?style=flat-square&logo=linux&logoColor=white)](https://github.com/rry0ku/veluna/releases)
 [![License](https://img.shields.io/badge/license-MIT-39FF14?style=flat-square)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
@@ -22,18 +30,6 @@
 Veluna is a native desktop music application that treats `mpv` as its audio engine and `yt-dlp` as its streaming backend, wrapped inside a Tauri v2 shell (Rust + React). The result is a player with near-zero resource overhead, full system integration on both Linux and Windows, and none of the baggage that comes with a web-based music service.
 
 > No account required. No telemetry. No ads. No cloud dependency beyond YouTube itself.
-
----
-
-## Screenshots
-
-<p align="center">
-  <img src="screenshots/ss1.png" alt="Veluna Home Dashboard" width="100%" />
-</p>
-
-<p align="center">
-  <img src="screenshots/ss2.png" alt="Veluna Immersive Full-Screen Synced Lyrics" width="100%" />
-</p>
 
 ---
 
