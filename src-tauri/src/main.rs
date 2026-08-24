@@ -121,7 +121,6 @@ static BIN_FFPROBE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 static BIN_FFMPEG:  std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 fn init_bin_paths() {
-    let home = std::env::var("HOME").unwrap_or_default();
     let mut paths: Vec<String> = Vec::new();
 
     #[cfg(target_os = "windows")]
@@ -152,7 +151,7 @@ fn init_bin_paths() {
 
     #[cfg(not(target_os = "windows"))]
     {
-        
+        let home = std::env::var("HOME").unwrap_or_default();
         let appimage = std::env::var("APPIMAGE").is_ok();
         let host = if appimage { "/proc/1/root" } else { "" };
 
