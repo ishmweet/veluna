@@ -4,11 +4,11 @@
   <img src="https://github.com/rry0ku/veluna/blob/main/src-tauri/icons/128x128%402x.png?raw=true" alt="Veluna logo" width="128" />
 </p>
 
-<h3 align="center">You're paying for music you could be getting for free. Right now.</h3>
+<h3 align="center">A native, ad-free desktop music player and library manager.</h3>
 
 <p align="center">
-A free, open-source desktop music player for people who are done with ads, subscriptions, and apps that spy on them.<br/>
-Stream from YouTube. Download for offline use. Own your library. No account, ever.
+An open-source desktop client that plays your local music library and streams audio from YouTube for personal use, built on <code>mpv</code> and <code>yt-dlp</code>.<br/>
+No account, no telemetry, no ads.
 </p>
 
 <p align="center">
@@ -32,19 +32,17 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Stars](https://img.shields.io/github/stars/rry0ku/veluna?style=flat-square&color=39FF14)](https://github.com/rry0ku/veluna/stargazers)
 
-**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Contribute](CONTRIBUTING.md) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
+**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Contribute](CONTRIBUTING.md) · [Report a Bug](https://github.com/rry0ku/veluna/issues) · [Legal & Fair Use](#legal--fair-use)**
 
 ---
 
-## Ask yourself this
+## What is Veluna?
 
-How much did you pay for music software last month? How many ads did you sit through to hear a song you already knew the words to? How much of your listening history does some server somewhere know about, that you never agreed to hand over?
+Veluna is a native desktop music application built with Tauri (Rust + React). It's primarily a local library manager, playlist tool, and playback engine, with an optional streaming/search feature powered by `yt-dlp` and `mpv` for finding and previewing tracks from YouTube.
 
-Veluna exists because the answer to all three of those should be zero.
+There's no account system, no telemetry, and no ads. It runs the same on Linux and Windows, and it's designed to stay light on system resources.
 
-No account required. No telemetry. No ads. No cloud dependency beyond YouTube itself. It streams straight from YouTube through `yt-dlp` and plays it through `mpv`, wrapped in a native Tauri shell built with Rust and React. That means it's fast, it's light on your system, and it runs the same whether you're on Linux or Windows.
-
-You already have everything you need to stop paying for this. It's one download away.
+> **Note on the YouTube streaming feature:** this functions similarly to a web browser accessing YouTube, it does not host, redistribute, or store any copyrighted audio on Veluna's own infrastructure (there is none, everything runs locally on your machine). Downloaded files are saved locally for personal use only, the same category of use as `yt-dlp`, `youtube-dl`, or a browser's own "save video" extension. See [Legal & Fair Use](#legal--fair-use) below.
 
 ---
 
@@ -106,7 +104,7 @@ You already have everything you need to stop paying for this. It's one download 
 
 ### 🎮 Discord Rich Presence
 - Shows current playing track, artist, elapsed/remaining time, and album art on your Discord profile
-- Interactive buttons for "Listen on YouTube" and "Download Veluna"
+- Interactive buttons for "Listen on YouTube" and "View on GitHub"
 
 ### 🖥️ System Tray *(optional)*
 - Left-click to show/hide the window; tray menu with Play/Pause, Next, Previous, Show, Quit
@@ -182,33 +180,9 @@ sudo apt install ./veluna_<version>_amd64.deb
 
 `apt` resolves and installs all required system dependencies automatically: `mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`.
 
-> For system tray support on GNOME, install `libayatana-appindicator3-1`.
-
-Launch from your application menu or run:
-
-```bash
-veluna
-```
-
-### Linux, Fedora / RedHat
-
-```bash
-sudo dnf install ./veluna_<version>_x86_64.rpm
-```
-
-`dnf` resolves and installs all required system dependencies automatically.
-
-> For system tray support on GNOME, install `libayatana-appindicator-gtk3`.
-
-Launch from your application menu or run:
-
-```bash
-veluna
-```
-
 ### Windows
 
-Download and run the `veluna_<version>_x64-setup.exe` installer from the [Releases](https://github.com/rry0ku/veluna/releases) page. The installer automatically bundles all required audio binaries (`mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`) into the installation directory. No manual setup, package managers, or extra tools required.
+Download and run the `.exe` installer from the [Releases](https://github.com/rry0ku/veluna/releases) page. The installer bundles all required binaries.
 
 ---
 
@@ -218,41 +192,9 @@ Download and run the `veluna_<version>_x64-setup.exe` installer from the [Releas
 
 | Requirement | Version | Notes |
 |---|---|---|
-| [Node.js](https://nodejs.org/) | 18+ | Frontend build & Tauri CLI (`npm`) |
+| [Node.js](https://nodejs.org/) | 18+ | Frontend build |
 | [Rust](https://rustup.rs/) | stable | `rustup install stable` |
-
-### Linux, System Dependencies
-
-For Arch Linux (Pacman):
-```bash
-sudo pacman -S --needed mpv yt-dlp ffmpeg openssl pkg-config \
-  webkit2gtk-4.1 gtk3 cairo gdk-pixbuf2 glib2 \
-  libayatana-appindicator librsvg
-```
-
-For Debian/Ubuntu/Mint (APT):
-```bash
-sudo apt install mpv yt-dlp ffmpeg libssl-dev pkg-config \
-  libwebkit2gtk-4.1-dev libgtk-3-dev \
-  libayatana-appindicator3-dev librsvg2-dev
-```
-
-For Fedora/RedHat (DNF):
-```bash
-sudo dnf install -y mpv yt-dlp ffmpeg openssl-devel pkg-config \
-  webkit2gtk4.1-devel gtk3-devel glib2-devel \
-  librsvg2-devel libayatana-appindicator-gtk3-devel
-```
-
-### Windows, Bundled Binaries
-
-Run the automated setup script to download and configure all dependencies:
-
-```bash
-npm run setup:deps
-```
-
-*(Alternatively, download `binaries.zip` from the [Releases](https://github.com/rry0ku/veluna/releases) page and extract directly into `src-tauri/binaries/`).*
+| [Tauri CLI](https://tauri.app/start/prerequisites/) | v2 | `cargo install tauri-cli --version "^2"` |
 
 ### Clone & Build
 
@@ -353,56 +295,6 @@ Playlist saved to localStorage
 
 ---
 
-## Project Structure
-
-```
-veluna/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                # Automated CI checks (Linux & Windows)
-│       └── release.yml           # Automated release packaging (.deb, .rpm, .exe)
-├── scripts/
-│   └── setup-deps.js             # Automated cross-platform Windows binaries setup
-├── src/
-│   ├── App.tsx                   # React UI main entry & core state
-│   ├── App.css                   # Core design system & component styles
-│   ├── constants.ts              # App constants and defaults
-│   ├── types.ts                  # Shared TypeScript type definitions
-│   ├── utils.ts                  # Common helper utilities & validators
-│   └── components/               # Modular UI sub-components
-│       ├── DownloadsPanel.tsx    # Offline library & folder downloads panel
-│       ├── Modals.tsx            # Consolidated modal overlays & dialogues
-│       ├── SettingsPanel.tsx     # Full app settings panel interface
-│       ├── SleepTimerPopover.tsx # Sleep timer popover overlay
-│       ├── SpeedSelector.tsx     # Playback rate controller popover
-│       ├── ThemedSelect.tsx      # Custom styled dropdown select
-│       ├── TrackRow.tsx          # Track list item renderer with context menus
-│       ├── VirtualTrackList.tsx  # Virtualized list for large collections
-│       └── WaveformBar.tsx       # Audio waveform progress bar
-├── src-tauri/
-│   ├── src/
-│   │   ├── main.rs               # Rust backend, MPV IPC observer & command handlers
-│   │   └── tray.rs               # System tray (Linux + Windows)
-│   ├── build.rs
-│   ├── Cargo.toml
-│   ├── tauri.conf.json           # Main Tauri configuration & Linux packaging
-│   ├── tauri.windows.conf.json   # Windows sidecar binary bundling config
-│   ├── icons/
-│   ├── packaging/                # Linux post-install scripts
-│   └── binaries/                 # Windows bundled executables
-├── docs/                         # Landing page & installer script
-├── packaging/                    # Linux packaging resources
-├── screenshots/                  # Preview screenshots
-│   ├── ss1.png                   # Home dashboard & discovery
-│   └── ss2.png                   # Immersive full-screen synced lyrics
-├── public/
-├── index.html
-├── package.json
-└── vite.config.ts
-```
-
----
-
 ## Data & Privacy
 
 All application state is stored locally in the webview's `localStorage` under `vg_*` prefixed keys. No database, no cloud sync, no external server. The only network requests Veluna makes:
@@ -431,10 +323,20 @@ npm run tauri dev
 
 ---
 
+## Legal & Fair Use
+
+Veluna does not host, mirror, or redistribute any copyrighted media. It is a local playback client, comparable in function to a web browser or to standalone tools like `yt-dlp` and `mpv`, which it uses under their own respective licenses. All streaming and download functionality operates by making the same publicly accessible requests a browser would; no content is cached, proxied, or served from any Veluna-owned infrastructure. There isn't any, everything runs locally on your machine.
+
+Use of the streaming/download feature is intended for personal, non-commercial use in accordance with applicable copyright law in your jurisdiction, and is subject to YouTube's [Terms of Service](https://www.youtube.com/t/terms). Users are responsible for how they use this software. If you are a rights holder with a concern about this project, please open an issue rather than filing a takedown, most concerns can be resolved by adjusting behavior rather than removing the tool.
+
+This project draws directly on the precedent set by [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) and [`youtube-dl`](https://github.com/ytdl-org/youtube-dl), both of which remain active, widely-used open-source projects under the same legal reasoning.
+
+---
+
 ## License
 
 MIT © [rry0ku](https://github.com/rry0ku)
 
 ---
 
-*Built with Rust, React, and a stubborn belief that music software shouldn't interrupt your listening with ads.*
+*Built with Rust, React, and a native desktop player that respects your system resources.*
