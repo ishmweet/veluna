@@ -204,7 +204,7 @@ veluna
 
 ### Windows
 
-Download and run the `.exe` installer from the [Releases](https://github.com/rry0ku/veluna/releases) page. The NSIS installer bundles all required binaries (`mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`) and extracts them to `%LOCALAPPDATA%\Programs\veluna-deps\` on first launch. No additional setup required.
+Download and run the `veluna_<version>_x64-setup.exe` installer from the [Releases](https://github.com/rry0ku/veluna/releases) page. The installer automatically bundles all required audio binaries (`mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`) into the installation directory. No manual setup, package managers, or extra tools required.
 
 ---
 
@@ -356,41 +356,39 @@ Playlist saved to localStorage
 
 ```
 veluna/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                # Automated CI checks (Linux & Windows)
+│       └── release.yml           # Automated release packaging (.deb, .rpm, .exe)
 ├── src/
 │   ├── App.tsx                   # React UI main entry & core state
 │   ├── App.css                   # Core design system & component styles
 │   ├── constants.ts              # App constants and defaults
 │   ├── types.ts                  # Shared TypeScript type definitions
-│   ├── utils.ts                  # Common helper utilities
+│   ├── utils.ts                  # Common helper utilities & validators
 │   └── components/               # Modular UI sub-components
-│       ├── CopyButton.tsx        # One-click clipboard copy button
-│       ├── CsvImportModal.tsx    # Spotify CSV playlist import modal
 │       ├── DownloadsPanel.tsx    # Offline library & folder downloads panel
-│       ├── ImportButton.tsx      # Sidebar import playlist dropdown
-│       ├── ImportResultModal.tsx # Post-import summary & naming dialogue
-│       ├── MetadataEditModal.tsx # Track ID3 metadata editor modal
-│       ├── Modals.tsx            # Modal overlays & confirmations
+│       ├── Modals.tsx            # Consolidated modal overlays & dialogues
 │       ├── SettingsPanel.tsx     # Full app settings panel interface
 │       ├── SleepTimerPopover.tsx # Sleep timer popover overlay
 │       ├── SpeedSelector.tsx     # Playback rate controller popover
 │       ├── ThemedSelect.tsx      # Custom styled dropdown select
 │       ├── TrackRow.tsx          # Track list item renderer with context menus
 │       ├── VirtualTrackList.tsx  # Virtualized list for large collections
-│       ├── WaveformBar.tsx       # Audio waveform progress bar
-│       └── YtImportModal.tsx     # YouTube playlist import modal
+│       └── WaveformBar.tsx       # Audio waveform progress bar
 ├── src-tauri/
 │   ├── src/
-│   │   ├── lib.rs                # Tauri library entry
-│   │   ├── main.rs               # Rust backend & command handlers
+│   │   ├── main.rs               # Rust backend, MPV IPC observer & command handlers
 │   │   └── tray.rs               # System tray (Linux + Windows)
 │   ├── build.rs
 │   ├── Cargo.toml
-│   ├── tauri.conf.json
-│   ├── tauri.windows.conf.json
+│   ├── tauri.conf.json           # Main Tauri configuration & Linux packaging
+│   ├── tauri.windows.conf.json   # Windows sidecar binary bundling config
 │   ├── icons/
-│   └── binaries/                 # Windows-only bundled executables
+│   ├── packaging/                # Linux post-install scripts
+│   └── binaries/                 # Windows bundled executables
 ├── docs/                         # Landing page & installer script
-├── packaging/                    # Arch Linux PKGBUILD & .SRCINFO
+├── packaging/                    # Linux packaging resources
 ├── screenshots/                  # Preview screenshots
 │   ├── ss1.png                   # Home dashboard & discovery
 │   └── ss2.png                   # Immersive full-screen synced lyrics
