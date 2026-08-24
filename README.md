@@ -1,19 +1,19 @@
 # Veluna
 
 <p align="center">
-  <img src="https://github.com/corvainx/veluna/blob/main/src-tauri/icons/128x128%402x.png?raw=true" alt="Veluna logo" width="128" />
+  <img src="https://github.com/rry0ku/veluna/blob/main/src-tauri/icons/128x128%402x.png?raw=true" alt="Veluna logo" width="128" />
 </p>
 
 > A free, open-source desktop music player built for people who actually listen.
 > Stream from YouTube. Download for offline use. Own your music — no accounts, no ads, no subscriptions.
 
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational?style=flat-square&logo=linux&logoColor=white)](https://github.com/corvainx/veluna/releases)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational?style=flat-square&logo=linux&logoColor=white)](https://github.com/rry0ku/veluna/releases)
 [![License](https://img.shields.io/badge/license-MIT-39FF14?style=flat-square)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-stable-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 
-**[Download](https://github.com/corvainx/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/corvainx/veluna/issues)**
+**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
 
 ---
 
@@ -138,7 +138,7 @@ Export all playlists, queue, play history, EQ settings, search history, Quick Pi
 Build and install native Arch Linux `.pkg.tar.zst` package with `makepkg`:
 
 ```bash
-git clone https://github.com/corvainx/veluna.git
+git clone https://github.com/rry0ku/veluna.git
 cd veluna/packaging
 makepkg -si
 ```
@@ -177,7 +177,7 @@ veluna
 
 ### Windows
 
-Download and run the `.exe` installer from the [Releases](https://github.com/corvainx/veluna/releases) page. The NSIS installer bundles all required binaries (`mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`) and extracts them to `%LOCALAPPDATA%\Programs\veluna-deps\` on first launch. No additional setup required.
+Download and run the `.exe` installer from the [Releases](https://github.com/rry0ku/veluna/releases) page. The NSIS installer bundles all required binaries (`mpv`, `yt-dlp`, `ffmpeg`, `ffprobe`) and extracts them to `%LOCALAPPDATA%\Programs\veluna-deps\` on first launch. No additional setup required.
 
 ---
 
@@ -216,7 +216,7 @@ sudo dnf install -y mpv yt-dlp ffmpeg openssl-devel pkg-config \
 
 ### Windows — Bundled Binaries
 
-Download `binaries.zip` from the [Releases](https://github.com/corvainx/veluna/releases) page and extract into `src-tauri/binaries/`:
+Download `binaries.zip` from the [Releases](https://github.com/rry0ku/veluna/releases) page and extract into `src-tauri/binaries/`:
 
 ```
 src-tauri/binaries/
@@ -229,7 +229,7 @@ src-tauri/binaries/
 ### Clone & Build
 
 ```bash
-git clone https://github.com/corvainx/veluna.git
+git clone https://github.com/rry0ku/veluna.git
 cd veluna
 npm install
 cargo tauri build
@@ -388,7 +388,7 @@ No usage data, crash reports, or analytics are ever collected or transmitted.
 Pull requests are welcome. For major changes, please open an issue first.
 
 ```bash
-git clone https://github.com/corvainx/veluna.git
+git clone https://github.com/rry0ku/veluna.git
 cd veluna
 npm install
 cargo tauri dev
@@ -398,7 +398,7 @@ cargo tauri dev
 
 ## License
 
-MIT © [Corvainx](https://github.com/corvainx)
+MIT © [rry0ku](https://github.com/rry0ku)
 
 ---
 

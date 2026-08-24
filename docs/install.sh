@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEB_URL="https://github.com/corvainx/veluna/releases/download/v0.1.1/veluna_0.1.1_amd64.deb"
-RPM_URL="https://github.com/corvainx/veluna/releases/download/v0.1.1/veluna-0.1.1-1.x86_64.rpm"
+DEB_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.1/veluna_0.1.1_amd64.deb"
+RPM_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.1/veluna-0.1.1-1.x86_64.rpm"
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -16,7 +16,7 @@ main() {
   if command -v pacman >/dev/null 2>&1; then
     echo -e "\033[1;32mDetected Arch Linux system.\033[0m"
     sudo pacman -S --needed --noconfirm mpv yt-dlp ffmpeg webkit2gtk-4.1 libayatana-appindicator git base-devel
-    git clone https://github.com/corvainx/veluna.git "$TEMP_DIR/veluna"
+    git clone https://github.com/rry0ku/veluna.git "$TEMP_DIR/veluna"
     cd "$TEMP_DIR/veluna/packaging"
     makepkg -si --noconfirm
     echo -e "\033[1;32mSuccessfully installed Veluna native Arch Linux package!\033[0m"

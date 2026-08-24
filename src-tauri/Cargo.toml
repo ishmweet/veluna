@@ -2,7 +2,7 @@
 name = "veluna"
 version = "0.1.1"
 description = "Ad-free desktop music streaming powered by YouTube. Stream millions of songs without subscriptions, bloat, or interruptions."
-authors = ["Corvainx"]
+authors = ["rry0ku"]
 edition = "2021"
 
 [lib]

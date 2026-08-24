@@ -1989,7 +1989,7 @@ async fn check_for_update() -> Result<Option<String>, String> {
         .map_err(|e| e.to_string())?;
 
     let resp = client
-        .get("https://api.github.com/repos/corvainx/veluna/releases/latest")
+        .get("https://api.github.com/repos/rry0ku/veluna/releases/latest")
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -2258,7 +2258,7 @@ fn update_discord_rpc(
                     buttons.push(activity::Button::new("Listen on YouTube", url));
                 }
             }
-            buttons.push(activity::Button::new("Download Veluna", "https://github.com/corvainx/veluna/releases/"));
+            buttons.push(activity::Button::new("Download Veluna", "https://github.com/rry0ku/veluna/releases/"));
             act = act.buttons(buttons);
 
             if client.set_activity(act).is_err() {

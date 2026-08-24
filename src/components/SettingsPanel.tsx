@@ -505,7 +505,7 @@ export function SettingsPanel({
                   <>
                     <div style={{fontSize:"13.5px",fontWeight:700,color:"#ffffff",marginBottom:"4px"}}>Update available: v{updateAvailable}</div>
                     <div style={{fontSize:"11.5px",color:"#6f6966",lineHeight:1.4,marginBottom:"10px"}}>A new version of Veluna is ready to download. Features and stability updates await.</div>
-                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/corvainx/veluna/releases/latest');}}
+                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/rry0ku/veluna/releases/latest');}}
                       style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"11px",fontWeight:600,color:"var(--v-accent)",textDecoration:"none"}}
                       onMouseEnter={e=>(e.currentTarget.style.textDecoration="underline")} onMouseLeave={e=>(e.currentTarget.style.textDecoration="none")}>
                       <ExternalLink size={12}/> View Release Notes on GitHub
@@ -515,7 +515,7 @@ export function SettingsPanel({
                   <>
                     <div style={{fontSize:"13.5px",fontWeight:700,color:"#ffffff",marginBottom:"4px"}}>You're up to date</div>
                     <div style={{fontSize:"11.5px",color:"#6f6966",lineHeight:1.4,marginBottom:"10px"}}>Veluna v{appVersion} is currently the latest version.</div>
-                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/corvainx/veluna');}}
+                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/rry0ku/veluna');}}
                       style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"11px",fontWeight:600,color:"var(--v-accent)",textDecoration:"none"}}
                       onMouseEnter={e=>(e.currentTarget.style.textDecoration="underline")} onMouseLeave={e=>(e.currentTarget.style.textDecoration="none")}>
                       <ExternalLink size={12}/> Visit GitHub Repository
