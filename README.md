@@ -244,7 +244,7 @@ sudo dnf install -y mpv yt-dlp ffmpeg openssl-devel pkg-config \
 
 Run the automated setup script to download and configure all dependencies:
 
-```powershell
+```bash
 npm run setup:deps
 ```
 
@@ -357,6 +357,8 @@ veluna/
 │   └── workflows/
 │       ├── ci.yml                # Automated CI checks (Linux & Windows)
 │       └── release.yml           # Automated release packaging (.deb, .rpm, .exe)
+├── scripts/
+│   └── setup-deps.js             # Automated cross-platform Windows binaries setup
 ├── src/
 │   ├── App.tsx                   # React UI main entry & core state
 │   ├── App.css                   # Core design system & component styles
