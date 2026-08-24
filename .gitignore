@@ -25,6 +25,9 @@ src-tauri/target/
 # Tauri bundles
 src-tauri/gen/
 src-tauri/bundle/
+src-tauri/binaries/*.exe
+src-tauri/binaries/*.zip
+src-tauri/binaries/*.7z
 
 # OS files
 .DS_Store

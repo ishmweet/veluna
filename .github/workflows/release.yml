@@ -60,9 +60,8 @@ jobs:
         if: matrix.platform == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
         run: |
-          ./scripts/setup-deps.ps1
+          node ./scripts/setup-deps.js
 
       - name: Install frontend dependencies
         run: npm ci
