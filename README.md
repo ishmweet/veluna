@@ -4,8 +4,20 @@
   <img src="https://github.com/rry0ku/veluna/blob/main/src-tauri/icons/128x128%402x.png?raw=true" alt="Veluna logo" width="128" />
 </p>
 
-> A free, open-source desktop music player built for people who actually listen.
-> Stream from YouTube. Download for offline use. Own your music — no accounts, no ads, no subscriptions.
+<h3 align="center">You're paying for music you could be getting for free. Right now.</h3>
+
+<p align="center">
+A free, open-source desktop music player for people who are done with ads, subscriptions, and apps that spy on them.<br/>
+Stream from YouTube. Download for offline use. Own your library. No account, ever.
+</p>
+
+<p align="center">
+  <a href="https://github.com/rry0ku/veluna/releases"><img src="https://img.shields.io/badge/⬇%20Download%20for%20Windows%20%26%20Linux-39FF14?style=for-the-badge" alt="Download" /></a>
+</p>
+
+<p align="center">
+  <sub>Free forever. Open source. Takes under a minute to install.</sub>
+</p>
 
 <p align="center">
   <img src="screenshots/ss1.png" alt="Veluna Home Dashboard" width="100%" />
@@ -20,93 +32,105 @@
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-stable-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Stars](https://img.shields.io/github/stars/rry0ku/veluna?style=flat-square&color=39FF14)](https://github.com/rry0ku/veluna/stargazers)
 
 **[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
 
 ---
 
-## What is Veluna?
+## Ask yourself this
 
-Veluna is a native desktop music application that treats `mpv` as its audio engine and `yt-dlp` as its streaming backend, wrapped inside a Tauri v2 shell (Rust + React). The result is a player with near-zero resource overhead, full system integration on both Linux and Windows, and none of the baggage that comes with a web-based music service.
+How much did you pay for music software last month? How many ads did you sit through to hear a song you already knew the words to? How much of your listening history does some server somewhere know about, that you never agreed to hand over?
 
-> No account required. No telemetry. No ads. No cloud dependency beyond YouTube itself.
+Veluna exists because the answer to all three of those should be zero.
+
+No account required. No telemetry. No ads. No cloud dependency beyond YouTube itself. It streams straight from YouTube through `yt-dlp` and plays it through `mpv`, wrapped in a native Tauri shell built with Rust and React. That means it's fast, it's light on your system, and it runs the same whether you're on Linux or Windows.
+
+You already have everything you need to stop paying for this. It's one download away.
+
+---
+
+## What you're giving up by not trying this
+
+| | Spotify Free | YouTube Music | **Veluna** |
+|---|---|---|---|
+| Ads interrupting playback | Yes | Yes (free tier) | **Never** |
+| Monthly cost | $0-12 | $0-11 | **$0, always** |
+| Account required | Yes | Yes | **No** |
+| Offline downloads | Premium only | Premium only | **Built in, free** |
+| Choice of audio format | No | No | **MP3 / Opus / M4A / FLAC** |
+| Telemetry / data collection | Yes | Yes | **None** |
+| Full-screen synced lyrics | Limited | No | **Yes** |
+| Import your existing playlists | N/A | N/A | **From Spotify or YouTube** |
+| Source code you can read | Closed | Closed | **Fully open, MIT licensed** |
+
+You're not being asked to compromise on features to get privacy and cost. You get both.
 
 ---
 
 ## Features
 
 ### 🔍 Streaming & Search
-- Search YouTube directly from the app — results appear with **dual search categories** (**YT Music** for official audio releases and **Videos** for official music videos) with dedicated category filter pills
-- Stream audio instantly via `yt-dlp` + `mpv` IPC — no video overhead, no buffering delay
+- Search YouTube directly from the app, with results split into **dual search categories** (**YT Music** for official audio releases and **Videos** for official music videos)
+- Stream audio instantly via `yt-dlp` + `mpv` IPC, no video overhead, no buffering delay
 - Search history dropdown (up to 8 recent queries) with one-click re-search
-- **Quick Picks** — a strip of your 20 most recently played tracks on the home screen for instant replay
-- **Genre Shelves** — home screen auto-detects genres from your listening history and groups tracks into horizontal scrollable shelves (Hip-Hop, EDM, Pop, Rock, R&B, Lo-Fi, K-Pop, Phonk, and more)
-- **Autoplay Recommendations** — automatically discovers and queues similar tracks when your active playlist or queue ends
+- **Quick Picks**, a strip of your 20 most recently played tracks on the home screen for instant replay
+- **Genre Shelves**, the home screen auto-detects genres from your listening history and groups tracks into horizontal scrollable shelves (Hip-Hop, EDM, Pop, Rock, R&B, Lo-Fi, K-Pop, Phonk, and more)
+- **Autoplay Recommendations**, automatically discovers and queues similar tracks when your active playlist or queue ends
 
 ### 📁 Offline Library
-- Point Veluna at any local music folder; scans recursively and enriches metadata in the background without blocking the UI
-- **Local Track Cover Art Support** — dynamically reads embedded metadata covers or cached artwork base64 strings in the background for local files
-- **Waveform Visualisation** — automatic waveform thumbnail generation for local audio tracks
-- **Metadata Editor** — edit title, artist, and album tags directly on local files with changes written to disk
-- Filter your library in real time — zero latency, pure in-memory search
-- Drag-to-reorder tracks (disabled automatically while searching)
-- Rename any file directly from the UI — applied on disk
-- Delete files from within the app
-- Show any track in your system file manager
+- Point Veluna at any local music folder; it scans recursively and enriches metadata in the background without blocking the UI
+- **Local Track Cover Art Support**, dynamically reads embedded metadata covers or cached artwork for local files
+- **Waveform Visualisation**, automatic waveform thumbnail generation for local audio tracks
+- **Metadata Editor**, edit title, artist, and album tags directly on local files with changes written to disk
+- Filter your library in real time, zero latency, pure in-memory search
+- Drag-to-reorder tracks, rename or delete files from the UI, show any track in your file manager
 - Export and import playlists in standard **M3U format**
 
 ### ⬇️ Downloads
-- Download any YouTube track with one click from search results, right-click menu, or the **download button beside the heart icon** in the player bar
+- Download any YouTube track with one click from search results, right-click menu, or the download button beside the heart icon
 - Choose your **audio format**: MP3, Opus, M4A, or FLAC
 - Choose your **quality**: High (320kbps+), Medium (~128kbps), or Low
-- **Embed Thumbnail** — cover art written directly into file metadata tags
-- All metadata (title, artist, album) embedded automatically
-- **Duplicate Detection** — scans your download folder before downloading and skips if the track already exists
+- **Embed Thumbnail**, cover art written directly into file metadata tags, alongside title, artist, and album
+- **Duplicate Detection**, scans your download folder first and skips tracks you already have
 
 ### 🎵 Playlists
-- Create, name, and describe playlists; edit or delete at any time
-- Upload a custom cover image for any playlist (except Liked Songs)
-- **Enhanced View Selector** — switch between grid and list views with clear "Layout: Grid" and "Layout: List" labels, featuring smooth interactive scaling on hover
-- **Collapsible Sidebar Playlists** — sleek collapsible sidebar playlist section with glowing active accents, artwork covers, track count subtitles, and independent expand/collapse toggle
-- **Search within a playlist** — filter tracks by title or artist in real time
-- **Liked Songs** — built-in smart playlist; heart any track anywhere in the app to add it
-- **Import from Spotify** — export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed. Minimize the import window while it runs — a **name & description popup appears automatically when matching completes**, even if the window was closed
-- **Import from YouTube** — paste any public YouTube or YouTube Music playlist link for instant import with automatic playlist title extraction, high-definition cover art, and clean track artist parsing
+- Create, name, and describe playlists; edit or delete at any time; upload a custom cover image
+- **Enhanced View Selector**, switch between grid and list views with smooth interactive scaling
+- **Collapsible Sidebar Playlists** with glowing active accents and track count subtitles
+- **Search within a playlist**, filter tracks by title or artist in real time
+- **Liked Songs**, a built-in smart playlist. Heart any track anywhere in the app to add it
+- **Import from Spotify**, export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed
+- **Import from YouTube**, paste any public YouTube or YouTube Music playlist link for instant import with automatic title extraction and high-definition cover art
 
 ### 📋 Queue
 - Add any track to the persistent queue from search results, playlists, or right-click menus
-- Drag-to-reorder the queue at any time
-- Queue survives across sessions
+- Drag-to-reorder the queue at any time. Queue survives across sessions
 
 ### ▶️ Playback Engine
-- **mpv backend** via IPC socket (Unix) / named pipe (Windows) — full codec support, hardware decoding
-- **Shuffle**, **Repeat** (Off / All / One), **Playback speed** (0.5×–2×)
-- **Volume control** — slider, scroll wheel, mute with memory
-- **Seek bar** — click or drag; waveform visualisation overlay on local files
-- **A-B Loop** — loop any segment continuously until cleared
-- **Bookmarks** — save one position per track, restored on next play
-- **Continue Where Left Off** — saves position every 5 seconds per track
-- **Next-track prefetching** — first queued track pre-fetched in background for gapless transitions
-- **EBU R128 Loudness Normalisation** — optional loudnorm filter for consistent volume across tracks (off by default)
-- **Skip Silence** — auto-skips silent segments via mpv `silencedetect` filter
-- **3-Band Equalizer** — real-time bass, mid, and treble adjustment (−12dB to +12dB) applied live via mpv audio filters; reset to flat with one click
+- **mpv backend** via IPC socket (Unix) / named pipe (Windows), full codec support, hardware decoding
+- **Shuffle**, **Repeat** (Off / All / One), **Playback speed** (0.5x-2x)
+- **Volume control** via slider, scroll wheel, or mute with memory
+- **Seek bar** with waveform visualisation overlay on local files
+- **A-B Loop**, loop any segment continuously until cleared
+- **Bookmarks**, save one position per track, restored on next play
+- **Continue Where Left Off**, saves position every 5 seconds per track
+- **Next-track prefetching** for gapless transitions
+- **EBU R128 Loudness Normalisation** and **Skip Silence** filters
+- **3-Band Equalizer**, real-time bass, mid, and treble adjustment applied live
 
 ### 🎤 Lyrics
-- Synced lyrics with **real-time line highlighting** that scrolls automatically as the song plays — click any line to seek
-- **Immersive full-screen view** — full-screen blurred album art background, left panel with cover, progress bar, controls; right panel with scrolling lyrics
-- **Lyrics Source** selector in Settings → Integrations: choose between **lrclib** (open, fast), **Musixmatch** (word-level richsync), or **NetEase** (best for C-pop / K-pop). Automatically falls back to lrclib → lyrics.ovh if primary source fails
+- Synced lyrics with **real-time line highlighting** that scrolls automatically as the song plays, click any line to seek
+- **Immersive full-screen view**, blurred album art background, progress bar, controls, and scrolling lyrics side by side
+- **Lyrics Source** selector: choose between **lrclib**, **Musixmatch**, or **NetEase**, with automatic fallback if your primary source fails
 
 ### 🎮 Discord Rich Presence
 - Shows current playing track, artist, elapsed/remaining time, and album art on your Discord profile
-- Interactive buttons for **"Listen on YouTube"** and **"Download Veluna"**
-- Toggle on/off at any time in Settings → Integrations
+- Interactive buttons for "Listen on YouTube" and "Download Veluna"
 
 ### 🖥️ System Tray *(optional)*
-Enable in Settings → Appearance. Once active:
-- **Left-click** the tray icon to show/hide the window
-- **Tray menu**: Play/Pause, Next, Previous, Show, Quit
+- Left-click to show/hide the window; tray menu with Play/Pause, Next, Previous, Show, Quit
 - Closing the window hides to tray instead of exiting
-- Tray events fire `tray_play_pause`, `tray_next`, `tray_prev` — wired to the same handlers as MPRIS and media keys
 
 ### ⌨️ Controls & Shortcuts
 
@@ -127,37 +151,36 @@ Media keys are registered globally and work even when the app is not in focus.
 Veluna registers a full `org.mpris.MediaPlayer2.veluna` D-Bus service. Works with **playerctl**, **KDE Connect**, **GNOME Shell extensions**, and any MPRIS2-compatible widget.
 
 ### 📊 Stats
-Comprehensive personal listening analytics dashboard with **All Time** and **Last 7 Days** filtering:
-- **Core Metrics** — Time Listened, total Tracks Played, and Unique Tracks count
-- **Activity Chart** — interactive daily play activity bar chart over the last 30 days / 7 days
-- **Behavioral Insights** — **Favorite Time** (detects peak listening period & hour e.g. Afternoon / 15:00), **Unique Artists** explored, and **Loyalty Index** (average repeat plays per track)
-- **Top Rankings** — ranked top 5 **Top Tracks**, **Top Artists** (with artwork/avatars), and **Top Genres** with affinity score bars
-- **Reset Stats** — one-click reset with confirmation dialogue to clear analytics at any time
+A personal listening analytics dashboard with **All Time** and **Last 7 Days** filtering:
+- **Core Metrics**: Time Listened, total Tracks Played, Unique Tracks
+- **Activity Chart**, interactive daily play activity over the last 30 or 7 days
+- **Behavioral Insights**: Favorite Time, Unique Artists, Loyalty Index
+- **Top Rankings**: Top Tracks, Top Artists, Top Genres
 
 ### 🌙 Sleep Timer
-Preset buttons (5–90 min) or custom input. Live countdown in sidebar. Cancellable at any time.
+Preset buttons (5-90 min) or custom input. Live countdown in sidebar. Cancellable any time.
 
 ### 🖱️ Right-Click Context Menus
-Available on every track in every view: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info. Right-click on playlist cards: Play All, Rename, Change Cover, Delete.
+Available on every track: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info.
 
 ### ⚙️ Settings
-- **Downloads** — audio quality, format, destination folder, embed thumbnail, duplicate detection
-- **Playback** — loudness normalization (EBU R128), skip silence, autoplay recommendations, 3-band equalizer
-- **Integrations** — Discord Rich Presence toggle, primary lyrics source (lrclib / Musixmatch / NetEase)
-- **Appearance** — theme selection (Obsidian, Emerald, Crimson, Amethyst, Midnight, Amber, Sapphire, Velvet), custom accent color picker, custom background color, default startup page (Home / Library / Downloads / etc.), system tray toggle
-- **Storage** — backup location, create backup, restore backup, reset app data
-- **Updates** — automatic update check against GitHub Releases on startup with one-click manual check and release notes
+- **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
+- **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer
+- **Integrations**: Discord Rich Presence, primary lyrics source
+- **Appearance**: 8 built-in themes, custom accent and background color, default startup page, tray toggle
+- **Storage**: backup location, create/restore backup, reset app data
+- **Updates**: automatic update check against GitHub Releases
 
 ### 💾 Backup & Restore
-Export all playlists, queue, play history, EQ settings, search history, Quick Picks, and preferences as a single JSON file. Restore or reset at any time.
+Export all playlists, queue, play history, EQ settings, search history, and preferences as a single JSON file. Restore or reset any time.
 
 ---
 
 ## Installation
 
-### Linux — Arch / Manjaro / EndeavourOS
+### Linux, Arch / Manjaro / EndeavourOS
 
-Build and install native Arch Linux `.pkg.tar.zst` package with `makepkg`:
+Build and install the native Arch Linux `.pkg.tar.zst` package with `makepkg`:
 
 ```bash
 git clone https://github.com/rry0ku/veluna.git
@@ -165,7 +188,7 @@ cd veluna/packaging
 makepkg -si
 ```
 
-### Linux — Debian / Ubuntu / Mint
+### Linux, Debian / Ubuntu / Mint
 
 ```bash
 sudo apt install ./veluna_<version>_amd64.deb
@@ -181,7 +204,7 @@ Launch from your application menu or run:
 veluna
 ```
 
-### Linux — Fedora / RedHat
+### Linux, Fedora / RedHat
 
 ```bash
 sudo dnf install ./veluna_<version>_x86_64.rpm
@@ -213,7 +236,7 @@ Download and run the `.exe` installer from the [Releases](https://github.com/rry
 | [Rust](https://rustup.rs/) | stable | `rustup install stable` |
 | [Tauri CLI](https://tauri.app/start/prerequisites/) | v2 | `cargo install tauri-cli --version "^2"` |
 
-### Linux — System Dependencies
+### Linux, System Dependencies
 
 For Arch Linux (Pacman):
 ```bash
@@ -236,7 +259,7 @@ sudo dnf install -y mpv yt-dlp ffmpeg openssl-devel pkg-config \
   librsvg2-devel libayatana-appindicator-gtk3-devel
 ```
 
-### Windows — Bundled Binaries
+### Windows, Bundled Binaries
 
 Download `binaries.zip` from the [Releases](https://github.com/rry0ku/veluna/releases) page and extract into `src-tauri/binaries/`:
 
@@ -408,7 +431,7 @@ All application state is stored locally in the webview's `localStorage` under `v
 | lrclib / Musixmatch / NetEase | When lyrics are opened | Synced lyrics fetch |
 | GitHub Releases API | Once on startup | Update check |
 
-No usage data, crash reports, or analytics are ever collected or transmitted.
+No usage data, crash reports, or analytics are ever collected or transmitted. That's not a policy that could change one day. There's simply no code path that sends it anywhere.
 
 ---
 
@@ -422,6 +445,19 @@ cd veluna
 npm install
 cargo tauri dev
 ```
+
+---
+
+## One more thing
+
+If you made it this far, you've read more about a free app than most people read before buying something. That's usually a sign you were looking for exactly this.
+
+The download takes less time than reading the rest of this README did. And if you're not ready to install it yet, the fastest way to remember it exists later is to star the repo now, it takes one click and costs nothing, and it's genuinely the biggest reason small open-source projects survive long enough to become good ones.
+
+<p align="center">
+  <a href="https://github.com/rry0ku/veluna/releases"><img src="https://img.shields.io/badge/⬇%20Download%20Veluna-39FF14?style=for-the-badge" alt="Download" /></a>
+  <a href="https://github.com/rry0ku/veluna/stargazers"><img src="https://img.shields.io/badge/⭐%20Star%20this%20repo-FFC131?style=for-the-badge" alt="Star" /></a>
+</p>
 
 ---
 
