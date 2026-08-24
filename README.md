@@ -17,10 +17,6 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 </p>
 
 <p align="center">
-  <sub>Free forever. Open source. Takes under a minute to install.</sub>
-</p>
-
-<p align="center">
   <img src="screenshots/ss1.png" alt="Veluna Home Dashboard" width="100%" />
 </p>
 
