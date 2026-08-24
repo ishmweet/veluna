@@ -67,6 +67,12 @@ jobs:
         run: |
           node ./scripts/setup-deps.js
 
+      - name: Create binaries.zip
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "src-tauri/binaries/*.exe" -DestinationPath "binaries.zip" -Force
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -76,8 +82,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Veluna v__VERSION__'
+          releaseName: 'v__VERSION__'
           releaseBody: 'See the assets below to download Veluna for your platform.'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload binaries.zip to Release
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} binaries.zip --clobber
