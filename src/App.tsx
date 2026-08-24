@@ -1479,22 +1479,26 @@ export default function Veluna() {
   }, [handlePlayTrack, handlePlayLocalTrack, setIsPlayingSync, shuffle, autoplayEnabled, getOrSearchVideoId, fetchAutoplayTracks, playHistory, showToast]);
 
   useEffect(() => {
-    const poll = async () => {
-      if (isDraggingProgressRef.current) return;
-      try {
-        const s: { playing: boolean; paused: boolean; position: number; duration: number; eof_reached: boolean } =
-          await invoke('get_playback_state');
+    let unlistenState: (() => void) | undefined;
+    let unlistenEnd: (() => void) | undefined;
+
+    listen<{ playing: boolean; paused: boolean; position: number; duration: number; eof_reached: boolean }>(
+      'mpv_playback_state',
+      event => {
+        const s = event.payload;
+        if (isDraggingProgressRef.current) return;
 
         progressSecondsRef.current = s.position;
         setProgressSeconds(s.position);
-        
+
         const ab = abLoopRef.current;
         if (ab.a !== null && ab.b !== null && s.position >= ab.b) {
           invoke('seek_audio', { time: ab.a }).catch(() => {});
         }
 
         if (s.duration > 0 && s.duration !== trackDurationRef.current) {
-          trackDurationRef.current = s.duration; setTrackDurationSeconds(s.duration);
+          trackDurationRef.current = s.duration;
+          setTrackDurationSeconds(s.duration);
         }
 
         if (!isLoadingTrack && !endDetectedRef.current) {
@@ -1505,9 +1509,8 @@ export default function Veluna() {
         if (!s.eof_reached && !endDetectedRef.current && s.position > 3 && s.duration > 0
             && crossfadeSeconds > 0 && s.position >= s.duration - crossfadeSeconds - 0.5
             && s.position < s.duration - 0.2) {
-          
           const fadeSteps = Math.max(1, Math.round(crossfadeSeconds * 5));
-          const volStep = (volume / fadeSteps);
+          const volStep = volume / fadeSteps;
           let step = 0;
           const fadeInterval = setInterval(() => {
             step++;
@@ -1515,28 +1518,49 @@ export default function Veluna() {
             invoke('set_volume', { volume: newVol }).catch(() => {});
             if (step >= fadeSteps) {
               clearInterval(fadeInterval);
-              invoke('set_volume', { volume }).catch(() => {}); 
+              invoke('set_volume', { volume }).catch(() => {});
               if (!endDetectedRef.current) handleTrackEnd();
             }
           }, (crossfadeSeconds * 1000) / fadeSteps);
-          
           return;
         }
-        
+
         if (s.eof_reached && !endDetectedRef.current && s.position > 3) {
           handleTrackEnd();
           return;
         }
-        
+
         if (!s.eof_reached && !endDetectedRef.current && s.position > 3 && s.duration > 0 && s.position >= s.duration - 1.0) {
           handleTrackEnd();
         }
-      } catch {}
-    };
+      }
+    ).then(fn => { unlistenState = fn; });
 
-    const id = setInterval(poll, isPlaying ? 500 : 2000);
-    return () => clearInterval(id);
-  }, [isPlaying, isLoadingTrack, handleTrackEnd, setIsPlayingSync]);
+    listen('mpv_track_end', () => {
+      if (!endDetectedRef.current) {
+        handleTrackEnd();
+      }
+    }).then(fn => { unlistenEnd = fn; });
+
+    // Initial state fetch
+    invoke<{ playing: boolean; paused: boolean; position: number; duration: number; eof_reached: boolean }>('get_playback_state')
+      .then(s => {
+        if (s.duration > 0) {
+          trackDurationRef.current = s.duration;
+          setTrackDurationSeconds(s.duration);
+        }
+        if (s.position > 0) {
+          progressSecondsRef.current = s.position;
+          setProgressSeconds(s.position);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      unlistenState?.();
+      unlistenEnd?.();
+    };
+  }, [isLoadingTrack, handleTrackEnd, setIsPlayingSync, crossfadeSeconds, volume]);
 
   const handleSelectDirectory = useCallback(async () => {
     try {

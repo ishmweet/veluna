@@ -44,11 +44,26 @@ use std::os::unix::net::UnixStream;
 #[cfg(windows)]
 use std::fs::OpenOptions;
 
-#[cfg(unix)]
-const SOCKET_PATH: &str = "/tmp/mpvsocket";
+static SOCKET_PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
-#[cfg(windows)]
-const SOCKET_PATH: &str = r"\\.\pipe\mpvsocket";
+fn socket_path() -> &'static str {
+    SOCKET_PATH.get_or_init(|| {
+        let pid = std::process::id();
+        #[cfg(unix)]
+        {
+            if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+                format!("{}/veluna-mpv-{}.sock", runtime_dir.trim_end_matches('/'), pid)
+            } else {
+                let tmp = std::env::temp_dir();
+                format!("{}/veluna-mpv-{}.sock", tmp.to_string_lossy().trim_end_matches('/'), pid)
+            }
+        }
+        #[cfg(windows)]
+        {
+            format!(r"\\.\pipe\veluna-mpv-{}", pid)
+        }
+    })
+}
 
 #[derive(Clone, Default)]
 struct MprisMetadata {
@@ -507,7 +522,8 @@ fn ensure_mpv_running() -> bool {
     if alive && wait_for_socket(200) { return true; }
 
     *guard = None;
-    let _ = std::fs::remove_file(SOCKET_PATH); 
+    #[cfg(unix)]
+    { let _ = std::fs::remove_file(socket_path()); }
 
     let mut args: Vec<String> = vec![
         "--no-video".into(),
@@ -527,7 +543,7 @@ fn ensure_mpv_running() -> bool {
         "--audio-pitch-correction=yes".into(),
         "--force-window=no".into(),
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36".into(),
-        format!("--input-ipc-server={}", SOCKET_PATH),
+        format!("--input-ipc-server={}", socket_path()),
     ];
     if let Some(af) = mpv_af_flag() { args.push(af); }
 
@@ -552,14 +568,25 @@ fn switch_track_ipc(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+static LOG_PATH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+fn init_log_path(app: &tauri::AppHandle) {
+    if let Ok(dir) = app.path().app_log_dir().or_else(|_| app.path().app_data_dir()) {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = LOG_PATH.set(dir.join("veluna_debug.log"));
+    }
+}
+
 fn log_debug(msg: &str) {
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/home/vanguard/veluna/debug.log")
-    {
-        use std::io::Write;
-        let _ = writeln!(file, "[{}] {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), msg);
+    if let Some(log_path) = LOG_PATH.get() {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "[{}] {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(), msg);
+        }
     }
 }
 
@@ -978,7 +1005,7 @@ async fn is_paused() -> Result<bool, String> {
     .map_err(|e| e.to_string())?
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 struct PlaybackState {
     playing: bool,
     paused: bool,
@@ -987,36 +1014,21 @@ struct PlaybackState {
     eof_reached: bool,
 }
 
+static CURRENT_PLAYBACK_STATE: std::sync::OnceLock<Arc<Mutex<PlaybackState>>> = std::sync::OnceLock::new();
+
+fn current_playback_state() -> &'static Arc<Mutex<PlaybackState>> {
+    CURRENT_PLAYBACK_STATE.get_or_init(|| Arc::new(Mutex::new(PlaybackState {
+        playing: false,
+        paused: true,
+        position: 0.0,
+        duration: 0.0,
+        eof_reached: false,
+    })))
+}
+
 #[tauri::command]
 async fn get_playback_state() -> Result<PlaybackState, String> {
-    tokio::task::spawn_blocking(|| {
-        let responses = send_ipc_batch(&[
-            r#"{"command": ["get_property", "pause"]}"#,
-            r#"{"command": ["get_property", "time-pos"]}"#,
-            r#"{"command": ["get_property", "duration"]}"#,
-        ]);
-
-        let pause_resp = responses.get(0)
-            .and_then(|r| r.as_ref().ok())
-            .cloned()
-            .ok_or_else(|| "mpv not running".to_string())?;
-
-        let paused = serde_json::from_str::<Value>(&pause_resp)
-            .ok().and_then(|j| j["data"].as_bool()).unwrap_or(false);
-
-        let get_f = |i: usize| responses.get(i)
-            .and_then(|r| r.as_ref().ok())
-            .and_then(|r| parse_f64_from_response(r).ok())
-            .map(safe_f64).unwrap_or(0.0);
-
-        let position = get_f(1);
-        let duration  = get_f(2);
-        let near_end  = duration > 0.0 && position > 5.0 && (duration - position) < 1.5 && paused;
-
-        Ok(PlaybackState { playing: !paused, paused, position, duration, eof_reached: near_end })
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    Ok(current_playback_state().lock().unwrap().clone())
 }
 
 #[tauri::command]
@@ -1309,8 +1321,12 @@ async fn scan_downloads(path: String) -> Result<Vec<LocalTrack>, String> {
 
 #[tauri::command]
 async fn delete_local_file(path: String) -> Result<(), String> {
+    let safe_path = sanitize_file_path(&path)?;
     tokio::task::spawn_blocking(move || {
-        std::fs::remove_file(&path).map_err(|e| format!("Delete failed: {}", e))
+        if !safe_path.is_file() {
+            return Err("Target is not a regular file".to_string());
+        }
+        std::fs::remove_file(&safe_path).map_err(|e| format!("Delete failed: {}", e))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1651,12 +1667,13 @@ async fn get_sleep_timer_remaining() -> Result<i64, String> {
 
 fn wait_for_socket(timeout_ms: u64) -> bool {
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    let sock = socket_path();
 
     #[cfg(unix)]
     {
         while std::time::Instant::now() < deadline {
-            if std::path::Path::new(SOCKET_PATH).exists() {
-                if let Ok(s) = UnixStream::connect(SOCKET_PATH) {
+            if std::path::Path::new(sock).exists() {
+                if let Ok(s) = UnixStream::connect(sock) {
                     let _ = s.shutdown(std::net::Shutdown::Both);
                     return true;
                 }
@@ -1668,9 +1685,8 @@ fn wait_for_socket(timeout_ms: u64) -> bool {
 
     #[cfg(windows)]
     {
-        
         while std::time::Instant::now() < deadline {
-            if OpenOptions::new().read(true).write(true).open(SOCKET_PATH).is_ok() {
+            if OpenOptions::new().read(true).write(true).open(sock).is_ok() {
                 return true;
             }
             std::thread::sleep(std::time::Duration::from_millis(15));
@@ -1681,10 +1697,11 @@ fn wait_for_socket(timeout_ms: u64) -> bool {
 
 fn send_ipc_batch(cmds: &[&str]) -> Vec<Result<String, String>> {
     let n = cmds.len();
+    let sock = socket_path();
 
     #[cfg(unix)]
     {
-        let stream = match UnixStream::connect(SOCKET_PATH) {
+        let stream = match UnixStream::connect(sock) {
             Ok(s) => s,
             Err(e) => return vec![Err(format!("IPC connect failed: {}", e)); n],
         };
@@ -1726,8 +1743,7 @@ fn send_ipc_batch(cmds: &[&str]) -> Vec<Result<String, String>> {
 
     #[cfg(not(unix))]
     {
-        
-        let file = match OpenOptions::new().read(true).write(true).open(SOCKET_PATH) {
+        let file = match OpenOptions::new().read(true).write(true).open(sock) {
             Ok(f) => f,
             Err(e) => return vec![Err(format!("IPC connect failed: {}", e)); n],
         };
@@ -1737,7 +1753,6 @@ fn send_ipc_batch(cmds: &[&str]) -> Vec<Result<String, String>> {
         let deadline    = std::time::Instant::now() + std::time::Duration::from_millis(800);
 
         for cmd in cmds {
-            
             {
                 let mut w = &file;
                 if w.write_all(cmd.as_bytes()).is_err() || w.write_all(b"\n").is_err() { break; }
@@ -1788,10 +1803,11 @@ fn send_ipc_command(cmd: &str) -> Result<String, String> {
         !v.is_null() && !v["error"].is_null()
     }
 
+    let sock = socket_path();
+
     #[cfg(unix)]
     {
-        
-        let stream = UnixStream::connect(SOCKET_PATH)
+        let stream = UnixStream::connect(sock)
             .map_err(|e| format!("IPC connect failed: {}", e))?;
         stream.set_read_timeout(Some(std::time::Duration::from_millis(500))).map_err(|e| e.to_string())?;
         stream.set_write_timeout(Some(std::time::Duration::from_millis(200))).map_err(|e| e.to_string())?;
@@ -1817,9 +1833,8 @@ fn send_ipc_command(cmd: &str) -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        
         let file = OpenOptions::new().read(true).write(true)
-            .open(SOCKET_PATH)
+            .open(sock)
             .map_err(|e| format!("IPC connect failed: {}", e))?;
         {
             let mut f = &file;
@@ -1836,6 +1851,123 @@ fn send_ipc_command(cmd: &str) -> Result<String, String> {
         }
         Err("No response from mpv".to_string())
     }
+}
+
+fn start_mpv_event_listener(app_handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        loop {
+            if !wait_for_socket(1000) {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                continue;
+            }
+
+            let sock = socket_path();
+            #[cfg(unix)]
+            let stream_res = UnixStream::connect(sock);
+            #[cfg(windows)]
+            let stream_res = OpenOptions::new().read(true).write(true).open(sock);
+
+            match stream_res {
+                Ok(stream) => {
+                    let mut reader = BufReader::new(&stream);
+                    let mut writer = &stream;
+
+                    let obs_cmds = [
+                        r#"{"command": ["observe_property", 1, "time-pos"]}"#,
+                        r#"{"command": ["observe_property", 2, "pause"]}"#,
+                        r#"{"command": ["observe_property", 3, "duration"]}"#,
+                        r#"{"command": ["observe_property", 4, "eof-reached"]}"#,
+                    ];
+                    for cmd in obs_cmds {
+                        let _ = writer.write_all(cmd.as_bytes());
+                        let _ = writer.write_all(b"\n");
+                    }
+                    let _ = writer.flush();
+
+                    let mut line = String::new();
+                    while reader.read_line(&mut line).is_ok() && !line.is_empty() {
+                        let trimmed = line.trim();
+                        if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
+                            if let Some(event) = v["event"].as_str() {
+                                match event {
+                                    "property-change" => {
+                                        let name = v["name"].as_str().unwrap_or("");
+                                        let mut state = current_playback_state().lock().unwrap();
+                                        let mut changed = false;
+                                        match name {
+                                            "time-pos" => {
+                                                if let Some(pos) = v["data"].as_f64() {
+                                                    state.position = safe_f64(pos);
+                                                    changed = true;
+                                                }
+                                            }
+                                            "pause" => {
+                                                if let Some(paused) = v["data"].as_bool() {
+                                                    state.paused = paused;
+                                                    state.playing = !paused;
+                                                    changed = true;
+                                                    mpris_notify();
+                                                }
+                                            }
+                                            "duration" => {
+                                                if let Some(dur) = v["data"].as_f64() {
+                                                    state.duration = safe_f64(dur);
+                                                    changed = true;
+                                                }
+                                            }
+                                            "eof-reached" => {
+                                                if let Some(eof) = v["data"].as_bool() {
+                                                    state.eof_reached = eof;
+                                                    if eof {
+                                                        state.playing = false;
+                                                        let _ = app_handle.emit("mpv_track_end", ());
+                                                    }
+                                                    changed = true;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                        if changed {
+                                            let s_clone = state.clone();
+                                            drop(state);
+                                            let _ = app_handle.emit("mpv_playback_state", &s_clone);
+                                        }
+                                    }
+                                    "end-file" => {
+                                        let reason = v["reason"].as_str().unwrap_or("");
+                                        if reason == "eof" {
+                                            {
+                                                let mut state = current_playback_state().lock().unwrap();
+                                                state.eof_reached = true;
+                                                state.playing = false;
+                                            }
+                                            let _ = app_handle.emit("mpv_track_end", ());
+                                            let s_clone = current_playback_state().lock().unwrap().clone();
+                                            let _ = app_handle.emit("mpv_playback_state", &s_clone);
+                                        }
+                                    }
+                                    "playback-restart" => {
+                                        {
+                                            let mut state = current_playback_state().lock().unwrap();
+                                            state.eof_reached = false;
+                                            state.playing = !state.paused;
+                                        }
+                                        let s_clone = current_playback_state().lock().unwrap().clone();
+                                        let _ = app_handle.emit("mpv_playback_state", &s_clone);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        line.clear();
+                    }
+                }
+                Err(_) => {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            }
+        }
+    });
 }
 
 fn parse_f64_from_response(response: &str) -> Result<f64, String> {
@@ -2198,11 +2330,11 @@ async fn run_mpris_server(
 
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
-    let p = std::path::Path::new(&path);
-    if let Some(parent) = p.parent() {
+    let safe_path = sanitize_file_path(&path)?;
+    if let Some(parent) = safe_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create directory: {}", e))?;
     }
-    std::fs::write(&path, content.as_bytes()).map_err(|e| format!("Write failed: {}", e))
+    std::fs::write(&safe_path, content.as_bytes()).map_err(|e| format!("Write failed: {}", e))
 }
 
 static DISCORD_CLIENT: std::sync::OnceLock<Mutex<Option<DiscordIpcClient>>> = std::sync::OnceLock::new();
@@ -2329,12 +2461,18 @@ fn main() {
 
             let handle = app.handle().clone();
 
+            init_log_path(&app.handle());
             app.manage(tray::init());
 
             #[cfg(target_os = "linux")]
             start_mpris_server(handle.clone());
 
-            std::thread::spawn(|| { ensure_mpv_running(); });
+            let h_mpv = handle.clone();
+            std::thread::spawn(move || {
+                if ensure_mpv_running() {
+                    start_mpv_event_listener(h_mpv);
+                }
+            });
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_icon(tauri::include_image!("icons/128x128.png"));
@@ -2436,7 +2574,7 @@ fn main() {
                         let _ = child.wait();
                     }
                     #[cfg(unix)]
-                    { let _ = std::fs::remove_file(SOCKET_PATH); }
+                    { let _ = std::fs::remove_file(socket_path()); }
                 }
                 _ => {}
             }
