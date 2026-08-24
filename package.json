@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "package:arch": "bash ./scripts/build-arch-pkg.sh",
     "setup:deps": "node ./scripts/setup-deps.js"
   },
   "dependencies": {

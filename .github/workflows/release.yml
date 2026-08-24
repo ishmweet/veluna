@@ -58,7 +58,9 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            rpm
+            rpm \
+            zstd \
+            libarchive-tools
 
       - name: Download Windows bundled binaries
         if: matrix.platform == 'windows-latest'
@@ -87,6 +89,19 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Build Arch Linux package (.pkg.tar.zst)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          chmod +x ./scripts/build-arch-pkg.sh
+          ./scripts/build-arch-pkg.sh "${{ github.ref_name }}"
+
+      - name: Upload Arch Linux .pkg.tar.zst to Release
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} veluna-*.pkg.tar.zst --clobber
 
       - name: Upload binaries.zip to Release
         if: matrix.platform == 'windows-latest'

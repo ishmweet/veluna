@@ -32,7 +32,7 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Stars](https://img.shields.io/github/stars/rry0ku/veluna?style=flat-square&color=39FF14)](https://github.com/rry0ku/veluna/stargazers)
 
-**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
+**[Download](https://github.com/rry0ku/veluna/releases) · [Discord](https://discord.com/invite/u7QXUgPcqr) · [Build from Source](#building-from-source) · [Contribute](CONTRIBUTING.md) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
 
 ---
 
@@ -160,7 +160,13 @@ Export all playlists, queue, play history, EQ settings, search history, and pref
 
 ### Linux, Arch / Manjaro / EndeavourOS
 
-Build and install the native Arch Linux `.pkg.tar.zst` package with `makepkg`:
+Download the `.pkg.tar.zst` package from the [Releases](https://github.com/rry0ku/veluna/releases) page and install with `pacman`:
+
+```bash
+sudo pacman -U ./veluna_<version>-1-x86_64.pkg.tar.zst
+```
+
+Alternatively, build and install directly with `makepkg`:
 
 ```bash
 git clone https://github.com/rry0ku/veluna.git
@@ -414,7 +420,7 @@ No usage data, crash reports, or analytics are ever collected or transmitted. Th
 
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for complete guidelines on environment setup, branch naming, coding standards, and pull request submissions. For major changes, please open an issue first.
 
 ```bash
 git clone https://github.com/rry0ku/veluna.git
