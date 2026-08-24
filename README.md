@@ -29,20 +29,23 @@ Veluna is a native desktop music application that treats `mpv` as its audio engi
 
 ### 🔍 Streaming & Search
 - Search YouTube directly from the app — results appear with **dual search categories** (**YT Music** for official audio releases and **Videos** for official music videos) with dedicated category filter pills
-- Stream audio instantly via `yt-dlp` + `mpv` IPC — no video, no buffering delay
+- Stream audio instantly via `yt-dlp` + `mpv` IPC — no video overhead, no buffering delay
 - Search history dropdown (up to 8 recent queries) with one-click re-search
 - **Quick Picks** — a strip of your 20 most recently played tracks on the home screen for instant replay
 - **Genre Shelves** — home screen auto-detects genres from your listening history and groups tracks into horizontal scrollable shelves (Hip-Hop, EDM, Pop, Rock, R&B, Lo-Fi, K-Pop, Phonk, and more)
+- **Autoplay Recommendations** — automatically discovers and queues similar tracks when your active playlist or queue ends
 
 ### 📁 Offline Library
-- Point Veluna at any folder and it scans instantly, then enriches metadata in the background without blocking the UI
+- Point Veluna at any local music folder; scans recursively and enriches metadata in the background without blocking the UI
 - **Local Track Cover Art Support** — dynamically reads embedded metadata covers or cached artwork base64 strings in the background for local files
+- **Waveform Visualisation** — automatic waveform thumbnail generation for local audio tracks
+- **Metadata Editor** — edit title, artist, and album tags directly on local files with changes written to disk
 - Filter your library in real time — zero latency, pure in-memory search
 - Drag-to-reorder tracks (disabled automatically while searching)
 - Rename any file directly from the UI — applied on disk
 - Delete files from within the app
 - Show any track in your system file manager
-- Export your entire library as an M3U playlist
+- Export and import playlists in standard **M3U format**
 
 ### ⬇️ Downloads
 - Download any YouTube track with one click from search results, right-click menu, or the **download button beside the heart icon** in the player bar
@@ -75,15 +78,20 @@ Veluna is a native desktop music application that treats `mpv` as its audio engi
 - **A-B Loop** — loop any segment continuously until cleared
 - **Bookmarks** — save one position per track, restored on next play
 - **Continue Where Left Off** — saves position every 5 seconds per track
-- **Next-track prefetching** — first queued track pre-fetched in background
-- **EBU R128 Loudness Normalisation** — optional loudnorm filter for consistent volume
+- **Next-track prefetching** — first queued track pre-fetched in background for gapless transitions
+- **EBU R128 Loudness Normalisation** — optional loudnorm filter for consistent volume across tracks (off by default)
 - **Skip Silence** — auto-skips silent segments via mpv `silencedetect` filter
 - **3-Band Equalizer** — real-time bass, mid, and treble adjustment (−12dB to +12dB) applied live via mpv audio filters; reset to flat with one click
 
 ### 🎤 Lyrics
 - Synced lyrics with **real-time line highlighting** that scrolls automatically as the song plays — click any line to seek
 - **Immersive full-screen view** — full-screen blurred album art background, left panel with cover, progress bar, controls; right panel with scrolling lyrics
-- **Lyrics Source** selector in Settings → Playback: choose between **lrclib** (open, fast), **Musixmatch** (word-level richsync), or **NetEase** (best for C-pop / K-pop). Automatically falls back to lrclib → lyrics.ovh if primary source fails
+- **Lyrics Source** selector in Settings → Integrations: choose between **lrclib** (open, fast), **Musixmatch** (word-level richsync), or **NetEase** (best for C-pop / K-pop). Automatically falls back to lrclib → lyrics.ovh if primary source fails
+
+### 🎮 Discord Rich Presence
+- Shows current playing track, artist, elapsed/remaining time, and album art on your Discord profile
+- Interactive buttons for **"Listen on YouTube"** and **"Download Veluna"**
+- Toggle on/off at any time in Settings → Integrations
 
 ### 🖥️ System Tray *(optional)*
 Enable in Settings → Appearance. Once active:
@@ -111,20 +119,26 @@ Media keys are registered globally and work even when the app is not in focus.
 Veluna registers a full `org.mpris.MediaPlayer2.veluna` D-Bus service. Works with **playerctl**, **KDE Connect**, **GNOME Shell extensions**, and any MPRIS2-compatible widget.
 
 ### 📊 Stats
-Total listen time displayed as a large HH:MM:SS counter with neon glow separators.
+Comprehensive personal listening analytics dashboard with **All Time** and **Last 7 Days** filtering:
+- **Core Metrics** — Time Listened, total Tracks Played, and Unique Tracks count
+- **Activity Chart** — interactive daily play activity bar chart over the last 30 days / 7 days
+- **Behavioral Insights** — **Favorite Time** (detects peak listening period & hour e.g. Afternoon / 15:00), **Unique Artists** explored, and **Loyalty Index** (average repeat plays per track)
+- **Top Rankings** — ranked top 5 **Top Tracks**, **Top Artists** (with artwork/avatars), and **Top Genres** with affinity score bars
+- **Reset Stats** — one-click reset with confirmation dialogue to clear analytics at any time
 
 ### 🌙 Sleep Timer
 Preset buttons (5–90 min) or custom input. Live countdown in sidebar. Cancellable at any time.
 
 ### 🖱️ Right-Click Context Menus
-Available on every track in every view: Play, Add to Queue, Add to Playlist, Download, Copy URL, Copy Title, Open in YouTube, Track Info. Right-click on playlist cards: Play All, Rename, Change Cover, Delete.
+Available on every track in every view: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info. Right-click on playlist cards: Play All, Rename, Change Cover, Delete.
 
 ### ⚙️ Settings
-- **Downloads** — quality, format, folder, embed thumbnail, duplicate detection
-- **Playback** — loudnorm, stream quality, skip silence, lyrics source selector, equalizer (bass / mid / treble, real-time via mpv)
-- **Storage** — backup, restore, reset
-- **Appearance** — system tray toggle
-- **Updates** — automatic update check against GitHub Releases on startup; queries the backend to display the verified installed tag/version in the Settings panel
+- **Downloads** — audio quality, format, destination folder, embed thumbnail, duplicate detection
+- **Playback** — loudness normalization (EBU R128), skip silence, autoplay recommendations, 3-band equalizer
+- **Integrations** — Discord Rich Presence toggle, primary lyrics source (lrclib / Musixmatch / NetEase)
+- **Appearance** — theme selection (Obsidian, Emerald, Crimson, Amethyst, Midnight, Amber, Sapphire, Velvet), custom accent color picker, custom background color, default startup page (Home / Library / Downloads / etc.), system tray toggle
+- **Storage** — backup location, create backup, restore backup, reset app data
+- **Updates** — automatic update check against GitHub Releases on startup with one-click manual check and release notes
 
 ### 💾 Backup & Restore
 Export all playlists, queue, play history, EQ settings, search history, Quick Picks, and preferences as a single JSON file. Restore or reset at any time.
@@ -266,12 +280,6 @@ mpv (IPC-controlled via Unix socket / Windows named pipe)
 System audio output (PipeWire / PulseAudio / DirectSound / WASAPI)
 ```
 
-### Audio Device Switching
-
-On **Linux**: `pactl set-default-sink` + `pactl move-sink-input` moves all active streams to the new device instantly without restarting mpv.
-
-On **Windows**: Veluna calls `IPolicyConfig::SetDefaultEndpoint` directly via the Windows Core Audio COM API — the same undocumented-but-stable interface used by EarTrumpet and SoundSwitch. No PowerShell modules, no third-party tools, works on Windows 7 through 11.
-
 ### Lyrics Pipeline
 
 ```
@@ -322,7 +330,7 @@ Playlist saved to localStorage
 | Audio Engine | mpv | Decoding and playback via IPC |
 | Streaming / Download | yt-dlp | YouTube search, streaming, downloading |
 | Media Info | ffprobe / ffmpeg | Metadata, waveform generation, format conversion |
-| Audio Devices (Windows) | windows crate (IPolicyConfig) | Native Core Audio device switching |
+| Discord RPC | discord-rich-presence | Live Discord status & interactive buttons |
 | MPRIS2 | zbus 3 | D-Bus integration on Linux |
 | Global Shortcuts | tauri-plugin-global-shortcut | Hardware media key support |
 | File Dialogs | tauri-plugin-dialog | Folder/file pickers |
@@ -336,23 +344,31 @@ Playlist saved to localStorage
 ```
 veluna/
 ├── src/
-│   ├── App.tsx                   # React UI main entry
+│   ├── App.tsx                   # React UI main entry & core state
 │   ├── App.css                   # Core design system & component styles
+│   ├── constants.ts              # App constants and defaults
 │   ├── types.ts                  # Shared TypeScript type definitions
 │   ├── utils.ts                  # Common helper utilities
-│   └── components/               # Extracted sub-components
-│       ├── TrackRow.tsx          # Renders track items and skeletons
-│       ├── SleepTimerPopover.tsx # Sleep timer popover overlay
-│       ├── ImportButton.tsx      # Sidebar import playlist dropdown
-│       ├── YtImportModal.tsx     # YouTube playlist import modal
+│   └── components/               # Modular UI sub-components
+│       ├── CopyButton.tsx        # One-click clipboard copy button
 │       ├── CsvImportModal.tsx    # Spotify CSV playlist import modal
-│       ├── MetadataEditModal.tsx # Track metadata editor modal
-│       ├── Modals.tsx            # Modal overlays & result dialogues
+│       ├── DownloadsPanel.tsx    # Offline library & folder downloads panel
+│       ├── ImportButton.tsx      # Sidebar import playlist dropdown
+│       ├── ImportResultModal.tsx # Post-import summary & naming dialogue
+│       ├── MetadataEditModal.tsx # Track ID3 metadata editor modal
+│       ├── Modals.tsx            # Modal overlays & confirmations
 │       ├── SettingsPanel.tsx     # Full app settings panel interface
-│       └── DownloadsPanel.tsx    # Offline library & folder downloads panel
+│       ├── SleepTimerPopover.tsx # Sleep timer popover overlay
+│       ├── SpeedSelector.tsx     # Playback rate controller popover
+│       ├── ThemedSelect.tsx      # Custom styled dropdown select
+│       ├── TrackRow.tsx          # Track list item renderer with context menus
+│       ├── VirtualTrackList.tsx  # Virtualized list for large collections
+│       ├── WaveformBar.tsx       # Audio waveform progress bar
+│       └── YtImportModal.tsx     # YouTube playlist import modal
 ├── src-tauri/
 │   ├── src/
-│   │   ├── main.rs               # Rust backend
+│   │   ├── lib.rs                # Tauri library entry
+│   │   ├── main.rs               # Rust backend & command handlers
 │   │   └── tray.rs               # System tray (Linux + Windows)
 │   ├── build.rs
 │   ├── Cargo.toml
@@ -360,6 +376,8 @@ veluna/
 │   ├── tauri.windows.conf.json
 │   ├── icons/
 │   └── binaries/                 # Windows-only bundled executables
+├── docs/                         # Landing page & installer script
+├── packaging/                    # Arch Linux PKGBUILD & .SRCINFO
 ├── public/
 ├── index.html
 ├── package.json
@@ -403,4 +421,3 @@ MIT © [rry0ku](https://github.com/rry0ku)
 ---
 
 *Built with Rust, React, and a stubborn belief that music software shouldn't interrupt your listening with ads.*
-
