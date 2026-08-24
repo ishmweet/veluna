@@ -50,24 +50,6 @@ You already have everything you need to stop paying for this. It's one download 
 
 ---
 
-## What you're giving up by not trying this
-
-| | Spotify Free | YouTube Music | **Veluna** |
-|---|---|---|---|
-| Ads interrupting playback | Yes | Yes (free tier) | **Never** |
-| Monthly cost | $0-12 | $0-11 | **$0, always** |
-| Account required | Yes | Yes | **No** |
-| Offline downloads | Premium only | Premium only | **Built in, free** |
-| Choice of audio format | No | No | **MP3 / Opus / M4A / FLAC** |
-| Telemetry / data collection | Yes | Yes | **None** |
-| Full-screen synced lyrics | Limited | No | **Yes** |
-| Import your existing playlists | N/A | N/A | **From Spotify or YouTube** |
-| Source code you can read | Closed | Closed | **Fully open, MIT licensed** |
-
-You're not being asked to compromise on features to get privacy and cost. You get both.
-
----
-
 ## Features
 
 ### 🔍 Streaming & Search
@@ -445,19 +427,6 @@ cd veluna
 npm install
 cargo tauri dev
 ```
-
----
-
-## One more thing
-
-If you made it this far, you've read more about a free app than most people read before buying something. That's usually a sign you were looking for exactly this.
-
-The download takes less time than reading the rest of this README did. And if you're not ready to install it yet, the fastest way to remember it exists later is to star the repo now, it takes one click and costs nothing, and it's genuinely the biggest reason small open-source projects survive long enough to become good ones.
-
-<p align="center">
-  <a href="https://github.com/rry0ku/veluna/releases"><img src="https://img.shields.io/badge/⬇%20Download%20Veluna-39FF14?style=for-the-badge" alt="Download" /></a>
-  <a href="https://github.com/rry0ku/veluna/stargazers"><img src="https://img.shields.io/badge/⭐%20Star%20this%20repo-FFC131?style=for-the-badge" alt="Star" /></a>
-</p>
 
 ---
 
