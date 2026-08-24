@@ -242,15 +242,13 @@ sudo dnf install -y mpv yt-dlp ffmpeg openssl-devel pkg-config \
 
 ### Windows, Bundled Binaries
 
-Download `binaries.zip` from the [Releases](https://github.com/rry0ku/veluna/releases) page and extract into `src-tauri/binaries/`:
+Run the automated setup script to download and configure all dependencies:
 
+```powershell
+npm run setup:deps
 ```
-src-tauri/binaries/
-├── mpv-x86_64-pc-windows-msvc.exe
-├── yt-dlp-x86_64-pc-windows-msvc.exe
-├── ffmpeg-x86_64-pc-windows-msvc.exe
-└── ffprobe-x86_64-pc-windows-msvc.exe
-```
+
+*(Alternatively, download `binaries.zip` from the [Releases](https://github.com/rry0ku/veluna/releases) page and extract directly into `src-tauri/binaries/`).*
 
 ### Clone & Build
 
