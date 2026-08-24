@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import {
   Search, X, ArrowUpCircle, CheckCircle, ExternalLink, RefreshCw,
-  FolderDown, FolderOpen, Image, Zap, Volume2, BarChart2, Globe,
+  FolderDown, FolderOpen, Image, Zap, BarChart2, Globe,
   Moon, Database, Upload, ArchiveRestore, Trash2, ChevronDown
 } from 'lucide-react';
 import { SettingsTab, DiskInfo } from '../types';
@@ -215,8 +215,6 @@ export type SettingsPanelProps = {
   onNavigateToUpdates?: () => void;
   lyricsSource: string; setLyricsSource: (v: string) => void;
   trayEnabled: boolean; setTrayEnabled: (v: boolean) => void;
-  audioDevices: { id: string; name: string; form: string; is_default: boolean }[];
-  setAudioDevices: React.Dispatch<React.SetStateAction<{ id: string; name: string; form: string; is_default: boolean }[]>>;
   discordRpcEnabled: boolean; setDiscordRpcEnabled: (v: boolean) => void;
   theme: string; setThemeState: (t: string) => void;
   accentColor: string; setAccentColorState: (a: string) => void;
@@ -242,7 +240,6 @@ export function SettingsPanel({
   appVersion,
   lyricsSource, setLyricsSource,
   trayEnabled, setTrayEnabled,
-  audioDevices, setAudioDevices,
   discordRpcEnabled, setDiscordRpcEnabled,
   theme, setThemeState,
   accentColor, setAccentColorState,
@@ -272,7 +269,7 @@ export function SettingsPanel({
     if (!searchQuery) return true;
     if (matchesSearch(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date"])) return true;
     if (matchesSearch(["Downloads", "Configure download quality", "Audio Quality", "Download Folder", "Audio Format", "Embed Thumbnail", "Duplicate Detection", "File Options"])) return true;
-    if (matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Audio Output", "Equalizer", "Bass", "Mid", "Treble"])) return true;
+    if (matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Equalizer", "Bass", "Mid", "Treble"])) return true;
     if (matchesSearch(["Integrations", "Discord Rich Presence", "Discord RPC", "Lyrics Source", "Primary source"])) return true;
     if (matchesSearch(["Storage", "Backup Location", "Create Backup", "Restore Backup", "Reset Veluna App"])) return true;
     if (matchesSearch(["Appearance", "System Tray", "Enable Tray Icon", "Default Startup Page", "Startup View", "Theme", "Accent Color", "Custom Theme"])) return true;
@@ -280,7 +277,6 @@ export function SettingsPanel({
   };
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
-  const [, setSwitchingDevice] = useState(false);
   const [startupNav, setStartupNav] = useState(() => loadLS('vg_startupNav', 'home'));
   const [hoveredSlider, setHoveredSlider] = useState<string | null>(null);
   const handleStartupNavChange = (v: string) => {
@@ -696,7 +692,7 @@ export function SettingsPanel({
           </div>
         )}
 
-        {show('playback') && matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Audio Output", "Equalizer", "Bass", "Mid", "Treble"]) && (
+        {show('playback') && matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Equalizer", "Bass", "Mid", "Treble"]) && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Playback</h2>
@@ -741,40 +737,6 @@ export function SettingsPanel({
                 </div>
                 <SettingsSwitch checked={autoplayEnabled} onChange={() => setAutoplayEnabled(!autoplayEnabled)} />
               </div>
-            </div>
-
-            <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",padding:"12px 16px",display:"flex",alignItems:"center",gap:"12px"}}>
-              <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0,display:"flex",alignItems:"center",gap:"8px",whiteSpace:"nowrap",flexShrink:0}}><Volume2 size={14} style={{color:"#8c8682"}} /> Audio Output Device</h3>
-              <div style={{flex:1}} />
-              {audioDevices.length === 0 ? (
-                <div style={{fontSize:"12px",color:"#6f6966"}}>No devices found</div>
-              ) : (() => {
-                const activeDevice = audioDevices.find(d => d.is_default) ?? audioDevices[0];
-                return (
-                  <ThemedSelect
-                    value={activeDevice?.id ?? ''}
-                    onChange={async (id) => {
-                      if (id === activeDevice?.id) return;
-                      setSwitchingDevice(true);
-                      try {
-                        await invoke('set_audio_device', { id });
-                        setAudioDevices(prev => prev.map(d => ({ ...d, is_default: d.id === id })));
-                        showToast(`Output switched: ${audioDevices.find(d=>d.id===id)?.name ?? id}`);
-                      } catch (e) { showToast(`Switch failed: ${e}`); }
-                      finally { setSwitchingDevice(false); }
-                    }}
-                    options={audioDevices.map(dev => ({
-                      value: dev.id,
-                      label: dev.name,
-                      desc: dev.form ? dev.form.charAt(0).toUpperCase() + dev.form.slice(1) : undefined,
-                    }))}
-                  />
-                );
-              })()}
-              <button onClick={(e) => { const icon = e.currentTarget.querySelector('svg')!; icon.style.transition='transform .5s ease'; icon.style.transform='rotate(360deg)'; setTimeout(()=>{icon.style.transition='none';icon.style.transform='rotate(0deg)';},520); invoke<{ id: string; name: string; form: string; is_default: boolean }[]>('list_audio_devices').then(setAudioDevices).catch(() => {}); }}
-                style={{padding:"4px",background:"none",border:"none",cursor:"pointer",color:"#5c5755",borderRadius:"6px",display:"flex",flexShrink:0,transition:"color .12s"}} title="Refresh devices" onMouseEnter={e=>e.currentTarget.style.color="#e2ddd9"} onMouseLeave={e=>e.currentTarget.style.color="#5c5755"}>
-                <RefreshCw size={13} />
-              </button>
             </div>
 
             <div style={{borderRadius:"14px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>

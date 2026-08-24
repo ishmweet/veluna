@@ -82,13 +82,8 @@ Veluna is a native desktop music application that treats `mpv` as its audio engi
 
 ### 🎤 Lyrics
 - Synced lyrics with **real-time line highlighting** that scrolls automatically as the song plays — click any line to seek
-- **Immersive full-screen view** — full-screen blurred album art background, left panel with cover, progress bar, controls, and audio output switcher; right panel with scrolling lyrics
+- **Immersive full-screen view** — full-screen blurred album art background, left panel with cover, progress bar, controls; right panel with scrolling lyrics
 - **Lyrics Source** selector in Settings → Playback: choose between **lrclib** (open, fast), **Musixmatch** (word-level richsync), or **NetEase** (best for C-pop / K-pop). Automatically falls back to lrclib → lyrics.ovh if primary source fails
-
-### 🔊 Audio Output
-- **Live device list** in Settings → Playback shows all active output devices with their form factor (headphones / speaker)
-- **Switch output instantly** without restarting playback — on Linux all active streams are moved to the new sink via `pactl move-sink-input`; on Windows switching uses the **Windows Core Audio IPolicyConfig COM interface** (same mechanism used by EarTrumpet / SoundSwitch — no external modules or installs required, works on Win7–Win11)
-- **Audio output dropdown in the immersive lyrics view** — switch devices without leaving the lyrics screen
 
 ### 🖥️ System Tray *(optional)*
 Enable in Settings → Appearance. Once active:
@@ -126,7 +121,7 @@ Available on every track in every view: Play, Add to Queue, Add to Playlist, Dow
 
 ### ⚙️ Settings
 - **Downloads** — quality, format, folder, embed thumbnail, duplicate detection
-- **Playback** — loudnorm, stream quality, skip silence, audio output device switcher, lyrics source selector, equalizer (bass / mid / treble, real-time via mpv)
+- **Playback** — loudnorm, stream quality, skip silence, lyrics source selector, equalizer (bass / mid / treble, real-time via mpv)
 - **Storage** — backup, restore, reset
 - **Appearance** — system tray toggle
 - **Updates** — automatic update check against GitHub Releases on startup; queries the backend to display the verified installed tag/version in the Settings panel
@@ -358,8 +353,7 @@ veluna/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── main.rs               # Rust backend
-│   │   ├── tray.rs               # System tray (Linux + Windows)
-│   │   └── audio_device.rs       # Audio device listing + switching
+│   │   └── tray.rs               # System tray (Linux + Windows)
 │   ├── build.rs
 │   ├── Cargo.toml
 │   ├── tauri.conf.json

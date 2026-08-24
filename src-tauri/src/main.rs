@@ -1,5 +1,4 @@
 mod tray;
-mod audio_device;
 
 use std::io::{Write, BufRead, BufReader};
 use std::process::Command;
@@ -207,7 +206,7 @@ lazy_static::lazy_static! {
         Arc::new(Mutex::new(None));
     static ref SLEEP_TIMER_GEN: Arc<Mutex<u64>> = Arc::new(Mutex::new(0));
 
-    static ref LOUDNORM_ENABLED: Arc<Mutex<bool>> = Arc::new(Mutex::new(true));
+    static ref LOUDNORM_ENABLED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
     static ref SKIP_SILENCE: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 }
 
@@ -2413,9 +2412,6 @@ fn main() {
             fetch_lyrics,
             search_yt_music,
             tray::tray_set,
-            audio_device::get_audio_device,
-            audio_device::list_audio_devices,
-            audio_device::set_audio_device,
             update_discord_rpc,
             clear_discord_rpc,
         ])

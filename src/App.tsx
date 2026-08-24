@@ -9,7 +9,6 @@ import {
   BarChart2,
   Check,
   CheckCircle,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -369,7 +368,6 @@ export default function Veluna() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyricsData, setLyricsData] = useState<{ lines: {time:number;text:string}[]; title: string; artist: string } | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
-  const [lyricsDevOpen, setLyricsDevOpen] = useState(false);
   // Artist thumbnail cache for Stats page
   const [artistThumbs, setArtistThumbs] = useState<Record<string, string>>({});
 
@@ -392,19 +390,12 @@ export default function Veluna() {
   const setBackupPath = useCallback((p: string) => { setBackupPathState(p); saveLS('vg_backupPath', p); }, []);
   const [playbackSpeed, setPlaybackSpeedState] = useState<number>(() => loadLS('vg_speed', 1));
   const [crossfadeSeconds] = useState<number>(() => loadLS('vg_crossfade', 0));
-  const [loudnormEnabled, setLoudnormEnabledState] = useState<boolean>(() => loadLS('vg_loudnorm', true));
+  const [loudnormEnabled, setLoudnormEnabledState] = useState<boolean>(() => loadLS('vg_loudnorm', false));
   const [skipSilence, setSkipSilenceState] = useState<boolean>(() => loadLS('vg_skipSilence', false));
   const [lyricsSource, setLyricsSource] = useState<string>(() => loadLS('vg_lyricsSource', 'lrclib'));
   const [trayEnabled, setTrayEnabled] = useState<boolean>(() => loadLS('vg_trayEnabled', false));
   const [autoplayEnabled, setAutoplayEnabled] = useState<boolean>(() => loadLS('vg_autoplay', true));
   const [metadataEditingTrack, setMetadataEditingTrack] = useState<Track | null>(null);
-  const [audioDevices, setAudioDevices] = useState<{ id: string; name: string; form: string; is_default: boolean }[]>([]);
-
-
-  useEffect(() => {
-    invoke<{ id: string; name: string; form: string; is_default: boolean }[]>('list_audio_devices')
-      .then(setAudioDevices).catch(() => {});
-  }, []);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const bookmarksRef = useRef<Record<string, number>>(loadLS('vg_bookmarks', {}));
   const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
@@ -4901,7 +4892,6 @@ export default function Veluna() {
               appVersion={appVersion}
               lyricsSource={lyricsSource} setLyricsSource={setLyricsSource}
               trayEnabled={trayEnabled} setTrayEnabled={setTrayEnabled}
-              audioDevices={audioDevices} setAudioDevices={setAudioDevices}
               discordRpcEnabled={discordRpcEnabled} setDiscordRpcEnabled={setDiscordRpcEnabled}
               theme={theme} setThemeState={setThemeState}
               accentColor={accentColor} setAccentColorState={setAccentColorState}
@@ -6223,7 +6213,6 @@ export default function Veluna() {
         }
         const pct = trackDurationSeconds > 0 ? Math.min((progressSeconds / trackDurationSeconds) * 100, 100) : 0;
         const remaining = trackDurationSeconds - progressSeconds;
-        const activeDevice = audioDevices.find(d => d.is_default);
         return (
           <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",userSelect:"none",background:"var(--v-bg0)"}}>
             {/* Background layers */}
@@ -6340,52 +6329,6 @@ export default function Veluna() {
                   <Volume2 size={14}/>
                 </button>
               </div>
-
-              {/* Audio device selector */}
-              {audioDevices.length > 0 && (
-                <div style={{width:"100%",position:"relative"}}>
-                  <button onClick={() => setLyricsDevOpen(o => !o)}
-                    style={{width:"100%",display:"flex",alignItems:"center",gap:"8px",padding:"7px 14px",borderRadius:"9999px",textAlign:"left",border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",cursor:"pointer",transition:"all .12s"}}
-                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,0.08)"} onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,0.04)"}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-                    <span style={{fontSize:"11px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textAlign:"left",color:"rgba(255,255,255,0.55)"}}>{activeDevice?.name ?? 'No device'}</span>
-                    <ChevronDown size={11} style={{color:"rgba(255,255,255,0.3)",transform:lyricsDevOpen?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}/>
-                  </button>
-                  {lyricsDevOpen && (
-                    <div style={{
-                      position:"absolute",
-                      top:"calc(100% + 6px)",
-                      left:0,right:0,
-                      borderRadius:"14px",
-                      padding:"4px",
-                      zIndex:99999,
-                      background:"rgba(12,11,11,0.35)",
-                      backdropFilter:"blur(32px)",
-                      WebkitBackdropFilter:"blur(32px)",
-                      border:"1px solid rgba(255,255,255,0.09)",
-                      animation:"dropIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) forwards"
-                    }}>
-                      {audioDevices.map(dev => (
-                        <button key={dev.id}
-                          onClick={async () => {
-                            if (!dev.is_default) {
-                              try { await invoke('set_audio_device', { id: dev.id }); setAudioDevices(prev => prev.map(d => ({ ...d, is_default: d.id === dev.id }))); showToast(`Output: ${dev.name}`); }
-                              catch (e) { showToast(`Switch failed: ${e}`); }
-                            }
-                            setLyricsDevOpen(false);
-                          }}
-                          style={{width:"100%",display:"flex",alignItems:"center",gap:"9px",padding:"7px 12px",textAlign:"left",border:"none",borderRadius:"9999px",background:dev.is_default?"rgba(255,255,255,0.07)":"transparent",cursor:dev.is_default?"default":"pointer",transition:"background .1s",color:"inherit"}}
-                          onMouseEnter={e=>{if(!dev.is_default)(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,0.05)";}}
-                          onMouseLeave={e=>{if(!dev.is_default)(e.currentTarget as HTMLElement).style.background="transparent";}}>
-                          <div style={{width:"5px",height:"5px",borderRadius:"50%",flexShrink:0,background:dev.is_default?"var(--v-accent)":"rgba(255,255,255,0.18)"}}/>
-                          <span style={{fontSize:"11.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:dev.is_default?"#fff":"rgba(255,255,255,0.5)",flex:1,textAlign:"left"}}>{dev.name}</span>
-                          {dev.is_default && <span style={{fontSize:"9px",fontWeight:700,color:"var(--v-accent)",flexShrink:0,letterSpacing:".08em"}}>ACTIVE</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
 
