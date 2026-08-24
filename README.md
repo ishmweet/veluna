@@ -4,11 +4,11 @@
   <img src="https://github.com/rry0ku/veluna/blob/main/src-tauri/icons/128x128%402x.png?raw=true" alt="Veluna logo" width="128" />
 </p>
 
-<h3 align="center">A native, ad-free desktop music player and library manager.</h3>
+<h3 align="center">You're paying for music you could be getting for free. Right now.</h3>
 
 <p align="center">
-An open-source desktop client that plays your local music library and streams audio from YouTube for personal use, built on <code>mpv</code> and <code>yt-dlp</code>.<br/>
-No account, no telemetry, no ads.
+A free, open-source desktop music player for people who are done with ads, subscriptions, and apps that spy on them.<br/>
+Stream from YouTube. Download for offline use. Own your library. No account, ever.
 </p>
 
 <p align="center">
