@@ -32,7 +32,7 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Stars](https://img.shields.io/github/stars/rry0ku/veluna?style=flat-square&color=39FF14)](https://github.com/rry0ku/veluna/stargazers)
 
-**[Download](https://github.com/rry0ku/veluna/releases) · [Discord](https://discord.com/invite/u7QXUgPcqr) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
+**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
 
 ---
 
