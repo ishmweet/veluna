@@ -214,9 +214,8 @@ Download and run the `veluna_<version>_x64-setup.exe` installer from the [Releas
 
 | Requirement | Version | Notes |
 |---|---|---|
-| [Node.js](https://nodejs.org/) | 18+ | Frontend build |
+| [Node.js](https://nodejs.org/) | 18+ | Frontend build & Tauri CLI (`npm`) |
 | [Rust](https://rustup.rs/) | stable | `rustup install stable` |
-| [Tauri CLI](https://tauri.app/start/prerequisites/) | v2 | `cargo install tauri-cli --version "^2"` |
 
 ### Linux, System Dependencies
 
@@ -259,7 +258,7 @@ src-tauri/binaries/
 git clone https://github.com/rry0ku/veluna.git
 cd veluna
 npm install
-cargo tauri build
+npm run tauri build
 ```
 
 | Platform | Output path |
@@ -271,7 +270,7 @@ cargo tauri build
 ### Development Mode
 
 ```bash
-cargo tauri dev
+npm run tauri dev
 ```
 
 ---
@@ -423,7 +422,7 @@ Pull requests are welcome. For major changes, please open an issue first.
 git clone https://github.com/rry0ku/veluna.git
 cd veluna
 npm install
-cargo tauri dev
+npm run tauri dev
 ```
 
 ---
