@@ -13,6 +13,7 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 
 <p align="center">
   <a href="https://github.com/rry0ku/veluna/releases"><img src="https://img.shields.io/badge/⬇%20Download%20for%20Windows%20%26%20Linux-39FF14?style=for-the-badge" alt="Download" /></a>
+  <a href="https://discord.com/invite/u7QXUgPcqr"><img src="https://img.shields.io/badge/💬%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <p align="center">
@@ -29,12 +30,13 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational?style=flat-square&logo=linux&logoColor=white)](https://github.com/rry0ku/veluna/releases)
 [![License](https://img.shields.io/badge/license-MIT-39FF14?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.com/invite/u7QXUgPcqr)
 [![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-stable-CE422B?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![Stars](https://img.shields.io/github/stars/rry0ku/veluna?style=flat-square&color=39FF14)](https://github.com/rry0ku/veluna/stargazers)
 
-**[Download](https://github.com/rry0ku/veluna/releases) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
+**[Download](https://github.com/rry0ku/veluna/releases) · [Discord](https://discord.com/invite/u7QXUgPcqr) · [Build from Source](#building-from-source) · [Report a Bug](https://github.com/rry0ku/veluna/issues)**
 
 ---
 
