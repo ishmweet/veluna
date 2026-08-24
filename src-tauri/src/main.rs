@@ -126,6 +126,15 @@ fn init_bin_paths() {
 
     #[cfg(target_os = "windows")]
     {
+        if let Ok(exe_p) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_p.parent() {
+                let dir_s = exe_dir.to_string_lossy().to_string();
+                paths.push(dir_s.clone());
+                paths.push(format!("{}\\resources", dir_s));
+                paths.push(format!("{}\\binaries", dir_s));
+            }
+        }
+
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
         let user_profile   = std::env::var("USERPROFILE").unwrap_or_default();
         
