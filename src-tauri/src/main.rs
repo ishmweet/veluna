@@ -245,7 +245,7 @@ static PLAY_COUNTER: std::sync::atomic::AtomicU64 =
 
 static PREFETCH_SEMAPHORE: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
 fn prefetch_semaphore() -> &'static tokio::sync::Semaphore {
-    PREFETCH_SEMAPHORE.get_or_init(|| tokio::sync::Semaphore::new(1))
+    PREFETCH_SEMAPHORE.get_or_init(|| tokio::sync::Semaphore::new(4))
 }
 
 fn expand_tilde(path: &str) -> String {
@@ -539,18 +539,26 @@ fn ensure_mpv_running() -> bool {
         "--keep-open=yes".into(),
         "--cache=yes".into(),
         "--cache-secs=30".into(),
-        "--demuxer-max-bytes=50MiB".into(),
-        "--demuxer-max-back-bytes=5MiB".into(),
-        "--demuxer-readahead-secs=5".into(),
+        "--demuxer-max-bytes=20MiB".into(),
+        "--demuxer-max-back-bytes=2MiB".into(),
+        "--demuxer-readahead-secs=2".into(),
+        "--demuxer-lavf-analyzeduration=0.1".into(),
+        "--demuxer-lavf-probesize=32768".into(),
+        "--audio-buffer=0.05".into(),
+        "--initial-audio-sync=no".into(),
         "--cache-pause=no".into(),
         "--cache-pause-initial=no".into(),
         "--network-timeout=10".into(),
-        "--audio-buffer=0.1".into(),
         "--demuxer-seekable-cache=yes".into(),
         "--cache-on-disk=no".into(),
         "--audio-pitch-correction=yes".into(),
         "--force-window=no".into(),
-        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36".into(),
+        "--user-agent=Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36".into(),
+        "--ytdl=yes".into(),
+        "--ytdl-format=ba/b/bestaudio/best/18/22".into(),
+        "--ytdl-raw-options=extractor-args=youtube:player_client=android,format=ba/b/bestaudio/best/18/22,no-check-certificates=,no-warnings=".into(),
+        "--demuxer-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5".into(),
+        "--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5".into(),
         format!("--input-ipc-server={}", socket_path()),
     ];
     if let Some(af) = mpv_af_flag() { args.push(af); }
@@ -564,12 +572,13 @@ fn ensure_mpv_running() -> bool {
 }
 
 fn switch_track_ipc(url: &str) -> Result<(), String> {
-    
-    let _ = send_ipc_command_with_retry(r#"{"command": ["set_property", "pause", true]}"#, 2);
-    
-    send_ipc_command_with_retry(r#"{"command": ["playlist-clear"]}"#, 3)
-        .map_err(|e| format!("playlist-clear failed: {}", e))?;
-    
+    {
+        let mut state = current_playback_state().lock().unwrap();
+        state.position = 0.0;
+        state.duration = 0.0;
+        state.playing = false;
+        state.eof_reached = false;
+    }
     let cmd = serde_json::json!({"command": ["loadfile", url, "replace"]}).to_string();
     send_ipc_command_with_retry(&cmd, 3)
         .map_err(|e| format!("loadfile failed: {}", e))?;
@@ -598,6 +607,124 @@ fn log_debug(msg: &str) {
     }
 }
 
+static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+
+fn get_http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(2500))
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            .build()
+            .unwrap_or_default()
+    })
+}
+
+fn extract_video_id(url: &str) -> Option<String> {
+    if url.len() == 11 && !url.contains('/') && !url.contains('?') && !url.contains('&') {
+        return Some(url.to_string());
+    }
+    if let Some(pos) = url.find("v=") {
+        let rest = &url[pos + 2..];
+        let end = rest.find('&').unwrap_or(rest.len());
+        let id = &rest[..end];
+        if id.len() == 11 { return Some(id.to_string()); }
+    }
+    if let Some(pos) = url.find("youtu.be/") {
+        let rest = &url[pos + 9..];
+        let end = rest.find('?').or_else(|| rest.find('&')).unwrap_or(rest.len());
+        let id = &rest[..end];
+        if id.len() == 11 { return Some(id.to_string()); }
+    }
+    None
+}
+
+async fn extract_stream_url_direct_innertube(url: &str) -> Option<String> {
+    let video_id = extract_video_id(url)?;
+    log_debug(&format!("Attempting direct Innertube fast-path for videoId: {}", video_id));
+
+    let client = get_http_client();
+    let body = serde_json::json!({
+        "context": {
+            "client": {
+                "clientName": "ANDROID",
+                "clientVersion": "21.26.364",
+                "androidSdkVersion": 30,
+                "userAgent": "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip",
+                "osName": "Android",
+                "osVersion": "11",
+                "hl": "en",
+                "timeZone": "UTC",
+                "utcOffsetMinutes": 0
+            }
+        },
+        "videoId": video_id,
+        "playbackContext": {
+            "contentPlaybackContext": {
+                "html5Preference": "HTML5_PREF_WANTS"
+            }
+        },
+        "contentCheckOk": true,
+        "racyCheckOk": true
+    });
+
+    let res = client.post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip")
+        .header("X-YouTube-Client-Name", "3")
+        .header("X-YouTube-Client-Version", "21.26.364")
+        .header("Origin", "https://www.youtube.com")
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() {
+        log_debug(&format!("Direct Innertube responded with non-200 status: {}", res.status()));
+        return None;
+    }
+
+    let json: serde_json::Value = res.json().await.ok()?;
+    let streaming_data = json.get("streamingData")?;
+
+    // Check progressive formats first (format 18 has AAC audio + AVC video stream, plays immediately with 0 demux delay)
+    if let Some(formats) = streaming_data.get("formats").and_then(|f| f.as_array()) {
+        for f in formats {
+            if let Some(url_str) = f.get("url").and_then(|u| u.as_str()) {
+                if !url_str.is_empty() && url_str.starts_with("http") {
+                    log_debug(&format!("Direct Innertube resolved progressive format itag {}", f.get("itag").unwrap_or(&serde_json::Value::Null)));
+                    return Some(url_str.to_string());
+                }
+            }
+        }
+    }
+
+    // Check adaptive formats
+    if let Some(adaptive) = streaming_data.get("adaptiveFormats").and_then(|a| a.as_array()) {
+        for f in adaptive {
+            let mime = f.get("mimeType").and_then(|m| m.as_str()).unwrap_or("");
+            if mime.starts_with("audio/") {
+                if let Some(url_str) = f.get("url").and_then(|u| u.as_str()) {
+                    if !url_str.is_empty() && url_str.starts_with("http") {
+                        log_debug(&format!("Direct Innertube resolved adaptive audio format itag {}", f.get("itag").unwrap_or(&serde_json::Value::Null)));
+                        return Some(url_str.to_string());
+                    }
+                }
+            }
+        }
+        for f in adaptive {
+            if let Some(url_str) = f.get("url").and_then(|u| u.as_str()) {
+                if !url_str.is_empty() && url_str.starts_with("http") {
+                    log_debug(&format!("Direct Innertube resolved adaptive format itag {}", f.get("itag").unwrap_or(&serde_json::Value::Null)));
+                    return Some(url_str.to_string());
+                }
+            }
+        }
+    }
+
+    log_debug("Direct Innertube formats required signature (falling back to yt-dlp)");
+    None
+}
+
 async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Option<String> {
     log_debug(&format!("extract_stream_url_async started for URL: {}, my_id: {:?}", youtube_url, my_id));
 
@@ -608,35 +735,38 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
         }
     }
 
+    // Fast-path: Direct Innertube JSON extraction (~150ms)
+    if let Some(direct_url) = extract_stream_url_direct_innertube(&youtube_url).await {
+        if let Some(id) = my_id {
+            if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != id {
+                return None;
+            }
+        }
+        return Some(direct_url);
+    }
+
     tokio::task::spawn_blocking(move || {
         use std::process::{Command, Stdio};
         use std::io::Read;
 
-        let group2: &[(Option<&str>, &str)] = &[
-            (Some("chrome+basictext"),      "web"),
-            (Some("firefox"),               "web"),
-            (Some("brave+basictext"),       "web"),
-            (Some("chromium+basictext"),    "web"),
-        ];
+        let mut children: Vec<(std::process::Child, &'static str)> = Vec::new();
 
-        let mut children = Vec::new();
-        let mut spawned_fallback = false;
-
+        // Primary Tier 1: single-request extraction with android client & player_skip
         let mut cmd = Command::new(bin_ytdlp());
         cmd.env("PYTHONHASHSEED", "0");
         cmd.env("PYTHONDONTWRITEBYTECODE", "1");
         cmd.env("PYTHONNOUSERSITE", "1");
         cmd.no_window();
         cmd.args([
+            "--no-config",
             "--no-warnings", "--no-playlist", "--no-check-certificates",
-            "--socket-timeout", "6", "--retries", "0",
+            "--socket-timeout", "4", "--retries", "0",
             "--no-call-home",
             "--no-check-formats",
-            "--js-runtimes", "node",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "--geo-bypass",
             "-g",
-            "--extractor-args", "youtube:player_client=android,skip=webpage",
-            "-f", "140/251/18/bestaudio",
+            "--extractor-args", "youtube:player_client=android;player_skip=webpage,configs,translated_subs,dash,hls,js,initial_data",
+            "-f", "ba/b/bestaudio/best/18/22",
             "--", &youtube_url
         ]);
         cmd.stdout(Stdio::piped());
@@ -644,101 +774,48 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
         cmd.stdin(Stdio::null());
 
         log_debug("Spawning primary client (android)...");
-        match cmd.spawn() {
-            Ok(child) => {
-                children.push((child, None, "android"));
-            }
-            Err(e) => {
-                log_debug(&format!("Failed to spawn android client: {}", e));
-            }
+        if let Ok(child) = cmd.spawn() {
+            children.push((child, "primary"));
         }
 
         let start_time = std::time::Instant::now();
-        let timeout = std::time::Duration::from_millis(9500);
+        let timeout = std::time::Duration::from_millis(4000);
         let mut resolved_url = None;
-        let mut spawned_group1_fallback = false;
+        let mut spawned_tier2 = false;
 
-        while start_time.elapsed() < timeout && resolved_url.is_none() && (!children.is_empty() || !spawned_fallback) {
-            if !spawned_group1_fallback && (start_time.elapsed() >= std::time::Duration::from_millis(600) || children.is_empty()) {
-                log_debug("Spawning secondary group1 clients (ios, default)...");
-                let secondary = &[(None, "ios"), (None, "default")];
-                for &(browser, client) in secondary {
-                    if let Some(id) = my_id {
-                        if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != id {
-                            break;
-                        }
-                    }
-                    let mut cmd = Command::new(bin_ytdlp());
-                    cmd.env("PYTHONHASHSEED", "0");
-                    cmd.env("PYTHONDONTWRITEBYTECODE", "1");
-                    cmd.env("PYTHONNOUSERSITE", "1");
-                    cmd.no_window();
-                    cmd.args([
-                        "--no-warnings", "--no-playlist", "--no-check-certificates",
-                        "--socket-timeout", "6", "--retries", "0",
-                        "--no-call-home",
-                        "--no-check-formats",
-                        "--js-runtimes", "node",
-                        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-                        "-g",
-                    ]);
-                    if client != "default" {
-                        cmd.args(["--extractor-args", &format!("youtube:player_client={},skip=webpage", client)]);
-                    }
-                    cmd.args(["-f", "140/251/18/bestaudio", "--", &youtube_url]);
-                    cmd.stdout(Stdio::piped());
-                    cmd.stderr(Stdio::piped());
-                    cmd.stdin(Stdio::null());
-                    if let Ok(child) = cmd.spawn() {
-                        children.push((child, browser, client));
-                    }
+        while start_time.elapsed() < timeout && resolved_url.is_none() && (!children.is_empty() || !spawned_tier2) {
+            // Tier 2 Fallback: if Tier 1 hasn't resolved within 750ms, spawn Android / iOS fallback
+            if !spawned_tier2 && (start_time.elapsed() >= std::time::Duration::from_millis(750) || children.is_empty()) {
+                log_debug("Spawning tier2 client fallback (android,ios,mweb)...");
+                let mut cmd2 = Command::new(bin_ytdlp());
+                cmd2.env("PYTHONHASHSEED", "0");
+                cmd2.env("PYTHONDONTWRITEBYTECODE", "1");
+                cmd2.env("PYTHONNOUSERSITE", "1");
+                cmd2.no_window();
+                cmd2.args([
+                    "--no-config",
+                    "--no-warnings", "--no-playlist", "--no-check-certificates",
+                    "--socket-timeout", "4", "--retries", "0",
+                    "--no-call-home",
+                    "--no-check-formats",
+                    "--geo-bypass",
+                    "-g",
+                    "--extractor-args", "youtube:player_client=android,ios,mweb;player_skip=webpage,configs,translated_subs,dash,hls,js,initial_data",
+                    "-f", "ba/b/bestaudio/best/18/22",
+                    "--", &youtube_url
+                ]);
+                cmd2.stdout(Stdio::piped());
+                cmd2.stderr(Stdio::piped());
+                cmd2.stdin(Stdio::null());
+                if let Ok(child2) = cmd2.spawn() {
+                    children.push((child2, "tier2"));
                 }
-                spawned_group1_fallback = true;
-            }
-
-            if !spawned_fallback && (start_time.elapsed() >= std::time::Duration::from_millis(1600) || children.is_empty()) {
-                log_debug("Spawning fallback browser cookie clients...");
-                for &(browser, client) in group2 {
-                    if let Some(id) = my_id {
-                        if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != id {
-                            break;
-                        }
-                    }
-                    let mut cmd = Command::new(bin_ytdlp());
-                    cmd.env("PYTHONHASHSEED", "0");
-                    cmd.env("PYTHONDONTWRITEBYTECODE", "1");
-                    cmd.env("PYTHONNOUSERSITE", "1");
-                    cmd.no_window();
-                    cmd.args([
-                        "--no-warnings", "--no-playlist", "--no-check-certificates",
-                        "--socket-timeout", "6", "--retries", "0",
-                        "--no-call-home",
-                        "--no-check-formats",
-                        "--js-runtimes", "node",
-                        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-                        "-g",
-                    ]);
-                    if client != "default" {
-                        cmd.args(["--extractor-args", &format!("youtube:player_client={},skip=webpage", client)]);
-                    }
-                    cmd.args(["-f", "140/251/18/bestaudio"]);
-                    if let Some(ref b) = browser {
-                        cmd.args(["--cookies-from-browser", b]);
-                    }
-                    cmd.args(["--", &youtube_url]);
-                    cmd.stdout(Stdio::piped());
-                    cmd.stderr(Stdio::piped());
-                    cmd.stdin(Stdio::null());
-                    if let Ok(child) = cmd.spawn() {
-                        children.push((child, browser, client));
-                    }
-                }
-                spawned_fallback = true;
+                spawned_tier2 = true;
             }
 
             let mut finished_indices = Vec::new();
 
-            for (idx, (child, browser, client)) in children.iter_mut().enumerate() {
+            for (idx, (child, label)) in children.iter_mut().enumerate() {
                 if let Some(id) = my_id {
                     if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != id {
                         log_debug("extract_stream_url superseded during monitoring loop");
@@ -749,37 +826,32 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         finished_indices.push(idx);
-                        log_debug(&format!("Client {}, browser {:?} finished. Status: {}", client, browser, status));
+                        log_debug(&format!("Worker {} finished with status: {}", label, status));
 
                         if status.success() {
                             if let Some(mut stdout) = child.stdout.take() {
                                 let mut stdout_str = String::new();
-                                if let Ok(_) = stdout.read_to_string(&mut stdout_str) {
-                                    log_debug(&format!("Client {}, browser {:?} stdout read length: {}", client, browser, stdout_str.len()));
+                                if stdout.read_to_string(&mut stdout_str).is_ok() {
                                     if let Some(url) = stdout_str.lines()
                                         .find(|l| l.starts_with("http") && !l.contains(".m3u8") && !l.contains("manifest.googlevideo.com"))
                                         .map(|s| s.trim().to_string())
                                     {
-                                        log_debug(&format!("Client {}, browser {:?} found URL: {}", client, browser, &url[..url.len().min(60)]));
+                                        log_debug(&format!("Worker {} found stream URL: {}", label, &url[..url.len().min(60)]));
                                         resolved_url = Some(url);
                                         break;
                                     }
                                 }
                             }
-                        } else {
-                            if let Some(mut stderr) = child.stderr.take() {
-                                let mut stderr_str = String::new();
-                                let _ = stderr.read_to_string(&mut stderr_str);
-                                log_debug(&format!("Client {}, browser {:?} failed. Stderr: {}", client, browser, stderr_str.trim()));
-                            }
+                        } else if let Some(mut stderr) = child.stderr.take() {
+                            let mut stderr_str = String::new();
+                            let _ = stderr.read_to_string(&mut stderr_str);
+                            log_debug(&format!("Worker {} failed: {}", label, stderr_str.trim()));
                         }
                     }
-                    Ok(None) => {
-                        
-                    }
+                    Ok(None) => {}
                     Err(e) => {
                         finished_indices.push(idx);
-                        log_debug(&format!("Error checking client {}, browser {:?}: {}", client, browser, e));
+                        log_debug(&format!("Error checking worker {}: {}", label, e));
                     }
                 }
             }
@@ -804,18 +876,14 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
             }
 
             if resolved_url.is_none() && !children.is_empty() {
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                std::thread::sleep(std::time::Duration::from_millis(40));
             }
         }
 
-        for (mut child, browser, client) in children {
-            log_debug(&format!("Killing remaining child process for client: {}, browser: {:?}", client, browser));
+        for (mut child, label) in children {
+            log_debug(&format!("Terminating worker process {}", label));
             let _ = child.kill();
             let _ = child.wait();
-        }
-
-        if resolved_url.is_none() && start_time.elapsed() >= timeout {
-            log_debug("Timeout (9.5s) reached in extract_stream_url_async!");
         }
 
         resolved_url
@@ -859,14 +927,7 @@ async fn play_audio(url: String) -> Result<(), String> {
 
     let stream_url = if let Some(c) = cached {
         c
-    } else {
-        let url = extract_stream_url_async(safe_url.clone(), Some(my_id))
-            .await
-            .ok_or_else(|| {
-                log_debug("Failed to extract stream URL in play_audio");
-                "Could not extract stream URL. Update yt-dlp: yt-dlp -U".to_string()
-            })?;
-
+    } else if let Some(extracted) = extract_stream_url_async(safe_url.clone(), Some(my_id)).await {
         if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != my_id {
             log_debug(&format!("Superseded after extraction. current PLAY_COUNTER: {}", PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst)));
             return Err("Superseded by newer play request".to_string());
@@ -875,13 +936,16 @@ async fn play_audio(url: String) -> Result<(), String> {
         {
             let mut cache = PREFETCH_CACHE.lock().unwrap();
             let now = std::time::Instant::now();
-            cache.insert(safe_url.clone(), CacheEntry { url: url.clone(), ts: now });
+            cache.insert(safe_url.clone(), CacheEntry { url: extracted.clone(), ts: now });
         }
 
-        url
+        extracted
+    } else {
+        log_debug(&format!("Track extraction failed - video is unavailable or deleted on YouTube: {}", safe_url));
+        return Err("Track is unavailable or cannot be streamed on YouTube".to_string());
     };
 
-    log_debug(&format!("Streaming URL resolved: {}", &stream_url[..stream_url.len().min(80)]));
+    log_debug(&format!("Streaming URL to MPV: {}", &stream_url[..stream_url.len().min(80)]));
 
     tokio::task::spawn_blocking(move || {
         if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != my_id {
@@ -1905,14 +1969,23 @@ fn start_mpv_event_listener(app_handle: tauri::AppHandle) {
                                         match name {
                                             "time-pos" => {
                                                 if let Some(pos) = v["data"].as_f64() {
-                                                    state.position = safe_f64(pos);
+                                                    let p = safe_f64(pos);
+                                                    state.position = p;
+                                                    if p > 0.05 && !state.playing && !state.paused {
+                                                        state.playing = true;
+                                                        let _ = app_handle.emit("mpv_track_started", ());
+                                                    }
                                                     changed = true;
                                                 }
                                             }
                                             "pause" => {
                                                 if let Some(paused) = v["data"].as_bool() {
                                                     state.paused = paused;
-                                                    state.playing = !paused;
+                                                    if paused {
+                                                        state.playing = false;
+                                                    } else if state.position > 0.05 {
+                                                        state.playing = true;
+                                                    }
                                                     changed = true;
                                                     mpris_notify();
                                                 }
@@ -1943,7 +2016,13 @@ fn start_mpv_event_listener(app_handle: tauri::AppHandle) {
                                     }
                                     "end-file" => {
                                         let reason = v["reason"].as_str().unwrap_or("");
-                                        if reason == "eof" {
+                                        if reason == "error" {
+                                            {
+                                                let mut state = current_playback_state().lock().unwrap();
+                                                state.playing = false;
+                                            }
+                                            let _ = app_handle.emit("mpv_track_error", ());
+                                        } else if reason == "eof" {
                                             {
                                                 let mut state = current_playback_state().lock().unwrap();
                                                 state.eof_reached = true;
@@ -1958,7 +2037,8 @@ fn start_mpv_event_listener(app_handle: tauri::AppHandle) {
                                         {
                                             let mut state = current_playback_state().lock().unwrap();
                                             state.eof_reached = false;
-                                            state.playing = !state.paused;
+                                            state.position = 0.0;
+                                            state.playing = false;
                                         }
                                         let s_clone = current_playback_state().lock().unwrap().clone();
                                         let _ = app_handle.emit("mpv_playback_state", &s_clone);

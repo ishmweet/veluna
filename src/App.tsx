@@ -170,6 +170,24 @@ export default function Veluna() {
   const setIsPlayingSync = useCallback((v: boolean) => { isPlayingRef.current = v; setIsPlaying(v); }, []);
 
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const isLoadingTrackRef = useRef(false);
+  const [loadingTrackUrl, setLoadingTrackUrl] = useState<string | null>(null);
+  const loadingTrackUrlRef = useRef<string | null>(null);
+  const setLoadingTrackUrlSync = useCallback((url: string | null) => {
+    loadingTrackUrlRef.current = url;
+    setLoadingTrackUrl(url);
+    const loading = !!url;
+    isLoadingTrackRef.current = loading;
+    setIsLoadingTrack(loading);
+  }, []);
+  const setIsLoadingTrackSync = useCallback((v: boolean) => {
+    isLoadingTrackRef.current = v;
+    setIsLoadingTrack(v);
+    if (!v) {
+      loadingTrackUrlRef.current = null;
+      setLoadingTrackUrl(null);
+    }
+  }, []);
   const [activeNav, setActiveNav] = useState(() => loadLS('vg_startupNav', 'home'));
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState(__APP_VERSION__);
@@ -758,7 +776,7 @@ export default function Veluna() {
     hoverPrefetchTimer.current = setTimeout(() => {
       hoverPrefetchRef.current = url;
       invoke('prefetch_track', { url }).catch(() => {});
-    }, 150);
+    }, 50);
   }, []);
 
   useEffect(() => {
@@ -925,7 +943,8 @@ export default function Veluna() {
     setAbLoop({ a: null, b: null }); abLoopRef.current = { a: null, b: null };
     setCurrentTrack(track); currentTrackRef.current = track;
     setCurrentLocalPath(null); currentLocalPathRef.current = null;
-    setIsLoadingTrack(true); setIsPlayingSync(false);
+    setLoadingTrackUrlSync(track.url);
+    setIsPlayingSync(false);
     setProgressSeconds(0); progressSecondsRef.current = 0;
     setTrackDurationSeconds(0); trackDurationRef.current = 0;
     setWaveformData([]); setAudioInfo(null);
@@ -951,35 +970,20 @@ export default function Veluna() {
     }
     setQuickPicks(prev => [track, ...prev.filter(t => t.url !== track.url)].slice(0, 20));
 
+    setLoadingTrackUrlSync(track.url);
+    setIsPlayingSync(false);
+
     try {
       await invoke('play_audio', { url: track.url });
-      await invoke('set_volume', { volume });
-      await invoke('set_playback_speed', { speed: playbackSpeed });
-      await invoke('set_equalizer', { bass: eq.bass, mid: eq.mid, treble: eq.treble });
 
-      let waited = 0;
-      await new Promise<void>(resolve => {
-        const t = setInterval(async () => {
-          waited += 200;
-          try {
-            const s: { position: number; duration: number; playing: boolean; paused: boolean } = await invoke('get_playback_state');
-            if (s.duration > 0 || s.playing) {
-              if (s.duration > 0) { setTrackDurationSeconds(s.duration); trackDurationRef.current = s.duration; }
-              
-              if (s.paused) { invoke('resume_audio').catch(() => {}); }
-              clearInterval(t); resolve(); return;
-            }
-          } catch {}
-          if (waited >= 12000) { clearInterval(t); resolve(); }
-        }, 200);
-      });
-
-      setIsPlayingSync(true);
+      invoke('set_volume', { volume }).catch(() => {});
+      invoke('set_playback_speed', { speed: playbackSpeed }).catch(() => {});
+      invoke('set_equalizer', { bass: eq.bass, mid: eq.mid, treble: eq.treble }).catch(() => {});
 
       if (codecPollRef.current) clearInterval(codecPollRef.current);
       let codecWaited = 0;
       codecPollRef.current = setInterval(async () => {
-        codecWaited += 400;
+        codecWaited += 300;
         try {
           const info: AudioInfo = await invoke('get_audio_info');
           if (info?.codec && info.codec !== 'unknown' && info.codec !== '') {
@@ -988,19 +992,25 @@ export default function Veluna() {
             codecPollRef.current = null;
           }
         } catch {}
-        if (codecWaited >= 6000) {
+        if (codecWaited >= 5000) {
           if (codecPollRef.current) clearInterval(codecPollRef.current);
           codecPollRef.current = null;
         }
-      }, 400);
+      }, 300);
 
       const bm = bookmarksRef.current[track.url];
       if (bm && bm > 2) {
-        setTimeout(() => invoke('seek_audio', { time: bm }).catch(() => {}), 800);
+        setTimeout(() => invoke('seek_audio', { time: bm }).catch(() => {}), 500);
       }
-    } catch { setIsPlayingSync(false); }
-    finally { setIsLoadingTrack(false); }
-  }, [volume, playbackSpeed, eq, setIsPlayingSync]);
+    } catch (err: any) {
+      setIsPlayingSync(false);
+      setLoadingTrackUrlSync(null);
+      const errMsg = typeof err === 'string' ? err : err?.message || '';
+      if (!errMsg.includes('Superseded')) {
+        showToast('Track unavailable on YouTube');
+      }
+    }
+  }, [volume, playbackSpeed, eq, setIsPlayingSync, setLoadingTrackUrlSync, showToast]);
 
   const handlePlayLocalTrack = useCallback(async (local: LocalTrack, localList?: LocalTrack[], localIndex?: number) => {
     invoke('pause_audio').catch(() => {});
@@ -1018,7 +1028,8 @@ export default function Veluna() {
       if (idx >= 0) localTrackIndexRef.current = idx;
     }
 
-    setIsLoadingTrack(true); setIsPlayingSync(false);
+    setLoadingTrackUrlSync(`local://${local.path}`);
+    setIsPlayingSync(false);
     setProgressSeconds(0); progressSecondsRef.current = 0;
     setTrackDurationSeconds(0); trackDurationRef.current = 0;
     setAudioInfo(null);
@@ -1056,17 +1067,17 @@ export default function Veluna() {
       await invoke('set_volume', { volume });
       await invoke('set_playback_speed', { speed: playbackSpeed });
       
-      setIsPlayingSync(true);
-      
       setTimeout(async () => {
         try {
           const s: { position: number; duration: number } = await invoke('get_playback_state');
           if (s.duration > 0) { setTrackDurationSeconds(s.duration); trackDurationRef.current = s.duration; }
         } catch {}
       }, 300);
-    } catch { setIsPlayingSync(false); }
-    finally { setIsLoadingTrack(false); }
-  }, [volume, playbackSpeed, setIsPlayingSync]);
+    } catch {
+      setIsPlayingSync(false);
+      setLoadingTrackUrlSync(null);
+    }
+  }, [volume, playbackSpeed, setIsPlayingSync, setLoadingTrackUrlSync]);
 
   const handleDeleteLocalTrack = useCallback(async (t: LocalTrack) => {
     try { await invoke('delete_local_file', { path: t.path }); showToast(`Deleted: ${t.title}`); }
@@ -1481,6 +1492,8 @@ export default function Veluna() {
   useEffect(() => {
     let unlistenState: (() => void) | undefined;
     let unlistenEnd: (() => void) | undefined;
+    let unlistenStarted: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
 
     listen<{ playing: boolean; paused: boolean; position: number; duration: number; eof_reached: boolean }>(
       'mpv_playback_state',
@@ -1501,8 +1514,18 @@ export default function Veluna() {
           setTrackDurationSeconds(s.duration);
         }
 
-        if (!isLoadingTrack && !endDetectedRef.current) {
-          const playing = !s.paused;
+        // Strictly keep loading animation active until audio genuinely begins playback
+        if (s.position > 0.05 && s.playing) {
+          if (isLoadingTrackRef.current) {
+            setIsLoadingTrackSync(false);
+          }
+          if (!isPlayingRef.current && !s.paused) {
+            setIsPlayingSync(true);
+          }
+        }
+
+        if (!endDetectedRef.current && !isLoadingTrackRef.current) {
+          const playing = !s.paused && s.playing;
           if (playing !== isPlayingRef.current) setIsPlayingSync(playing);
         }
 
@@ -1536,6 +1559,22 @@ export default function Veluna() {
       }
     ).then(fn => { unlistenState = fn; });
 
+    listen('mpv_track_started', () => {
+      if (isLoadingTrackRef.current) {
+        setIsLoadingTrackSync(false);
+      }
+      setIsPlayingSync(true);
+    }).then(fn => { unlistenStarted = fn; });
+
+    listen('mpv_track_error', () => {
+      if (isLoadingTrackRef.current) {
+        setIsLoadingTrackSync(false);
+      }
+      setLoadingTrackUrlSync(null);
+      setIsPlayingSync(false);
+      showToast("Track unavailable on YouTube");
+    }).then(fn => { unlistenError = fn; });
+
     listen('mpv_track_end', () => {
       if (!endDetectedRef.current) {
         handleTrackEnd();
@@ -1559,8 +1598,10 @@ export default function Veluna() {
     return () => {
       unlistenState?.();
       unlistenEnd?.();
+      unlistenStarted?.();
+      unlistenError?.();
     };
-  }, [isLoadingTrack, handleTrackEnd, setIsPlayingSync, crossfadeSeconds, volume]);
+  }, [handleTrackEnd, setIsPlayingSync, setIsLoadingTrackSync, crossfadeSeconds, volume, showToast]);
 
   const handleSelectDirectory = useCallback(async () => {
     try {
@@ -2922,6 +2963,7 @@ export default function Veluna() {
                         <div className="v-home-quickpicks-grid">
                           {quickPicks.slice(0, 12).map((track, cardIdx) => {
                             const isActive = currentTrack?.url === track.url;
+                            const isCardLoading = loadingTrackUrl === track.url || (isActive && isLoadingTrack);
                             return (
                               <div
                                 key={track.url}
@@ -2976,17 +3018,20 @@ export default function Veluna() {
                                       loading="lazy"
                                     />
                                   )}
-                                  {isActive && isLoadingTrack ? (
-                                    <div style={{
-                                      position: 'absolute',
-                                      inset: 0,
-                                      background: 'rgba(0,0,0,0.5)',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}>
-                                      <div style={{ width: '12px', height: '12px', border: '1.5px solid var(--v-accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                                    </div>
+                                  {isCardLoading ? (
+                                     <div style={{
+                                       position: 'absolute',
+                                       inset: 0,
+                                       background: 'rgba(0,0,0,0.2)',
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       justifyContent: 'center'
+                                     }}>
+                                       <svg width="18" height="18" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
+                                         <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.2)" strokeWidth="2.5" />
+                                         <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 4px rgba(0,0,0,0.9)) drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                                       </svg>
+                                     </div>
                                   ) : isActive && isPlaying ? (
                                     <div style={{
                                       position: 'absolute',
@@ -3143,6 +3188,7 @@ export default function Veluna() {
                                 >
                                   {genreTracks.map((track, tIdx) => {
                                     const isActive = currentTrack?.url === track.url;
+                                    const isCardLoading = loadingTrackUrl === track.url || (isActive && isLoadingTrack);
                                     return (
                                       <div
                                         key={track.url}
@@ -3184,17 +3230,20 @@ export default function Veluna() {
                                               loading="lazy"
                                             />
                                           )}
-                                          {isActive && isLoadingTrack ? (
-                                            <div style={{
-                                              position: 'absolute',
-                                              inset: 0,
-                                              background: 'rgba(0,0,0,0.5)',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center'
-                                            }}>
-                                              <div style={{ width: '16px', height: '16px', border: '2px solid var(--v-accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                                            </div>
+                                          {isCardLoading ? (
+                                             <div style={{
+                                               position: 'absolute',
+                                               inset: 0,
+                                               background: 'rgba(0,0,0,0.2)',
+                                               display: 'flex',
+                                               alignItems: 'center',
+                                               justifyContent: 'center'
+                                             }}>
+                                               <svg width="18" height="18" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
+                                                 <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5" />
+                                                 <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                                               </svg>
+                                             </div>
                                           ) : isActive && isPlaying ? (
                                             <div style={{
                                               position: 'absolute',
@@ -3702,7 +3751,7 @@ export default function Veluna() {
                                   index={i}
                                   isActive={currentTrack?.url === track.url}
                                   isHovered={hoveredTrackUrl === track.url}
-                                  isLoadingTrack={isLoadingTrack}
+                                  isLoadingTrack={loadingTrackUrl === track.url || (currentTrack?.url === track.url && isLoadingTrack)}
                                   isPlaying={isPlaying}
                                   isLiked={isTrackLiked(track.url)}
                                   isDownloading={(downloadingTracks[track.url] ?? 0)}
@@ -4110,7 +4159,7 @@ export default function Veluna() {
                                     <div style={{flex:1,minWidth:0}}>
                                       <TrackRow track={enrichedTrack} index={i} showRemove onRemove={() => removeFromPlaylist(openPlaylist.id, enrichedTrack.url)}
                                         isActive={currentTrack?.url === enrichedTrack.url} isHovered={hoveredTrackUrl === enrichedTrack.url}
-                                        isLoadingTrack={isLoadingTrack} isPlaying={isPlaying}
+                                        isLoadingTrack={loadingTrackUrl === enrichedTrack.url || (currentTrack?.url === enrichedTrack.url && isLoadingTrack)} isPlaying={isPlaying}
                                         isLiked={isTrackLiked(enrichedTrack.url)} isDownloading={(downloadingTracks[enrichedTrack.url] ?? 0)}
                                         onPlay={() => handlePlayInContext(enrichedTrack, openPlaylist.tracks.map(x => ({ ...x, cover: getTrackCover(x) })))}
                                         onHoverEnter={() => { setHoveredTrackUrl(enrichedTrack.url); prefetchOnHover(enrichedTrack.url); }} onHoverLeave={() => setHoveredTrackUrl(null)}
@@ -5005,8 +5054,11 @@ export default function Veluna() {
                       <div style={{position:'relative',width:'38px',height:'38px',borderRadius:'6px',overflow:'hidden',flexShrink:0,background:'var(--v-bdr2)',border:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'center'}}>
                         {getTrackCover(currentTrack) ? <img src={getTrackCover(currentTrack)} style={{width:'100%',height:'100%',objectFit:'cover'}} alt="" /> : <FileMusic size={16} style={{color:'#5c5755'}} />}
                         {isLoadingTrack ? (
-                          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                            <div style={{width:'12px',height:'12px',border:'1.5px solid #e2ddd9',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
+                          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
+                              <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5" />
+                              <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                            </svg>
                           </div>
                         ) : isPlaying ? (
                           <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -5186,8 +5238,8 @@ export default function Veluna() {
       {}
       <div className="v-player-dock">
         {isLoadingTrack && (
-          <div style={{position:"absolute",top:0,left:0,width:"100%",height:"1px",overflow:"hidden",background:"var(--v-bdr2)"}}>
-            <div style={{height:"100%",background:"rgba(226,221,217,0.4)",animation:"loadbar 1.6s ease-in-out infinite",width:"35%"}}/>
+          <div style={{position:"absolute",top:0,left:0,width:"100%",height:"2px",overflow:"hidden",background:"rgba(255,255,255,0.03)",zIndex:10}}>
+            <div style={{position:"absolute",top:0,height:"100%",background:"linear-gradient(90deg, transparent, rgba(226,221,217,0.3), #ffffff, #e2ddd9, transparent)",boxShadow:"0 0 10px rgba(226,221,217,0.8), 0 0 3px #fff",borderRadius:"999px",animation:"velunaLoadStream 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}/>
           </div>
         )}
         {isPlaying&&!isLoadingTrack&&<div style={{position:"absolute",top:0,left:0,right:0,height:"1px",background:"rgba(226,221,217,0.06)"}}/>}
@@ -5209,13 +5261,16 @@ export default function Veluna() {
                   <img
                     src={currentTrack.cover}
                     alt={currentTrack.title}
-                    style={{position: 'absolute', inset: 0, width:"100%",height:"100%",objectFit:"cover",opacity:isLoadingTrack?0.4:1,transition:"opacity .2s"}}
+                    style={{position: 'absolute', inset: 0, width:"100%",height:"100%",objectFit:"cover"}}
                     onError={e => { e.currentTarget.style.display = 'none'; }}
                   />
                 )}
                 {isLoadingTrack
-                  ? <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <div style={{width:"16px",height:"16px",border:"2px solid #9e9894",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+                  ? <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" style={{animation:"spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}>
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(226,221,217,0.2)" strokeWidth="2.2"/>
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="#e2ddd9" strokeWidth="2.2" strokeDasharray="56.5" strokeDashoffset="38" strokeLinecap="round" style={{filter:"drop-shadow(0 0 4px rgba(0,0,0,0.9)) drop-shadow(0 0 3px rgba(226,221,217,0.7))"}}/>
+                      </svg>
                     </div>
                   : !currentTrack.url.startsWith('local://')
                     ? <div className="art-ov" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity .15s"}}>
@@ -5226,11 +5281,10 @@ export default function Veluna() {
               <div key={currentTrack.url} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:"1px",animation:"fadeIn 0.25s ease both"}}>
                 <div style={{fontWeight:700,color:"#e2ddd9",fontSize:"14px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:"1.3"}}>{currentTrack.title}</div>
                 {isLoadingTrack
-                  ? <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
-                      <div style={{display:"flex",gap:"2px",alignItems:"flex-end",height:"10px"}}>
-                        {[1,0.6,0.8,0.5].map((h,i)=><span key={i} style={{width:"2px",background:"rgba(226,221,217,0.5)",borderRadius:"1px",display:"inline-block",height:`${h*100}%`,animation:`barBounce ${0.65+i*0.1}s ease-in-out ${i*100}ms infinite`,transformOrigin:"bottom"}}/>)}
+                  ? <div style={{display:"flex",alignItems:"center",height:"16px"}}>
+                      <div style={{display:"flex",gap:"3px",alignItems:"center",height:"12px"}}>
+                        {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",boxShadow:"0 0 4px rgba(226,221,217,0.5)",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
                       </div>
-                      <span style={{fontSize:"10px",color:"rgba(226,221,217,0.5)"}}>Buffering</span>
                     </div>
                   : <div style={{fontSize:"12px",color:"#8a807c",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentTrack.artist||""}</div>}
                 {audioInfo&&!isLoadingTrack&&(
@@ -5285,10 +5339,13 @@ export default function Veluna() {
                 onMouseEnter={e=>{if(currentTrack)e.currentTarget.style.transform="scale(1.15)";}} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
                 <SkipBack size={17}/>
               </button>
-              <button onClick={togglePlayPause} disabled={!currentTrack||isLoadingTrack}
+              <button onClick={togglePlayPause} disabled={!currentTrack}
                 className="v-player-btn-play">
                 {isLoadingTrack
-                  ? <div style={{width:"16px",height:"16px",border:"2px solid #0c0b0b",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+                  ? <svg width="20" height="20" viewBox="0 0 24 24" style={{animation:"spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}>
+                      <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(12,11,11,0.15)" strokeWidth="2.5"/>
+                      <circle cx="12" cy="12" r="8.5" fill="none" stroke="#0c0b0b" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
+                    </svg>
                   : isPlaying ? <Pause fill="currentColor" size={18}/> : <Play fill="currentColor" size={18} style={{marginLeft:"2px"}}/>}
               </button>
               <button onClick={handleSkipForward} title="Next" style={{background:"none",border:"none",cursor:(queue.length>0||playlistContextRef.current!==null)?"pointer":"not-allowed",color:(queue.length>0||playlistContextRef.current!==null)?"#9e9894":"#2a2727",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
@@ -6307,7 +6364,12 @@ export default function Veluna() {
                 <button onClick={togglePlayPause}
                   style={{width:"44px",height:"44px",borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",border:"none",cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",transition:"transform .1s"}}
                   onMouseEnter={e=>e.currentTarget.style.transform="scale(1.06)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-                  {isPlaying ? <Pause fill="#000" stroke="#000" size={18}/> : <Play fill="#000" stroke="#000" size={18} style={{marginLeft:"2px"}}/>}
+                  {isLoadingTrack
+                    ? <svg width="20" height="20" viewBox="0 0 24 24" style={{animation:"spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}>
+                        <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth="2.5"/>
+                        <circle cx="12" cy="12" r="8.5" fill="none" stroke="#000" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
+                      </svg>
+                    : isPlaying ? <Pause fill="#000" stroke="#000" size={18}/> : <Play fill="#000" stroke="#000" size={18} style={{marginLeft:"2px"}}/>}
                 </button>
                 <button onClick={handleSkipForward} style={{color:"rgba(255,255,255,0.6)",background:"none",border:"none",cursor:"pointer",display:"flex",transition:"color .12s"}}
                   onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.6)"}>
