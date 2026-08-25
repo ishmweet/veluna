@@ -15,7 +15,7 @@ env:
 
 jobs:
   check-linux:
-    name: 'Check (Linux)'
+    name: 'Linux build'
     runs-on: ubuntu-22.04
 
     steps:
@@ -60,7 +60,7 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
   check-windows:
-    name: 'Check (Windows)'
+    name: 'Windows build'
     runs-on: windows-latest
 
     steps:

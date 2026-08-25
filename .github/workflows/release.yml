@@ -15,7 +15,7 @@ env:
 
 jobs:
   release-linux:
-    name: 'Release (Linux)'
+    name: 'Linux build'
     runs-on: ubuntu-22.04
 
     steps:
@@ -79,7 +79,7 @@ jobs:
           gh release upload ${{ github.ref_name }} veluna-*.pkg.tar.zst --clobber
 
   release-windows:
-    name: 'Release (Windows)'
+    name: 'Windows build'
     runs-on: windows-latest
 
     steps:
