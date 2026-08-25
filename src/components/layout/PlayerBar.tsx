@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Track, AudioInfo, RepeatMode, CtxMenu } from '../../types';
 import { getTrackGradient, formatTime, parseDurationToSeconds } from '../../utils';
+import { invoke } from '@tauri-apps/api/core';
 import { WaveformBar } from '../WaveformBar';
 import { SpeedSelector } from '../SpeedSelector';
 import { SleepTimerPopover } from '../SleepTimerPopover';
@@ -144,9 +145,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const total = trackDurationSeconds || parseDurationToSeconds(currentTrack.duration);
     const time = total * pct;
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke('seek_audio', { time }).catch(() => {});
-    });
+    invoke('seek_audio', { time }).catch(() => {});
   });
 
   const updateVolumeFromEvent = customUpdateVolume || ((clientX: number) => {
@@ -155,9 +154,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const v = Math.round(pct * 100);
     _setVolume(v);
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke('set_volume', { volume: v }).catch(() => {});
-    });
+    invoke('set_volume', { volume: v }).catch(() => {});
   });
 
   return (

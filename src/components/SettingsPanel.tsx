@@ -9,6 +9,7 @@ import { SettingsTab, DiskInfo } from '../types';
 import { loadLS, saveLS, lightenColor, validateSettingsChange, formatBytes } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ThemedSelect } from './ThemedSelect';
 
 const SettingsSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => {
@@ -1218,7 +1219,7 @@ export function SettingsPanel({
               </div>
               <div className="v-settings-row" style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={async () => {
                 try {
-                  const sel = await (await import('@tauri-apps/plugin-dialog')).open({ directory: true, multiple: false, defaultPath: backupPath });
+                  const sel = await openDialog({ directory: true, multiple: false, defaultPath: backupPath });
                   if (sel) setBackupPath(sel as string);
                 } catch {}
               }}>
