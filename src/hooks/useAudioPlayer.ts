@@ -121,6 +121,10 @@ export function useAudioPlayer({
     if (currentTrack) saveLS('vg_lastTrack', currentTrack);
   }, [currentTrack]);
 
+  useEffect(() => {
+    invoke('set_playback_speed', { speed: playbackSpeed }).catch(() => {});
+  }, [playbackSpeed]);
+
   const toggleShuffle = useCallback(() => {
     setShuffle(p => {
       showToast(!p ? 'Shuffle on' : 'Shuffle off');
