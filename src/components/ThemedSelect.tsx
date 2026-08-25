@@ -80,15 +80,11 @@ export const ThemedSelect = ({ value, options, onChange }: ThemedSelectProps) =>
         minWidth: dropPos.width,
         zIndex: 999999,
         animation: 'dropIn 0.15s ease-out',
-        background: 'rgba(14,13,12,0.85)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderStyle: 'solid',
-        borderWidth: '1px',
-        borderColor: 'rgba(255,255,255,0.08)',
+        background: 'var(--v-bg2)',
+        border: '1px solid var(--v-bdr2)',
         borderRadius: '16px',
         padding: '5px',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
+        boxShadow: '0 16px 48px rgba(0,0,0,0.85)',
       }}>
       {options.map((opt) => (
         <button key={opt.value}
@@ -103,16 +99,16 @@ export const ThemedSelect = ({ value, options, onChange }: ThemedSelectProps) =>
             cursor: 'pointer',
             borderRadius: '9999px',
             background: value === opt.value ? 'rgba(255,255,255,0.08)' : 'transparent',
-            color: value === opt.value ? 'var(--v-accent)' : 'rgba(255,255,255,0.55)',
+            color: value === opt.value ? 'var(--v-accent)' : 'var(--v-fg2)',
             transition: 'background 0.1s',
             border: 'none',
             outline: 'none',
           }}
-          onMouseEnter={e => { if (value !== opt.value) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; }}
+          onMouseEnter={e => { if (value !== opt.value) (e.currentTarget as HTMLElement).style.background = 'var(--v-bg3)'; }}
           onMouseLeave={e => { if (value !== opt.value) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>{opt.label}</span>
-          {opt.desc && <span style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{opt.desc}</span>}
+          <span style={{ fontSize: '13px', fontWeight: 600, color: value === opt.value ? 'var(--v-accent)' : 'var(--v-fg)' }}>{opt.label}</span>
+          {opt.desc && <span style={{ fontSize: '11.5px', color: 'var(--v-fg3)', marginTop: '2px' }}>{opt.desc}</span>}
         </button>
       ))}
     </div>

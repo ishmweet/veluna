@@ -35,12 +35,28 @@ export type Playlist = {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
+export type LyricLine = {
+  time: number;
+  text: string;
+};
+
+export type LyricsData = {
+  lines: LyricLine[];
+  title: string;
+  artist: string;
+};
+
 export type CtxMenu = {
-  x: number; y: number;
-  type: 'track' | 'playlist' | 'sidebar-playlist' | 'queue-track' | 'quickpick';
+  x: number;
+  y: number;
+  type: 'track' | 'playlist' | 'sidebar-playlist' | 'queue-track' | 'quickpick' | 'local';
   track?: Track;
   playlist?: Playlist;
+  localTracksList?: LocalTrack[];
+  localTrackIndex?: number;
 };
+
+export type NavView = 'home' | 'downloads' | 'playlists' | 'library' | 'stats' | 'settings';
 
 export type AudioInfo = { codec: string; bitrate: number; samplerate: number; channels: string; format: string; url: string };
 export type DiskInfo = { used_bytes: number; track_count: number };

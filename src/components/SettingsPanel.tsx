@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
+import React, { useState, useEffect } from 'react';
 import {
-  Search, X, ArrowUpCircle, CheckCircle, ExternalLink, RefreshCw,
+  Search, X, ArrowUpCircle, ExternalLink, RefreshCw,
   FolderDown, FolderOpen, Image, Zap, BarChart2, Globe,
-  Moon, Database, Upload, ArchiveRestore, Trash2, ChevronDown
+  Moon, Database, Upload, ArchiveRestore, Trash2,
+  Download, GitBranch
 } from 'lucide-react';
 import { SettingsTab, DiskInfo } from '../types';
 import { loadLS, saveLS, lightenColor, validateSettingsChange, formatBytes } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { ThemedSelect } from './ThemedSelect';
 
 const SettingsSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => {
   const [hovered, setHovered] = useState(false);
@@ -46,153 +47,6 @@ const SettingsSwitch = ({ checked, onChange }: { checked: boolean; onChange: () 
         }}
       />
     </button>
-  );
-};
-
-const ThemedSelect = ({ value, options, onChange }: {
-  value: string;
-  options: { label: string; value: string; desc?: string }[];
-  onChange: (v: string) => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-  const current = options.find(o => o.value === value);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || dropRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const update = () => {
-      if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      const dropW = Math.max(r.width, 220);
-      const left = Math.min(r.left, window.innerWidth - dropW - 8);
-      const dropH = dropRef.current ? dropRef.current.offsetHeight : (options.length * 56 + 10);
-      const spaceBelow = window.innerHeight - r.bottom - 8;
-      const spaceAbove = r.top - 8;
-      let top = r.bottom + 4;
-      if (spaceBelow < dropH && spaceAbove > spaceBelow) {
-        top = r.top - dropH - 4;
-      }
-      setDropPos({ top, left: Math.max(8, left), width: dropW });
-    };
-    update();
-    const timer = setTimeout(update, 0);
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [open, options.length]);
-
-  const handleOpen = () => {
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      const dropW = Math.max(r.width, 220);
-      const left = Math.min(r.left, window.innerWidth - dropW - 8);
-      const dropH = options.length * 56 + 10;
-      const spaceBelow = window.innerHeight - r.bottom - 8;
-      const spaceAbove = r.top - 8;
-      let top = r.bottom + 4;
-      if (spaceBelow < dropH && spaceAbove > spaceBelow) {
-        top = r.top - dropH - 4;
-      }
-      setDropPos({ top, left: Math.max(8, left), width: dropW });
-    }
-    setOpen(o => !o);
-  };
-
-  const dropdown = open ? (
-    <div
-      ref={dropRef}
-      style={{
-        position: 'fixed',
-        top: dropPos.top,
-        left: dropPos.left,
-        minWidth: dropPos.width,
-        zIndex: 999999,
-        animation: 'dropIn 0.15s ease-out',
-        background: 'rgba(14,13,12,0.85)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderStyle: 'solid',
-        borderWidth: '1px',
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderRadius: '16px',
-        padding: '5px',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
-      }}>
-      {options.map((opt) => (
-        <button key={opt.value}
-          onMouseDown={e => { e.preventDefault(); onChange(opt.value); setOpen(false); }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            width: '100%',
-            padding: '8px 14px',
-            textAlign: 'left',
-            cursor: 'pointer',
-            borderRadius: '9999px',
-            background: value === opt.value ? 'rgba(255,255,255,0.08)' : 'transparent',
-            color: value === opt.value ? 'var(--v-accent)' : 'rgba(255,255,255,0.55)',
-            transition: 'background 0.1s',
-            border: 'none',
-            outline: 'none',
-          }}
-          onMouseEnter={e => { if (value !== opt.value) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; }}
-          onMouseLeave={e => { if (value !== opt.value) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-        >
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>{opt.label}</span>
-          {opt.desc && <span style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{opt.desc}</span>}
-        </button>
-      ))}
-    </div>
-  ) : null;
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <button ref={btnRef}
-        onClick={handleOpen}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '7px 14px',
-          borderRadius: '9999px',
-          fontSize: '13px',
-          fontWeight: 500,
-          border: '1px solid rgba(255,255,255,0.09)',
-          outline: 'none',
-          background: open ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
-          color: open ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.5)',
-          cursor: 'pointer',
-          minWidth: '130px',
-          transition: 'all .12s',
-        }}
-        onMouseEnter={e => { if (!open) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; } }}
-        onMouseLeave={e => { if (!open) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'; } }}
-      >
-        <span style={{ flex: 1, textAlign: "left" }}>{current?.label}</span>
-        <ChevronDown size={14} style={{ transition: "transform .2s", transform: open ? "rotate(180deg)" : "none" }} />
-      </button>
-      {typeof document !== 'undefined' && dropdown
-        ? ReactDOM.createPortal(dropdown, document.body)
-        : null}
-    </div>
   );
 };
 
@@ -293,7 +147,7 @@ export function SettingsPanel({
   ];
 
   const matchesUpdates = showTab('updates') && (
-    matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "Release notes", "GitHub", "Changelog", appVersion, updateAvailable || ""]) ||
+    matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "GitHub", "Changelog", appVersion, updateAvailable || ""]) ||
     matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])
   );
 
@@ -336,7 +190,7 @@ export function SettingsPanel({
   return (
     <div style={{flex:1,display:"flex",overflow:"hidden",background:"var(--v-bg0)"}}>
       <div style={{width:"180px",flexShrink:0,background:"var(--v-bg0)",borderRight:"none",display:"flex",flexDirection:"column",padding:"16px 10px",gap:"4px"}}>
-        <div style={{fontSize:"10px",fontWeight:800,letterSpacing:".18em",textTransform:"uppercase",color:"#76706c",padding:"4px 10px 14px"}}>Settings</div>
+        <div style={{fontSize:"11px",fontWeight:800,letterSpacing:".18em",textTransform:"uppercase",color:"#76706c",padding:"4px 10px 14px"}}>Settings</div>
         
         <div style={{ padding: "0 2px 12px" }}>
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -353,7 +207,7 @@ export function SettingsPanel({
                 border: "1px solid var(--v-bdr2)",
                 borderRadius: "9999px",
                 color: "#e2ddd9",
-                fontSize: "12px",
+                fontSize: "13px",
                 outline: "none",
                 transition: "all 0.2s cubic-bezier(0.2, 0, 0, 1)",
                 boxSizing: "border-box"
@@ -401,7 +255,7 @@ export function SettingsPanel({
                 padding:"10px 14px",borderRadius:"9999px",
                 border:"none",cursor:"pointer",
                 textAlign:"left",width:"100%",
-                fontSize:"13.5px",fontWeight:isActive?700:500,
+                fontSize:"14.5px",fontWeight:isActive?700:500,
                 background:isActive?"rgba(226,221,217,0.06)":"transparent",
                 color:isActive?"#e2ddd9":"#8c8682",
                 position:"relative",
@@ -428,7 +282,7 @@ export function SettingsPanel({
             gap: "10px",
             padding: "8px 12px",
             borderRadius: "8px",
-            fontSize: "12.5px",
+            fontSize: "13.5px",
             fontWeight: 500,
             background: "rgba(226, 221, 217, 0.04)",
             color: "#e2ddd9",
@@ -452,139 +306,190 @@ export function SettingsPanel({
       <div style={{flex:1,overflowY:"auto",padding:"20px 24px 140px 24px"}} className="custom-scrollbar">
         {searchQuery && (
           <div style={{ marginBottom: "20px" }}>
-            <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#e2ddd9", margin: "0 0 3px" }}>Search Results</h2>
-            <p style={{ fontSize: "12px", color: "#5c5755", marginTop: "3px" }}>Showing settings matching "{searchQuery}"</p>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#e2ddd9", margin: "0 0 3px" }}>Search Results</h2>
+            <p style={{ fontSize: "13px", color: "#5c5755", marginTop: "3px" }}>Showing settings matching "{searchQuery}"</p>
           </div>
         )}
 
         {!hasAnyMatches ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", color: "#5c5755", gap: "10px" }}>
             <Search size={28} strokeWidth={1.5} />
-            <p style={{ fontSize: "13px" }}>No settings match your search</p>
+            <p style={{ fontSize: "14px" }}>No settings match your search</p>
           </div>
         ) : (
           <>
         {matchesUpdates && (
-          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:"24px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Updates</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Check for new releases and view version status.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Updates</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Check for new releases and view version status.</p>
             </div>
 
+            {/* Clean Status Area (Not in a box) */}
             <div style={{
-              borderRadius:"12px",
-              border:updateAvailable?"1px solid rgba(226, 221, 217, 0.25)":"1px solid var(--v-bdr)",
-              padding:"20px",
-              display:"flex",
-              alignItems:"center",
-              gap:"20px",
-              background:updateAvailable?"rgba(226, 221, 217, 0.02)":"var(--v-bg0)",
-              transition:"all 0.2s",
-              position:"relative",
-              overflow:"hidden"
-            }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = updateAvailable ? 'rgba(226, 221, 217, 0.4)' : 'var(--v-bdr3)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = updateAvailable ? 'rgba(226, 221, 217, 0.25)' : 'var(--v-bdr)'; }}
-            >
+              display: "flex",
+              alignItems: "center",
+              gap: "18px",
+              padding: "4px 0 8px 0",
+            }}>
+              {/* Clean App Icon */}
               <div style={{
-                position: "absolute",
-                top: "-20px",
-                left: "-20px",
-                width: "120px",
-                height: "120px",
-                background: "var(--v-accent)",
-                opacity: 0.02,
-                borderRadius: "50%",
-                pointerEvents: "none"
-              }} />
-
-              <div style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "14px",
+                width: "52px",
+                height: "52px",
+                borderRadius: "12px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)",
                 border: "1px solid rgba(255, 255, 255, 0.08)",
-                boxShadow: "0 6px 20px rgba(0, 0, 0, 0.2)",
                 flexShrink: 0,
                 position: "relative"
               }}>
-                <div style={{
-                  position: "absolute",
-                  bottom: "-3px",
-                  right: "-3px",
-                  width: "18px",
-                  height: "18px",
-                  borderRadius: "50%",
-                  background: "var(--v-bg0)",
-                  border: `1px solid ${updateAvailable ? "rgba(226, 221, 217, 0.25)" : "var(--v-bdr)"}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: updateAvailable ? "#e2ddd9" : "var(--v-accent)"
-                }}>
-                  {updateAvailable ? <ArrowUpCircle size={11}/> : <CheckCircle size={11}/>}
-                </div>
-                <svg width="34" height="34" viewBox="0 0 28 28" fill="none" style={{
-                  flexShrink: 0
-                }}>
+                <svg width="30" height="30" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
                   <rect width="28" height="28" rx="6" fill="var(--v-accent)"/>
                   <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
                   <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
                 </svg>
               </div>
 
-              <div style={{flex:1,minWidth:0,position:"relative",zIndex:1}}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 {updateAvailable ? (
-                  <>
-                    <div style={{fontSize:"13.5px",fontWeight:700,color:"#ffffff",marginBottom:"4px"}}>Update available: v{updateAvailable}</div>
-                    <div style={{fontSize:"11.5px",color:"#6f6966",lineHeight:1.4,marginBottom:"10px"}}>A new version of Veluna is ready to download. Features and stability updates await.</div>
-                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/rry0ku/veluna/releases/latest');}}
-                      style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"11px",fontWeight:600,color:"var(--v-accent)",textDecoration:"none"}}
-                      onMouseEnter={e=>(e.currentTarget.style.textDecoration="underline")} onMouseLeave={e=>(e.currentTarget.style.textDecoration="none")}>
-                      <ExternalLink size={12}/> View Release Notes on GitHub
-                    </a>
-                  </>
+                  <div>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
+                      Update available: v{updateAvailable}
+                    </div>
+                    <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 12px 0", lineHeight: 1.4 }}>
+                      A new version of Veluna is ready to download. Features and stability updates await.
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <button
+                        onClick={() => openUrl('https://github.com/rry0ku/veluna/releases/latest')}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "7px 16px",
+                          borderRadius: "18px",
+                          background: "var(--v-accent)",
+                          color: "var(--v-bg0)",
+                          border: "none",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
+                      >
+                        <Download size={13} strokeWidth={2.4} /> Download v{updateAvailable}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <div style={{fontSize:"13.5px",fontWeight:700,color:"#ffffff",marginBottom:"4px"}}>You're up to date</div>
-                    <div style={{fontSize:"11.5px",color:"#6f6966",lineHeight:1.4,marginBottom:"10px"}}>Veluna v{appVersion} is currently the latest version.</div>
-                    <a href="#" onClick={e=>{e.preventDefault();openUrl('https://github.com/rry0ku/veluna');}}
-                      style={{display:"inline-flex",alignItems:"center",gap:"6px",fontSize:"11px",fontWeight:600,color:"var(--v-accent)",textDecoration:"none"}}
-                      onMouseEnter={e=>(e.currentTarget.style.textDecoration="underline")} onMouseLeave={e=>(e.currentTarget.style.textDecoration="none")}>
-                      <ExternalLink size={12}/> Visit GitHub Repository
+                  <div>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
+                      You're up to date
+                    </div>
+                    <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 8px 0" }}>
+                      Veluna v{appVersion} is currently the latest version.
+                    </p>
+                    <a
+                      href="#"
+                      onClick={e => { e.preventDefault(); openUrl('https://github.com/rry0ku/veluna'); }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--v-accent)",
+                        textDecoration: "none"
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
+                      onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
+                    >
+                      <ExternalLink size={12} /> Visit GitHub Repository
                     </a>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
 
+            {/* Version Metadata Strip */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "12px",
+            }}>
+              <div style={{
+                borderRadius: "10px",
+                border: "1px solid var(--v-bdr)",
+                background: "var(--v-bg0)",
+                padding: "13px 15px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px"
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Installed Version</span>
+                <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#e2ddd9", fontFamily: "monospace" }}>v{appVersion}</span>
+              </div>
+
+              <div style={{
+                borderRadius: "10px",
+                border: "1px solid var(--v-bdr)",
+                background: "var(--v-bg0)",
+                padding: "13px 15px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px"
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Latest Available</span>
+                <span style={{ fontSize: "13.5px", fontWeight: 700, color: updateAvailable ? "var(--v-accent)" : "#10b981", fontFamily: "monospace" }}>
+                  v{updateAvailable || appVersion}
+                </span>
+              </div>
+
+              <div style={{
+                borderRadius: "10px",
+                border: "1px solid var(--v-bdr)",
+                background: "var(--v-bg0)",
+                padding: "13px 15px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px"
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Update Source</span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#e2ddd9", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <GitBranch size={13} style={{ color: "var(--v-accent)" }} /> GitHub Releases
+                </span>
+              </div>
+            </div>
+
+            {/* Standard Settings Card */}
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Check Automatically on Startup</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>Automatically check for new releases when launching Veluna</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Check Automatically on Startup</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Automatically check for new releases when launching Veluna</p>
                 </div>
                 <SettingsSwitch checked={autoCheckUpdates} onChange={() => setAutoCheckUpdates(!autoCheckUpdates)} />
               </div>
               
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Manual Update Check</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>Force a search for the latest version of Veluna on GitHub</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Manual Update Check</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Force a search for the latest version of Veluna on GitHub</p>
                 </div>
                 <button
                   onClick={handleCheckUpdate}
                   disabled={isCheckingUpdate}
                   style={{
-                    padding: "6px 14px",
+                    padding: "7px 16px",
                     borderRadius: "18px",
                     background: isCheckingUpdate ? "rgba(255,255,255,0.02)" : "var(--v-accent)",
                     color: isCheckingUpdate ? "#5c5755" : "var(--v-bg0)",
                     border: "none",
-                    fontSize: "12px",
+                    fontSize: "13px",
                     fontWeight: 700,
                     cursor: isCheckingUpdate ? "not-allowed" : "pointer",
                     display: "flex",
@@ -596,13 +501,11 @@ export function SettingsPanel({
                   onMouseEnter={e => {
                     if (!isCheckingUpdate) {
                       e.currentTarget.style.filter = "brightness(1.1)";
-                      e.currentTarget.style.transform = "scale(1.02)";
                     }
                   }}
                   onMouseLeave={e => {
                     if (!isCheckingUpdate) {
                       e.currentTarget.style.filter = "none";
-                      e.currentTarget.style.transform = "none";
                     }
                   }}
                 >
@@ -613,7 +516,7 @@ export function SettingsPanel({
                     </>
                   ) : (
                     <>
-                      <RefreshCw size={12} />
+                      <RefreshCw size={13} />
                       Check Now
                     </>
                   )}
@@ -626,19 +529,19 @@ export function SettingsPanel({
         {matchesDownloads && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Downloads</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Configure download quality, formats, and folders.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Downloads</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure download quality, formats, and folders.</p>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Audio Specifications</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Audio Specifications</h3>
               </div>
               
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Download Quality</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Download Quality</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
                     {downloadQuality === 'High' ? 'Best available audio bitrate (320kbps+)' : downloadQuality === 'Medium' ? 'Balanced quality (~128kbps)' : 'Smallest file size'}
                   </p>
                 </div>
@@ -655,8 +558,8 @@ export function SettingsPanel({
 
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Audio Format</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Audio Format</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
                     {downloadFormat === 'opus' ? 'Best compression, native YouTube codec' : downloadFormat === 'm4a' ? 'AAC in M4A, great Apple/car stereo compat' : downloadFormat === 'flac' ? 'Lossless — largest files' : 'MP3 — widest compatibility'}
                   </p>
                 </div>
@@ -675,7 +578,7 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Download Directory</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Download Directory</h3>
               </div>
               <div className="v-settings-row" style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={handleSelectDirectory}>
                 <div style={{flex:1,minWidth:0}}>
@@ -683,7 +586,7 @@ export function SettingsPanel({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    fontSize: "11.5px",
+                    fontSize: "12.5px",
                     color: "#9e9894",
                     background: "rgba(255, 255, 255, 0.02)",
                     border: "1px solid var(--v-bdr)",
@@ -693,10 +596,10 @@ export function SettingsPanel({
                     fontFamily: "monospace",
                     maxWidth: "90%"
                   }}>
-                    <FolderOpen size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                    <FolderOpen size={13} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{downloadPath}</span>
                   </div>
-                  {diskInfo && <p style={{fontSize:"11px",color:"#5c5755",marginTop:"6px"}}>{formatBytes(diskInfo.used_bytes)} used · {diskInfo.track_count} offline tracks</p>}
+                  {diskInfo && <p style={{fontSize:"12px",color:"#5c5755",marginTop:"6px"}}>{formatBytes(diskInfo.used_bytes)} used · {diskInfo.track_count} offline tracks</p>}
                 </div>
                 <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
                   <FolderOpen size={16} />
@@ -706,21 +609,21 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",display:"flex",alignItems:"center",gap:"8px",margin:0}}><Image size={14} style={{color:"#8c8682"}} /> File Options</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",display:"flex",alignItems:"center",gap:"8px",margin:0}}><Image size={14} style={{color:"#8c8682"}} /> File Options</h3>
               </div>
               
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Embed Artwork Thumbnail</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{embedThumbnail ? 'Active — album/track cover art is embedded into audio file tags' : 'Disabled — downloaded audio files will have no embedded cover'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Embed Artwork Thumbnail</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{embedThumbnail ? 'Active — album/track cover art is embedded into audio file tags' : 'Disabled — downloaded audio files will have no embedded cover'}</p>
                 </div>
                 <SettingsSwitch checked={embedThumbnail} onChange={() => setEmbedThumbnail(!embedThumbnail)} />
               </div>
               
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Smart Duplicate Detection</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{duplicateDetect ? 'Active — tracks already in your download folder are skipped' : 'Disabled — duplicates will download and overwrite if triggered'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Smart Duplicate Detection</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{duplicateDetect ? 'Active — tracks already in your download folder are skipped' : 'Disabled — duplicates will download and overwrite if triggered'}</p>
                 </div>
                 <SettingsSwitch checked={duplicateDetect} onChange={() => setDuplicateDetect(!duplicateDetect)} />
               </div>
@@ -731,19 +634,19 @@ export function SettingsPanel({
         {matchesPlayback && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Playback</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Configure the audio engine and playback behaviors.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Playback</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure the audio engine and playback behaviors.</p>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0,display:"flex",alignItems:"center",gap:"8px"}}><Zap size={14} style={{color:"#8c8682"}} /> Audio Processing</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0,display:"flex",alignItems:"center",gap:"8px"}}><Zap size={14} style={{color:"#8c8682"}} /> Audio Processing</h3>
               </div>
               
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #141312"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Loudness Normalization</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{loudnormEnabled ? 'Active — consistent volume across tracks (EBU R128)' : 'Disabled — raw volume, faster track start'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Loudness Normalization</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{loudnormEnabled ? 'Active — consistent volume across tracks (EBU R128)' : 'Disabled — raw volume, faster track start'}</p>
                 </div>
                 <SettingsSwitch checked={loudnormEnabled} onChange={() => {
                   const next = !loudnormEnabled;
@@ -755,8 +658,8 @@ export function SettingsPanel({
 
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #141312"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Skip Silence</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{skipSilence ? 'Active — auto-skips silent gaps' : 'Disabled — plays entire track including silence'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Skip Silence</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{skipSilence ? 'Active — auto-skips silent gaps' : 'Disabled — plays entire track including silence'}</p>
                 </div>
                 <SettingsSwitch checked={skipSilence} onChange={() => {
                   const next = !skipSilence;
@@ -768,8 +671,8 @@ export function SettingsPanel({
 
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Autoplay Recommendations</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{autoplayEnabled ? 'Active — queues similar recommendations when music ends' : 'Disabled — playback stops when queue finishes'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Autoplay Recommendations</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{autoplayEnabled ? 'Active — queues similar recommendations when music ends' : 'Disabled — playback stops when queue finishes'}</p>
                 </div>
                 <SettingsSwitch checked={autoplayEnabled} onChange={() => setAutoplayEnabled(!autoplayEnabled)} />
               </div>
@@ -779,11 +682,11 @@ export function SettingsPanel({
               {/* Header & Presets */}
               <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:"12px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <h3 style={{fontSize:"13.5px",fontWeight:700,color:"var(--v-fg)",margin:0,display:"flex",alignItems:"center",gap:"8px",letterSpacing:"-0.01em"}}>
+                  <h3 style={{fontSize:"14.5px",fontWeight:700,color:"var(--v-fg)",margin:0,display:"flex",alignItems:"center",gap:"8px",letterSpacing:"-0.01em"}}>
                     <BarChart2 size={15} style={{color:"var(--v-fg2)"}} /> Equalizer
                   </h3>
                   <button onClick={() => { setEq({ bass: 0, mid: 0, treble: 0 }); invoke('set_equalizer', { bass: 0, mid: 0, treble: 0 }).catch(() => {}); }}
-                    style={{fontSize:"11px",fontWeight:700,color:"var(--v-fg2)",cursor:"pointer",padding:"4px 14px",borderRadius:"9999px",border:"1px solid var(--v-bdr2)",background:"rgba(255,255,255,0.02)",transition:"all .15s ease"}}
+                    style={{fontSize:"12px",fontWeight:700,color:"var(--v-fg2)",cursor:"pointer",padding:"4px 14px",borderRadius:"9999px",border:"1px solid var(--v-bdr2)",background:"rgba(255,255,255,0.02)",transition:"all .15s ease"}}
                     onMouseEnter={e=>{e.currentTarget.style.color="var(--v-fg)";e.currentTarget.style.borderColor="var(--v-bdr3)";e.currentTarget.style.background="rgba(255,255,255,0.06)";}}
                     onMouseLeave={e=>{e.currentTarget.style.color="var(--v-fg2)";e.currentTarget.style.borderColor="var(--v-bdr2)";e.currentTarget.style.background="rgba(255,255,255,0.02)";}}>
                     Reset
@@ -807,7 +710,7 @@ export function SettingsPanel({
                         invoke('set_equalizer', preset).catch(() => {});
                       }}
                       style={{
-                        padding:"4px 13px",borderRadius:"9999px",fontSize:"11.5px",fontWeight:600,cursor:"pointer",
+                        padding:"5px 14px",borderRadius:"9999px",fontSize:"12.5px",fontWeight:600,cursor:"pointer",
                         border: isSelected ? "1px solid var(--v-accent)" : "1px solid var(--v-bdr2)",
                         background: isSelected ? "var(--v-accent)" : "rgba(255,255,255,0.02)",
                         color: isSelected ? "var(--v-bg0)" : "var(--v-fg2)",
@@ -841,11 +744,11 @@ export function SettingsPanel({
                     }}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"10px"}}>
                         <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-                          <span style={{fontSize:"13px",fontWeight:700,color:isActive?"var(--v-fg)":"var(--v-fg2)",transition:"color .15s"}}>{label}</span>
-                          <span style={{fontSize:"10px",fontWeight:500,color:"var(--v-fg3)",letterSpacing:"0.02em"}}>{freq}</span>
+                          <span style={{fontSize:"14px",fontWeight:700,color:isActive?"var(--v-fg)":"var(--v-fg2)",transition:"color .15s"}}>{label}</span>
+                          <span style={{fontSize:"11px",fontWeight:500,color:"var(--v-fg3)",letterSpacing:"0.02em"}}>{freq}</span>
                         </div>
                         <div style={{
-                          fontSize:"11.5px",fontWeight:700,
+                          fontSize:"12.5px",fontWeight:700,
                           fontVariantNumeric:"tabular-nums",
                           color: isActive ? "var(--v-fg)" : "var(--v-fg3)",
                           background: isActive ? "rgba(255,255,255,0.04)" : "transparent",
@@ -906,18 +809,18 @@ export function SettingsPanel({
         {matchesIntegrations && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Integrations</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Configure external integrations and social status activity.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Integrations</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure external integrations and social status activity.</p>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Discord Integration</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Discord Integration</h3>
               </div>
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Discord Rich Presence</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{discordRpcEnabled ? 'Active — shows listening activity on your Discord profile' : 'Disabled — listening activity is hidden'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Discord Rich Presence</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{discordRpcEnabled ? 'Active — shows listening activity on your Discord profile' : 'Disabled — listening activity is hidden'}</p>
                 </div>
                 <SettingsSwitch checked={discordRpcEnabled} onChange={() => setDiscordRpcEnabled(!discordRpcEnabled)} />
               </div>
@@ -925,12 +828,12 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Lyrics Provider</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Lyrics Provider</h3>
               </div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Primary Source</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Primary Source</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
                     {lyricsSource === 'musixmatch' ? 'Musixmatch — word-level richsync when available'
                       : lyricsSource === 'netease' ? 'NetEase — great for Asian artists & translations'
                       : 'lrclib — open, fast, fully synced and community-driven'}
@@ -949,16 +852,16 @@ export function SettingsPanel({
         {matchesAppearance && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Appearance</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Customize application themes, accent colors, and startup behaviors.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Appearance</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Customize application themes, accent colors, and startup behaviors.</p>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Application Theme</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Application Theme</h3>
               </div>
               <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:"12px"}}>
-                <p style={{fontSize:"12px",color:"#6f6966",margin:0}}>Choose from one of our curated high-contrast dark modes.</p>
+                <p style={{fontSize:"13px",color:"#6f6966",margin:0}}>Choose from one of our curated high-contrast dark modes.</p>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:"12px",marginTop:"4px"}}>
                   {[
                     { id: 'obsidian', name: 'Obsidian', desc: 'True deep black', bg: '#0c0b0b', cardBg: '#171515', accent: '#e2ddd9' },
@@ -1004,8 +907,8 @@ export function SettingsPanel({
                             <span style={{ width: "14px", height: "14px", borderRadius: "50%", background: t.cardBg, border: "1px solid rgba(255,255,255,0.08)" }} />
                             <span style={{ width: "14px", height: "14px", borderRadius: "50%", background: t.accent, border: "1px solid rgba(255,255,255,0.08)" }} />
                           </div>
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#e2ddd9" }}>{t.name}</span>
-                          <span style={{ fontSize: "10.5px", color: "#5c5755", marginTop: "2px" }}>{t.desc}</span>
+                          <span style={{ fontSize: "14px", fontWeight: 700, color: "#e2ddd9" }}>{t.name}</span>
+                          <span style={{ fontSize: "11.5px", color: "#5c5755", marginTop: "2px" }}>{t.desc}</span>
                         </div>
                       </div>
                     );
@@ -1047,8 +950,8 @@ export function SettingsPanel({
                       <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: accentColor, border: "1px solid rgba(255,255,255,0.08)" }} />
                     </div>
                     <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "#e2ddd9" }}>Custom Theme</span>
-                      <span style={{ fontSize: "11px", color: "#5c5755", marginTop: "2px" }}>Personal background color</span>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: "#e2ddd9" }}>Custom Theme</span>
+                      <span style={{ fontSize: "12px", color: "#5c5755", marginTop: "2px" }}>Personal background color</span>
                     </div>
                   </div>
                   
@@ -1066,7 +969,7 @@ export function SettingsPanel({
                       transition: "opacity 0.2s"
                     }}
                   >
-                    <span style={{ fontSize: "11px", color: "#6f6966", fontWeight: 500 }}>Hex:</span>
+                    <span style={{ fontSize: "12px", color: "#6f6966", fontWeight: 500 }}>Hex:</span>
                     <input
                       type="text"
                       value={customBgColor}
@@ -1079,9 +982,9 @@ export function SettingsPanel({
                       }}
                       placeholder="#0c0b0b"
                       style={{
-                        width: "75px",
+                        width: "78px",
                         padding: "4px 8px",
-                        fontSize: "11px",
+                        fontSize: "12px",
                         background: "rgba(0, 0, 0, 0.2)",
                         border: "1px solid rgba(255, 255, 255, 0.06)",
                         borderRadius: "6px",
@@ -1132,10 +1035,10 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Accent Color</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Accent Color</h3>
               </div>
               <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:"12px"}}>
-                <p style={{fontSize:"12px",color:"#6f6966",margin:0}}>Choose a preset highlight color or select a custom color profile.</p>
+                <p style={{fontSize:"13px",color:"#6f6966",margin:0}}>Choose a preset highlight color or select a custom color profile.</p>
                 <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap",marginTop:"4px"}}>
                   {[
                     { value: '#e2ddd9', label: 'Silver' },
@@ -1206,16 +1109,16 @@ export function SettingsPanel({
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "8px" }}>
-                    <span style={{ fontSize: "11px", color: "#5c5755", fontWeight: 500 }}>Hex:</span>
+                    <span style={{ fontSize: "12px", color: "#5c5755", fontWeight: 500 }}>Hex:</span>
                     <input
                       type="text"
                       value={accentColor}
                       onChange={e => setAccentColorState(e.target.value)}
                       placeholder="#ffffff"
                       style={{
-                        width: "80px",
+                        width: "82px",
                         padding: "6px 8px",
-                        fontSize: "11px",
+                        fontSize: "12px",
                         background: "rgba(226,221,217,0.015)",
                         border: "1px solid var(--v-bdr)",
                         borderRadius: "8px",
@@ -1240,12 +1143,12 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>System Integration</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>System Integration</h3>
               </div>
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Enable System Tray Icon</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>{trayEnabled ? 'Active — window minimizes to system tray on close' : 'Disabled — close exits the app entirely'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable System Tray Icon</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{trayEnabled ? 'Active — window minimizes to system tray on close' : 'Disabled — close exits the app entirely'}</p>
                 </div>
                 <SettingsSwitch checked={trayEnabled} onChange={async () => {
                   const next = !trayEnabled;
@@ -1257,12 +1160,12 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Startup Behavior</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Startup Behavior</h3>
               </div>
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Default Startup View</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : startupNav === 'library' ? 'Playlists' : 'Settings'}</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Default Startup View</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : startupNav === 'library' ? 'Playlists' : 'Settings'}</p>
                 </div>
                 <ThemedSelect
                   value={startupNav}
@@ -1281,12 +1184,12 @@ export function SettingsPanel({
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",gap:"8px"}}>
                 <Zap size={14} style={{color:"var(--v-accent)"}}/>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Performance & Graphics</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Performance & Graphics</h3>
               </div>
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"16px"}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9",margin:0}}>Low-Spec / Performance Mode</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",margin:"4px 0 0 0",lineHeight:1.4}}>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9",margin:0}}>Low-Spec / Performance Mode</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",margin:"4px 0 0 0",lineHeight:1.4}}>
                     {performanceMode
                       ? 'Active — GPU blur effects, heavy hover transitions, and continuous animations are disabled for maximum smoothness on older hardware.'
                       : 'Disabled — full visual effects, fluid transitions, and standard animations are enabled.'}
@@ -1305,13 +1208,13 @@ export function SettingsPanel({
         {matchesStorage && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
-              <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage</h2>
-              <p style={{fontSize:"12.5px",color:"#6f6966",margin:0}}>Backup, restore data, and manage application maintenance.</p>
+              <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage</h2>
+              <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Backup, restore data, and manage application maintenance.</p>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Backup Location</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Backup Location</h3>
               </div>
               <div className="v-settings-row" style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={async () => {
                 try {
@@ -1324,7 +1227,7 @@ export function SettingsPanel({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    fontSize: "11.5px",
+                    fontSize: "12.5px",
                     color: "#9e9894",
                     background: "rgba(255, 255, 255, 0.02)",
                     border: "1px solid var(--v-bdr)",
@@ -1334,10 +1237,10 @@ export function SettingsPanel({
                     fontFamily: "monospace",
                     maxWidth: "90%"
                   }}>
-                    <FolderOpen size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                    <FolderOpen size={13} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{backupPath || downloadPath}</span>
                   </div>
-                  <p style={{fontSize:"11px",color:"#5c5755",marginTop:"6px"}}>Backup file: veluna_backup.json</p>
+                  <p style={{fontSize:"12px",color:"#5c5755",marginTop:"6px"}}>Backup file: veluna_backup.json</p>
                 </div>
                 <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
                   <FolderOpen size={16} />
@@ -1347,13 +1250,13 @@ export function SettingsPanel({
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Backup & Restore Actions</h3>
+                <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Backup & Restore Actions</h3>
               </div>
               
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out",borderBottom:"1px solid #141312"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={onBackup}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Create Backup</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>Save all playlists, queue, history, and settings to a JSON file</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Create Backup</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Save all playlists, queue, history, and settings to a JSON file</p>
                 </div>
                 <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
                   <Upload size={16} />
@@ -1362,8 +1265,8 @@ export function SettingsPanel({
 
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={onRestore}>
                 <div>
-                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9"}}>Restore Backup</p>
-                  <p style={{fontSize:"11px",color:"#6f6966",marginTop:"4px"}}>Restore playlists, history, and preferences from a backup file</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Restore Backup</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Restore playlists, history, and preferences from a backup file</p>
                 </div>
                 <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
                   <ArchiveRestore size={16} />
@@ -1377,8 +1280,8 @@ export function SettingsPanel({
               onClick={onReset}>
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
                 <div>
-                  <h3 style={{fontSize:"13px",fontWeight:600,color:"#ef4444",margin:0}}>Reset Veluna App</h3>
-                  <p style={{fontSize:"11px",color:"rgba(239, 68, 68, 0.6)",marginTop:"4px"}}>Permanently delete all local database contents, playlists, history, and configuration files. This action is irreversible.</p>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#ef4444",margin:0}}>Reset Veluna App</h3>
+                  <p style={{fontSize:"12px",color:"rgba(239, 68, 68, 0.6)",marginTop:"4px"}}>Permanently delete all local database contents, playlists, history, and configuration files. This action is irreversible.</p>
                 </div>
                 <button style={{padding:"6px",color:"#ef4444",background:"none",border:"none",cursor:"pointer",display:"flex",flexShrink:0,marginLeft:"10px"}}>
                   <Trash2 size={16}/>

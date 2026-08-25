@@ -38,57 +38,60 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 
 ## What is Veluna?
 
-Veluna is a native desktop music application built with Tauri (Rust + React). It's primarily a local library manager, playlist tool, and playback engine, with an optional streaming/search feature powered by `yt-dlp` and `mpv` for finding and previewing tracks from YouTube.
+Veluna is a native desktop music application built with Tauri (Rust + React 19). It's primarily a local library manager, playlist tool, and playback engine, with an optional streaming/search feature powered by `yt-dlp` and `mpv` for finding and previewing tracks from YouTube.
 
-There's no account system, no telemetry, and no ads. It runs the same on Linux and Windows, and it's designed to stay light on system resources.
+There's no account system, no telemetry, and no ads. It runs identically on Linux and Windows, and it's designed to stay light on system resources.
 
-> **Note on the YouTube streaming feature:** this functions similarly to a web browser accessing YouTube, it does not host, redistribute, or store any copyrighted audio on Veluna's own infrastructure (there is none, everything runs locally on your machine). Downloaded files are saved locally for personal use only, the same category of use as `yt-dlp`, `youtube-dl`, or a browser's own "save video" extension. See [Legal & Fair Use](#legal--fair-use) below.
+> **Note on the YouTube streaming feature:** this functions similarly to a web browser accessing YouTube, it does not host, redistribute, or store any copyrighted audio on Veluna's own infrastructure (everything runs locally on your machine). Downloaded files are saved locally for personal use only, the same category of use as `yt-dlp`, `youtube-dl`, or a browser's own "save video" extension. See [Legal & Fair Use](#legal--fair-use) below.
 
 ---
 
 ## Features
 
 ### 🔍 Streaming & Search
-- Search YouTube directly from the app, with results split into **dual search categories** (**YT Music** for official audio releases and **Videos** for official music videos)
+- Search YouTube directly from the app with results split into **dual search categories** (**YT Music** for official studio audio and **Videos** for official music videos)
 - Stream audio instantly via `yt-dlp` + `mpv` IPC, no video overhead, no buffering delay
-- Search history dropdown (up to 8 recent queries) with one-click re-search
-- **Quick Picks**, a strip of your 20 most recently played tracks on the home screen for instant replay
-- **Genre Shelves**, the home screen auto-detects genres from your listening history and groups tracks into horizontal scrollable shelves (Hip-Hop, EDM, Pop, Rock, R&B, Lo-Fi, K-Pop, Phonk, and more)
+- Search history dropdown (up to 8 recent queries) with one-click re-search and item removal
+- **Quick Picks**, a carousel of your 20 most recently played tracks on the home screen for instant replay
+- **Genre Shelves**, auto-detects genres from your listening history and organizes tracks into horizontal scrollable shelves (Hip-Hop, EDM, Pop, Rock, R&B, Lo-Fi, K-Pop, Phonk, and more)
 - **Autoplay Recommendations**, automatically discovers and queues similar tracks when your active playlist or queue ends
 
 ### 📁 Offline Library
-- Point Veluna at any local music folder; it scans recursively and enriches metadata in the background without blocking the UI
+- Point Veluna at any local music directory; it scans recursively and enriches tags, waveforms, and artwork in batches without blocking the UI
 - **Local Track Cover Art Support**, dynamically reads embedded metadata covers or cached artwork for local files
 - **Waveform Visualisation**, automatic waveform thumbnail generation for local audio tracks
 - **Metadata Editor**, edit title, artist, and album tags directly on local files with changes written to disk
 - Filter your library in real time, zero latency, pure in-memory search
-- Drag-to-reorder tracks, rename or delete files from the UI, show any track in your file manager
+- Drag-to-reorder tracks, rename or delete files from the UI, open any track in your system file manager
 - Export and import playlists in standard **M3U format**
 
 ### ⬇️ Downloads
-- Download any YouTube track with one click from search results, right-click menu, or the download button beside the heart icon
+- Download any YouTube track with one click from search results, right-click menu, or the download icon
 - Choose your **audio format**: MP3, Opus, M4A, or FLAC
 - Choose your **quality**: High (320kbps+), Medium (~128kbps), or Low
 - **Embed Thumbnail**, cover art written directly into file metadata tags, alongside title, artist, and album
 - **Duplicate Detection**, scans your download folder first and skips tracks you already have
 
 ### 🎵 Playlists
-- Create, name, and describe playlists; edit or delete at any time; upload a custom cover image
-- **Enhanced View Selector**, switch between grid and list views with smooth interactive scaling
-- **Collapsible Sidebar Playlists** with clean active indicators and track count subtitles
+- Create, name, and describe playlists; edit or delete at any time; upload custom cover images
+- **Enhanced View Selector**, toggle between grid and list views with smooth interactive transitions
+- **Collapsible Sidebar Playlists** with clean active indicators, track counts, and outward-expanding action menus
 - **Search within a playlist**, filter tracks by title or artist in real time
-- **Liked Songs**, a built-in smart playlist. Heart any track anywhere in the app to add it
+- **Liked Songs**, built-in smart playlist. Heart any track anywhere in the app to save it
 - **Import from Spotify**, export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed
 - **Import from YouTube**, paste any public YouTube or YouTube Music playlist link for instant import with automatic title extraction and high-definition cover art
+- **Import from M3U**, load standard local `.m3u` playlist files directly into your collection
 
 ### 📋 Queue
-- Add any track to the persistent queue from search results, playlists, or right-click menus
-- Drag-to-reorder the queue at any time. Queue survives across sessions
+- Add any track to the persistent queue from search results, playlists, or right-click context menus
+- Drag-to-reorder queue items at any time; queue state persists across sessions
+- Dedicated Play Queue panel with direct save-to-playlist and quick dismiss controls
 
 ### ▶️ Playback Engine
 - **mpv backend** via IPC socket (Unix) / named pipe (Windows), full codec support, hardware decoding
-- **Shuffle**, **Repeat** (Off / All / One), **Playback speed** (0.5x-2x)
-- **Volume control** via slider, scroll wheel, or mute with memory
+- **Audio Crossfade**, configurable smooth volume fading between tracks (0–12s) with concurrency race protection
+- **Shuffle**, **Repeat** (Off / All / One), **Playback speed** (0.5x–2x with centered drop-in popover)
+- **Volume control** via slider, scroll wheel, mute toggle with memory, and Max Volume shortcut
 - **Seek bar** with waveform visualisation overlay on local files
 - **A-B Loop**, loop any segment continuously until cleared
 - **Bookmarks**, save one position per track, restored on next play
@@ -99,31 +102,39 @@ There's no account system, no telemetry, and no ads. It runs the same on Linux a
 
 ### 🎤 Lyrics
 - Synced lyrics with **real-time line highlighting** that scrolls automatically as the song plays, click any line to seek
-- **Immersive full-screen view**, blurred album art background, progress bar, controls, and scrolling lyrics side by side
+- **Immersive full-screen view**, blurred album art ambient backdrop, progress bar, playback controls, volume controls, and scrolling lyrics side by side
 - **Lyrics Source** selector: choose between **lrclib**, **Musixmatch**, or **NetEase**, with automatic fallback if your primary source fails
 
 ### 🎮 Discord Rich Presence
 - Shows current playing track, artist, elapsed/remaining time, and album art on your Discord profile
 - Interactive buttons for "Listen on YouTube" and "View on GitHub"
+- Live progress synchronization on play, seek, and track switches
 
 ### 🖥️ System Tray *(optional)*
 - Left-click to show/hide the window; tray menu with Play/Pause, Next, Previous, Show, Quit
 - Closing the window hides to tray instead of exiting
 
+### 🎨 Themes & Design System
+- Built-in curated palettes: **Obsidian**, **Midnight Navy**, **Forest Emerald**, **Cyberpunk**, **Sunset Crimson**, **Pure Black**
+- **Custom Theme** support with custom background color picker and accent selector
+- Solid, theme-harmonized context menus and popovers with zero bleed-through
+
 ### ⌨️ Controls & Shortcuts
 
 | Action | Shortcut |
-|--------|----------|
+|---|---|
 | Play / Pause | `Space` |
 | Seek forward 10s | `→` |
 | Seek backward 10s | `←` |
 | Mute / Unmute | `M` |
-| Focus search bar | `Ctrl+F` |
+| Focus Search Bar (Global) | `Ctrl+F` / `Cmd+F` |
+| Show Keyboard Shortcuts | `?` |
+| Dismiss Modal / Menu | `Esc` |
 | Play / Pause (media key) | Hardware key |
 | Next track (media key) | Hardware key |
 | Previous track (media key) | Hardware key |
 
-Media keys are registered globally and work even when the app is not in focus.
+Media keys are registered globally and work even when the app is minimized or running in the background.
 
 ### 🐧 MPRIS2 Integration (Linux)
 Veluna registers a full `org.mpris.MediaPlayer2.veluna` D-Bus service. Works with **playerctl**, **KDE Connect**, **GNOME Shell extensions**, and any MPRIS2-compatible widget.
@@ -136,21 +147,21 @@ A personal listening analytics dashboard with **All Time** and **Last 7 Days** f
 - **Top Rankings**: Top Tracks, Top Artists, Top Genres
 
 ### ⚡ Low-Spec & Performance Mode
-- **Zero-Lag Architecture**: Built-in toggle designed specifically for low-end hardware, older dual-core CPUs, and integrated Intel HD/UHD graphics
-- **GPU Blur & Shadow Elimination**: Completely removes GPU-heavy `backdrop-filter: blur(...)` and box shadows in favor of a crisp, high-contrast flat obsidian aesthetic
-- **Animation & Transition Stripping**: Disables all continuous CSS keyframe animations (spinners, equalizer waves, loading streams) and hover transforms for instantaneous, 0ms input response
-- **Background Throttling**: Automatically pauses active animations and throttles background polling intervals when the app is minimized or hidden, reducing idle CPU/GPU usage to **0%**
-- **Top-Left Status Badge**: Displays a quick `⚡ ECO MODE` indicator in the top-left navigation sidebar with instant access to settings
+- **Zero-Lag Architecture**: Built-in toggle designed specifically for low-end hardware, older CPUs, and integrated graphics
+- **GPU Blur & Shadow Elimination**: Removes GPU-heavy `backdrop-filter: blur(...)` and box shadows in favor of a crisp, high-contrast flat obsidian aesthetic
+- **Animation & Transition Stripping**: Disables continuous keyframe animations (spinners, equalizer waves, loading streams) and hover transforms for instantaneous 0ms input response
+- **Background Throttling**: Automatically pauses active animations and throttles background polling intervals when the app is minimized, reducing idle CPU/GPU usage to **0%**
+- **Top-Left Status Badge**: Displays a quick `⚡ ECO MODE` indicator in the navigation sidebar with instant access to settings
 
 ### 🌙 Sleep Timer
-Preset buttons (5-90 min) or custom input. Live countdown in sidebar. Cancellable any time.
+Preset buttons (5–90 min) or custom numeric input with a live countdown indicator in the player bar. Cancellable at any time.
 
 ### 🖱️ Right-Click Context Menus
-Available on every track: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info.
+Available on every track and playlist: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info.
 
 ### ⚙️ Settings
 - **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
-- **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer
+- **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer, crossfade duration
 - **Integrations**: Discord Rich Presence, primary lyrics source
 - **Appearance & Performance**: curated themes, custom accent and background color, default startup page, system tray toggle, and Low-Spec / Performance Mode
 - **Storage**: backup location, create/restore backup, reset app data
@@ -276,7 +287,57 @@ Each match/failure updates the live progress list
 Name & description popup appears when matching completes
     │
     ▼
-Playlist saved to localStorage
+```
+
+---
+
+## Project Structure
+
+```
+veluna/
+├── src/
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── ContextMenu.tsx       # Right-click contextual actions for tracks and playlists
+│   │   │   ├── PlayerBar.tsx         # Bottom playback bar, seekbar, volume & audio controls
+│   │   │   ├── QueuePanel.tsx        # Slide-out play queue drawer with drag-and-drop reorder
+│   │   │   ├── Sidebar.tsx           # Primary navigation, collapsible playlists & import menu
+│   │   │   └── TopBar.tsx            # Navigation breadcrumbs, history back button & app logo
+│   │   ├── views/
+│   │   │   ├── HomeView.tsx          # Search results, Quick Picks & auto-detected Genre Shelves
+│   │   │   ├── PlaylistsView.tsx     # Playlist grid/list view, track management & multi-select
+│   │   │   ├── StatsView.tsx         # Listening analytics, activity graphs & top artists/tracks
+│   │   │   └── LyricsView.tsx        # Full-screen synchronized lyrics view with ambient backdrop
+│   │   ├── DownloadsPanel.tsx        # Offline library scanner, folder picker & metadata tagger
+│   │   ├── Modals.tsx                # Spotify CSV, YouTube URL & M3U playlist import dialogs
+│   │   ├── SettingsPanel.tsx         # Audio filters, EQ, themes, low-spec mode & backups
+│   │   ├── SleepTimerPopover.tsx     # Quick presets and custom sleep timer countdown
+│   │   ├── SpeedSelector.tsx         # Playback rate controller (0.5x – 2.0x)
+│   │   ├── ThemedSelect.tsx          # Shared dropdown component with theme token styling
+│   │   ├── TrackRow.tsx              # Virtualized track item with hover states & like toggles
+│   │   ├── VirtualTrackList.tsx      # Windowed list virtualizer for high-performance rendering
+│   │   └── WaveformBar.tsx           # Peak waveform visualization and click-to-seek bar
+│   ├── hooks/
+│   │   ├── useAudioPlayer.ts         # mpv IPC client, crossfade timers & playback lifecycle
+│   │   ├── useListeningStats.ts      # Local analytics accumulator, play counts & time history
+│   │   ├── useLyrics.ts              # Multi-source LRC lyrics fetcher & auto-scroll synchronizer
+│   │   ├── usePlaylists.ts           # Playlist state management & localStorage persistence
+│   │   ├── useQueue.ts               # Persistent playback queue with contextual autoplays
+│   │   ├── useSearch.ts              # Dual-tab YouTube search & LRU query history cache
+│   │   ├── useTheme.ts               # Theme palette injector & Low-Spec ECO mode manager
+│   │   └── useToast.ts               # Notification toast dispatcher
+│   ├── App.tsx                       # Root view router, global keybindings & background sync
+│   ├── App.css                       # Design tokens, theme variables, reset & micro-animations
+│   ├── constants.ts                  # Genres, default configuration & audio presets
+│   ├── types.ts                      # TypeScript definitions for tracks, playlists & IPC events
+│   ├── utils.ts                      # Time formatting, color math, CSV parsing & validators
+│   └── main.tsx                      # React 19 application entry point
+├── src-tauri/
+│   ├── src/
+│   │   └── main.rs                   # Rust backend: mpv IPC, yt-dlp pipe, MPRIS2 & Discord RPC
+│   ├── Cargo.toml                    # Rust dependencies (Tauri v2, tokio, discord-rpc, zbus)
+│   └── tauri.conf.json               # Window dimensions, CSP policies & native bundle configs
+└── packaging/                        # Linux package definitions (PKGBUILD, post-install hooks)
 ```
 
 ---
@@ -285,20 +346,20 @@ Playlist saved to localStorage
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| UI Framework | React 19 + TypeScript | Component rendering, state management |
-| Styling | Vanilla CSS | Custom design system, dynamic gradients, ambient blurs |
-| Icons | lucide-react | All UI icons |
-| Desktop Shell | Tauri v2 | Native window, IPC bridge, file system |
-| Backend | Rust (stable) | All system operations |
+| UI Framework | React 19 + TypeScript | Component rendering, modular hooks, state management |
+| Styling | CSS3 Design System | Custom glassmorphism, dynamic gradients, theme variables |
+| Icons | lucide-react | Vector iconography |
+| Desktop Shell | Tauri v2 | Native window, IPC bridge, file system permissions |
+| Backend | Rust (stable) | System integration, subprocess management, disk queries |
 | Audio Engine | mpv | Decoding and playback via IPC |
 | Streaming / Download | yt-dlp | YouTube search, streaming, downloading |
-| Media Info | ffprobe / ffmpeg | Metadata, waveform generation, format conversion |
-| Discord RPC | discord-rich-presence | Live Discord status & interactive buttons |
+| Media Info | ffprobe / ffmpeg | Metadata extraction, waveform generation, format transcoding |
+| Discord RPC | discord-rich-presence | Live Discord status, timestamps & interactive action links |
 | MPRIS2 | zbus 3 | D-Bus integration on Linux |
 | Global Shortcuts | tauri-plugin-global-shortcut | Hardware media key support |
 | File Dialogs | tauri-plugin-dialog | Folder/file pickers |
-| URL Opening | tauri-plugin-opener | Opening links in system browser |
-| HTTP | reqwest | Lyrics fetching, GitHub update check |
+| URL Opening | tauri-plugin-opener | Opening external links in default browser |
+| HTTP | reqwest | Lyrics fetching, GitHub update checks |
 
 ---
 

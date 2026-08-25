@@ -837,6 +837,45 @@ kbd {
   border-radius: 1.5px;
 }
 
+.v-sidebar-playlist-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--v-bg2) !important;
+  background-color: var(--v-bg2) !important;
+  border: 1px solid var(--v-bdr2) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.95), 0 0 0 1px var(--v-bdr2) !important;
+  z-index: 99999 !important;
+  opacity: 1 !important;
+  animation: fadeUpSm 0.12s ease-out;
+}
+.v-sidebar-playlist-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--v-fg2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+.v-sidebar-playlist-menu-item:hover {
+  background-color: var(--v-bg3) !important;
+  color: var(--v-fg) !important;
+}
+
 .v-pl-item {
   display: flex;
   align-items: center;
@@ -1075,45 +1114,7 @@ kbd {
   opacity: 1;
 }
 
-.v-nav-btn {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border-radius: 9999px;
-  border: none;
-  background: transparent;
-  color: var(--v-fg2);
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  font-size: 15.5px;
-  font-weight: 500;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  overflow: hidden;
-}
-.v-nav-btn:hover {
-  background: rgba(255, 255, 255, 0.025);
-  color: #fff;
-  transform: translateX(1px);
-}
-.v-nav-btn--active {
-  background: rgba(255, 255, 255, 0.045) !important;
-  color: #fff !important;
-  font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-}
-.v-nav-btn--active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 25%;
-  bottom: 25%;
-  width: 3px;
-  background: var(--v-accent);
-  border-radius: 0 4px 4px 0;
-}
+
 
 /* 🎛️ Premium Context Menu & Popover Glass Design System Surface */
 .v-ctx,
@@ -1212,11 +1213,11 @@ kbd {
 
 /* Offline Downloads Panel Card */
 .v-library-sidebar-card {
-  background: var(--v-bg3);
-  border: 1px solid var(--v-bdr3);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  padding: 16px 18px;
+  transition: border-color 0.2s ease;
 }
 .v-library-stat-item {
   display: flex;
@@ -1228,6 +1229,11 @@ kbd {
   align-items: center;
   justify-content: center;
   text-align: center;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease;
+}
+.v-library-stat-item:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
 }
 .v-library-stat-val { font-size: 20px; font-weight: 800; color: var(--v-fg); }
 .v-library-stat-lbl { font-size: 10px; color: var(--v-fg3); margin-top: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -1236,12 +1242,12 @@ kbd {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px;
-  border-radius: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
-.v-library-recent-row:hover { background: var(--v-bg4); }
+.v-library-recent-row:hover { background: var(--v-bg4); transform: translateX(2px); }
 .v-library-recent-art {
   width: 36px;
   height: 36px;
@@ -1281,19 +1287,19 @@ kbd {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
   background: var(--v-bg2);
   border: 1px solid var(--v-bdr2);
   color: var(--v-fg2);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .v-library-import-btn:hover {
   background: var(--v-bg4);
-  border-color: var(--v-bdr);
+  border-color: rgba(255, 255, 255, 0.12);
   color: var(--v-fg);
   transform: translateX(2px);
 }
@@ -1511,6 +1517,26 @@ kbd {
   color: #000000 !important;
   transform: none !important;
 }
+.v-perf-mode .v-library-sidebar-card {
+  background: #101010 !important;
+  border: 1px solid #222222 !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+}
+.v-perf-mode .v-library-stat-item {
+  background: #141414 !important;
+  border: 1px solid #282828 !important;
+  border-radius: 6px !important;
+}
+.v-perf-mode .v-library-import-btn {
+  background: #141414 !important;
+  border: 1px solid #282828 !important;
+  border-radius: 6px !important;
+  transform: none !important;
+}
+.v-perf-mode .v-library-recent-row {
+  border-radius: 6px !important;
+}
 .v-perf-mode img {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
@@ -1519,4 +1545,24 @@ kbd {
 /* 6. Background Tab Optimization: Pause animations when window is minimized */
 .v-app-hidden * {
   animation-play-state: paused !important;
+}
+
+.v-new-playlist-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: #e2ddd9;
+  cursor: pointer;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.v-new-playlist-btn:hover {
+  border-color: var(--v-accent);
+  color: var(--v-accent);
 }

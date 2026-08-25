@@ -77,7 +77,7 @@ export function VirtualTrackList<T>({
       }
       window.removeEventListener('resize', updateScroll);
     };
-  }, [items.length]);
+  }, [items]);
 
   const totalHeight = items.length * itemHeight;
   const startIndex = Math.max(0, Math.floor(scrollState.scrollTop / itemHeight) - overscan);

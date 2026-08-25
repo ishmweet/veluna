@@ -44,8 +44,26 @@ export function ImportResultModal({
               onMouseLeave={e=>{e.currentTarget.style.color="#5c5755";e.currentTarget.style.borderColor="var(--v-bdr2)";}}>
               Cancel
             </button>
-            <button onClick={()=>{if(name.trim())onSave(name.trim(),desc.trim());}} disabled={!name.trim()}
-              style={{flex:1,padding:"8px",borderRadius:"8px",border:"none",background:"#e2ddd9",color:"var(--v-bg0)",fontWeight:700,cursor:"pointer",fontSize:"12px",opacity:name.trim()?1:0.35}}>
+            <button
+              onClick={() => { if (name.trim()) onSave(name.trim(), desc.trim()); }}
+              disabled={!name.trim()}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "8px",
+                border: "none",
+                background: "var(--v-accent)",
+                color: "#000000",
+                fontWeight: 700,
+                cursor: name.trim() ? "pointer" : "not-allowed",
+                fontSize: "12px",
+                opacity: name.trim() ? 1 : 0.35,
+                boxShadow: name.trim() ? "0 2px 10px rgba(0,0,0,0.3)" : "none",
+                transition: "all .15s ease"
+              }}
+              onMouseEnter={e => { if (name.trim()) (e.currentTarget as HTMLElement).style.opacity = '0.9'; }}
+              onMouseLeave={e => { if (name.trim()) (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+            >
               Save Playlist
             </button>
           </div>
@@ -105,7 +123,7 @@ export function ImportButton({ onSpotify, onYoutube, onM3u }: {
         }}>
           {[
             { label:'From Spotify', icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>, action:()=>{onSpotify();setOpen(false);} },
-            { label:'From YouTube', icon:<svg width="13" height="11" viewBox="0 0 18 14" fill="#ef4444"><path d="M17.6 2.2C17.4 1.4 16.8.8 16 .6 14.6.2 9 .2 9 .2S3.4.2 2 .6C1.2.8.6 1.4.4 2.2 0 3.6 0 6.5 0 6.5s0 2.9.4 4.3c.2.8.8 1.4 1.6 1.6C3.4 12.8 9 12.8 9 12.8s5.6 0 7-.4c.8-.2 1.4-.8 1.6-1.6.4-1.4.4-4.3.4-4.3s0-2.9-.4-4.3zM7.2 9.3V3.7l4.7 2.8-4.7 2.8z"/></svg>, action:()=>{onYoutube();setOpen(false);} },
+            { label:'From YouTube', icon:<svg width="14" height="14" viewBox="0 0 24 24" style={{flexShrink:0}}><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z" fill="#ff0000"/><polygon points="9.545,8.432 15.818,12 9.545,15.568" fill="#ffffff"/></svg>, action:()=>{onYoutube();setOpen(false);} },
             { label:'From M3U File', icon:<FileOutput size={13} style={{color:'#9e9894'}} />, action:()=>{onM3u();setOpen(false);} },
           ].map(({label,icon,action}, idx)=>(
             <button key={label} onClick={action}
@@ -1116,14 +1134,15 @@ export function MetadataEditModal({
             style={{
               padding:"9px 16px",
               borderRadius:"8px",
-              background:loading?"rgba(226,221,217,0.3)":(isSaveHovered?"#fff":"#e2ddd9"),
+              background:loading?"rgba(255,255,255,0.15)":"var(--v-accent)",
               border:"none",
-              color:"var(--v-bg0)",
+              color:"#000000",
               fontWeight:700,
               cursor:(loading || !title.trim())?"not-allowed":"pointer",
               fontSize:"12.5px",
+              opacity:(!loading && title.trim())?(isSaveHovered?0.9:1):0.35,
               transition:"all 0.2s ease",
-              boxShadow:(!loading && title.trim())?"0 4px 12px rgba(226, 221, 217, 0.2)":"none"
+              boxShadow:(!loading && title.trim())?"0 2px 10px rgba(0,0,0,0.3)":"none"
             }}
             onMouseEnter={() => setIsSaveHovered(true)}
             onMouseLeave={() => setIsSaveHovered(false)}

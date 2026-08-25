@@ -57,3 +57,6 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Others
+SKILLS.md

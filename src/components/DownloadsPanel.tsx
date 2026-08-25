@@ -127,6 +127,9 @@ export function DownloadsPanel({
       if (di) setDiskInfo(di);
 
       setEnriching(true);
+      let workingTracks = [...rawWithCovers];
+      let hasUpdates = false;
+      let count = 0;
       for (const t of rawWithCovers) {
         const existing = existingTracks.find(p => p.path === t.path);
         if (existing && existing.duration !== undefined) {
@@ -143,8 +146,16 @@ export function DownloadsPanel({
             } catch {}
           }
           const enriched = { ...t, title: m.title || t.title, artist: cleanArtist(m.artist) || t.artist || undefined, duration: m.duration !== '0:00' ? m.duration : undefined, has_cover: m.has_cover, cover };
-          setTracks(prev => prev.map(p => p.path === t.path ? enriched : p));
+          workingTracks = workingTracks.map(p => p.path === t.path ? enriched : p);
+          hasUpdates = true;
+          count++;
+          if (count % 8 === 0) {
+            setTracks([...workingTracks]);
+          }
         } catch { /* keep original */ }
+      }
+      if (hasUpdates) {
+        setTracks(workingTracks);
       }
       setEnriching(false);
     } catch (e) { setError(String(e)); setScanning(false); setEnriching(false); }
@@ -427,7 +438,7 @@ export function DownloadsPanel({
                       </div>
                     )}
                     <div className="v-track__num">
-                      {isActive&&isLoadingTrack
+                      {isActive&&isLoadingTrack&&!isPlaying
                         ? <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
                             <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
                             <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>

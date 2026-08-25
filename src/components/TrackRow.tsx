@@ -32,7 +32,7 @@ export const TrackRow = React.memo(({
     onClick={onPlay} onContextMenu={onCtx} onMouseEnter={onHoverEnter} onMouseLeave={onHoverLeave}
   >
     <div className="v-track__num">
-      {isActive && isLoadingTrack
+      {isActive && isLoadingTrack && !isPlaying
         ? <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
             <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
             <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
@@ -52,7 +52,22 @@ export const TrackRow = React.memo(({
       justifyContent: 'center'
     }}>
       <Music size={16} style={{position: 'absolute', color: 'rgba(255,255,255,0.25)'}} />
-      {track.cover && <img src={track.cover} alt={track.title} style={{position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.35)'}} onError={e => { e.currentTarget.style.display = 'none'; }} loading="lazy" />}
+      {track.cover && (
+        <img
+          src={track.cover}
+          alt={track.title}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: track.cover.includes('ytimg.com') || track.cover.includes('googleusercontent.com') ? 'scale(1.35)' : 'none'
+          }}
+          onError={e => { e.currentTarget.style.display = 'none'; }}
+          loading="lazy"
+        />
+      )}
     </div>
     <div className="v-track__info">
       <div className="v-track__title">{track.title}</div>
