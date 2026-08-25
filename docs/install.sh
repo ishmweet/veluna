@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEB_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.2/veluna_0.1.2_amd64.deb"
-RPM_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.2/veluna-0.1.2-1.x86_64.rpm"
+DEB_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.3/veluna_0.1.3_amd64.deb"
+RPM_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.3/veluna-0.1.3-1.x86_64.rpm"
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -21,11 +21,11 @@ main() {
     makepkg -si --noconfirm
     echo -e "\033[1;32mSuccessfully installed Veluna native Arch Linux package!\033[0m"
   elif command -v apt >/dev/null 2>&1; then
-    PACKAGE_PATH="$TEMP_DIR/veluna_0.1.2_amd64.deb"
+    PACKAGE_PATH="$TEMP_DIR/veluna_0.1.3_amd64.deb"
     curl -fsSL# "$DEB_URL" -o "$PACKAGE_PATH" || error "Download failed."
     sudo apt install -y "$PACKAGE_PATH"
   elif command -v dnf >/dev/null 2>&1; then
-    PACKAGE_PATH="$TEMP_DIR/veluna-0.1.2-1.x86_64.rpm"
+    PACKAGE_PATH="$TEMP_DIR/veluna-0.1.3-1.x86_64.rpm"
     curl -fsSL# "$RPM_URL" -o "$PACKAGE_PATH" || error "Download failed."
     sudo dnf install -y "$PACKAGE_PATH"
   else

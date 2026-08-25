@@ -221,6 +221,7 @@ export type SettingsPanelProps = {
   customBgColor: string; setCustomBgColorState: (c: string) => void;
   autoCheckUpdates: boolean; setAutoCheckUpdates: (v: boolean) => void;
   isCheckingUpdate: boolean; handleCheckUpdate: () => void;
+  performanceMode: boolean; setPerformanceMode: (v: boolean) => void;
 };
 
 export function SettingsPanel({
@@ -246,6 +247,7 @@ export function SettingsPanel({
   customBgColor, setCustomBgColorState,
   autoCheckUpdates, setAutoCheckUpdates,
   isCheckingUpdate, handleCheckUpdate,
+  performanceMode, setPerformanceMode,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'playback');
   useEffect(() => {
@@ -253,27 +255,20 @@ export function SettingsPanel({
   }, [initialTab]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const matchesSearch = (textList: string[]) => {
+  const matchCard = (keywords: (string | undefined | null | number)[]) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
-    return textList.some(txt => (txt || '').toLowerCase().includes(q));
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const validKeywords = keywords
+      .filter((k): k is string | number => k !== undefined && k !== null)
+      .map(k => String(k).toLowerCase());
+    return tokens.every(token => validKeywords.some(kw => kw.includes(token)));
   };
 
-  const show = (tab: SettingsTab) => {
-    if (searchQuery) return true;
+  const showTab = (tab: SettingsTab) => {
+    if (searchQuery.trim()) return true;
     return activeTab === tab;
-  };
-
-  const hasMatches = () => {
-    if (!searchQuery) return true;
-    if (matchesSearch(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date"])) return true;
-    if (matchesSearch(["Downloads", "Configure download quality", "Audio Quality", "Download Folder", "Audio Format", "Embed Thumbnail", "Duplicate Detection", "File Options"])) return true;
-    if (matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Equalizer", "Bass", "Mid", "Treble"])) return true;
-    if (matchesSearch(["Integrations", "Discord Rich Presence", "Discord RPC", "Lyrics Source", "Primary source"])) return true;
-    if (matchesSearch(["Storage", "Backup Location", "Create Backup", "Restore Backup", "Reset Veluna App"])) return true;
-    if (matchesSearch(["Appearance", "System Tray", "Enable Tray Icon", "Default Startup Page", "Startup View", "Theme", "Accent Color", "Custom Theme"])) return true;
-    return false;
   };
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
@@ -296,6 +291,47 @@ export function SettingsPanel({
     { id: 'storage',      label: 'Storage',      icon: <Database size={15} /> },
     { id: 'updates',      label: 'Updates',      icon: <ArrowUpCircle size={15} /> },
   ];
+
+  const matchesUpdates = showTab('updates') && (
+    matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "Release notes", "GitHub", "Changelog", appVersion, updateAvailable || ""]) ||
+    matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])
+  );
+
+  const matchesDownloads = showTab('downloads') && (
+    matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality]) ||
+    matchCard(["Downloads", "Audio Specifications", "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat]) ||
+    matchCard(["Downloads", "Download Directory", "Download Folder", "Download Path", "Storage Location", "Save Location", "Folder", "Browse", "Offline tracks", downloadPath]) ||
+    matchCard(["Downloads", "File Options", "Embed Artwork Thumbnail", "Thumbnail", "Album Cover", "Cover Art", "ID3 Tags", "Artwork"]) ||
+    matchCard(["Downloads", "File Options", "Smart Duplicate Detection", "Duplicate Detection", "Skip existing", "Duplicates", "Overwrite"])
+  );
+
+  const matchesPlayback = showTab('playback') && (
+    matchCard(["Playback", "Audio Processing", "Loudness Normalization", "Loudnorm", "EBU R128", "Volume Normalization", "Sound leveling", "Gain"]) ||
+    matchCard(["Playback", "Audio Processing", "Skip Silence", "Silence Removal", "Remove silent gaps", "Silence"]) ||
+    matchCard(["Playback", "Audio Processing", "Autoplay Recommendations", "Autoplay", "Continuous playback", "Queue similar", "Infinite music"]) ||
+    matchCard(["Playback", "Equalizer", "EQ", "Bass", "Mid", "Treble", "Flat", "Bass Boost", "Vocal", "Rock", "Electronic", "Presets", "dB", "60Hz", "1kHz", "16kHz", "Frequencies", "Sound tuning"])
+  );
+
+  const matchesIntegrations = showTab('integrations') && (
+    matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing"]) ||
+    matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource])
+  );
+
+  const matchesAppearance = showTab('appearance') && (
+    matchCard(["Appearance", "Application Theme", "Theme", "Dark mode", "Obsidian", "Midnight Navy", "Forest Emerald", "Cyberpunk", "Sunset Crimson", "Pure Black", "Custom Theme", "Hex", "Color picker", theme, customBgColor]) ||
+    matchCard(["Appearance", "Accent Color", "Accent", "Silver", "Indigo", "Emerald", "Magenta", "Orange", "Crimson", "Custom Hex", "Highlight color", accentColor]) ||
+    matchCard(["Appearance", "System Integration", "System Tray", "Enable System Tray Icon", "Minimize to tray", "Close to tray", "Background", "Tray"]) ||
+    matchCard(["Appearance", "Startup Behavior", "Default Startup View", "Startup View", "Home", "Downloads", "Offline", "Library", "Playlists", "Stats", "Settings", "Launch", startupNav]) ||
+    matchCard(["Appearance", "Performance & Graphics", "Low-Spec / Performance Mode", "Low-Spec Mode", "Performance Mode", "Eco Mode", "Performance", "Graphics", "GPU", "Battery", "Lag", "Speed", "Animations", "Blur", "Low power"])
+  );
+
+  const matchesStorage = showTab('storage') && (
+    matchCard(["Storage", "Backup Location", "Download Directory", "veluna_backup.json", backupPath, downloadPath, "Save path", "Folder"]) ||
+    matchCard(["Storage", "Backup & Restore Actions", "Create Backup", "Restore Backup", "JSON", "Export data", "Import data", "Save playlists", "Restore playlists", "Settings backup"]) ||
+    matchCard(["Storage", "Reset Veluna App", "Reset", "Clear data", "Factory reset", "Wipe database", "Delete all", "Danger zone", "Irreversible"])
+  );
+
+  const hasAnyMatches = !searchQuery.trim() || matchesUpdates || matchesDownloads || matchesPlayback || matchesIntegrations || matchesAppearance || matchesStorage;
 
   return (
     <div style={{flex:1,display:"flex",overflow:"hidden",background:"var(--v-bg0)"}}>
@@ -421,14 +457,14 @@ export function SettingsPanel({
           </div>
         )}
 
-        {!hasMatches() ? (
+        {!hasAnyMatches ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", color: "#5c5755", gap: "10px" }}>
             <Search size={28} strokeWidth={1.5} />
             <p style={{ fontSize: "13px" }}>No settings match your search</p>
           </div>
         ) : (
           <>
-        {show('updates') && matchesSearch(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date"]) && (
+        {matchesUpdates && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Updates</h2>
@@ -587,7 +623,7 @@ export function SettingsPanel({
           </div>
         )}
 
-        {show('downloads') && matchesSearch(["Downloads", "Configure download quality", "Audio Quality", "Download Folder", "Audio Format", "Embed Thumbnail", "Duplicate Detection", "File Options"]) && (
+        {matchesDownloads && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Downloads</h2>
@@ -692,7 +728,7 @@ export function SettingsPanel({
           </div>
         )}
 
-        {show('playback') && matchesSearch(["Playback", "Audio Normalization", "Loudnorm", "Smart Playback", "Skip Silence", "Autoplay Recommendations", "Equalizer", "Bass", "Mid", "Treble"]) && (
+        {matchesPlayback && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Playback</h2>
@@ -867,7 +903,7 @@ export function SettingsPanel({
           </div>
         )}
 
-        {show('integrations') && matchesSearch(["Integrations", "Discord Rich Presence", "Discord RPC", "Lyrics Source", "Primary source"]) && (
+        {matchesIntegrations && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Integrations</h2>
@@ -910,7 +946,7 @@ export function SettingsPanel({
           </div>
         )}
 
-        {show('appearance') && matchesSearch(["Appearance", "System Tray", "Enable Tray Icon", "Default Startup Page", "Startup View", "Theme", "Accent Color", "Custom Theme"]) && (
+        {matchesAppearance && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Appearance</h2>
@@ -1241,10 +1277,32 @@ export function SettingsPanel({
                 />
               </div>
             </div>
+
+            <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",gap:"8px"}}>
+                <Zap size={14} style={{color:"var(--v-accent)"}}/>
+                <h3 style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",margin:0}}>Performance & Graphics</h3>
+              </div>
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"16px"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:"13px",fontWeight:500,color:"#e2ddd9",margin:0}}>Low-Spec / Performance Mode</p>
+                  <p style={{fontSize:"11px",color:"#6f6966",margin:"4px 0 0 0",lineHeight:1.4}}>
+                    {performanceMode
+                      ? 'Active — GPU blur effects, heavy hover transitions, and continuous animations are disabled for maximum smoothness on older hardware.'
+                      : 'Disabled — full visual effects, fluid transitions, and standard animations are enabled.'}
+                  </p>
+                </div>
+                <SettingsSwitch checked={performanceMode} onChange={() => {
+                  const next = !performanceMode;
+                  setPerformanceMode(next);
+                  showToast(next ? 'Low-Spec Mode enabled' : 'Low-Spec Mode disabled');
+                }} />
+              </div>
+            </div>
           </div>
         )}
 
-        {show('storage') && matchesSearch(["Storage", "Backup Location", "Create Backup", "Restore Backup", "Reset Veluna App"]) && (
+        {matchesStorage && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             <div>
               <h2 style={{fontSize:"22px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage</h2>

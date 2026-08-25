@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlusCircle, ChevronDown, FileOutput, Upload, X, Loader2, CheckCircle2, XCircle, Music } from 'lucide-react';
+import { PlusCircle, ChevronDown, FileOutput, Upload, X, Loader2, CheckCircle2, XCircle, Music, Trash2 } from 'lucide-react';
 import { Track } from '../types';
 import { cleanArtist } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
@@ -1129,6 +1129,183 @@ export function MetadataEditModal({
             onMouseLeave={() => setIsSaveHovered(false)}
           >
             {loading ? 'Saving...' : 'Save Tags'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PlaylistDeleteConfirmModal({
+  isOpen,
+  modalData,
+  onClose,
+  onConfirmDelete,
+}: {
+  isOpen: boolean;
+  modalData: { ids: string[]; names: string[] } | null;
+  onClose: () => void;
+  onConfirmDelete: () => void;
+}) {
+  const [btnHovered, setBtnHovered] = useState(false);
+  const [cancelHovered, setCancelHovered] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen || !modalData) return;
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'Enter') {
+        onConfirmDelete();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, modalData, onClose, onConfirmDelete]);
+
+  if (!isOpen || !modalData) return null;
+
+  const isMulti = modalData.ids.length > 1;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(4px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: '380px',
+          maxWidth: '90vw',
+          borderRadius: '14px',
+          overflow: 'hidden',
+          background: 'var(--v-bg2)',
+          border: '1px solid var(--v-bdr2)',
+          boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '20px 20px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#8a807c',
+              flexShrink: 0
+            }}
+          >
+            <Trash2 size={16} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#e2ddd9', margin: 0 }}>
+              {isMulti ? 'Delete Playlists?' : 'Delete Playlist?'}
+            </h2>
+            <p style={{ fontSize: '12px', color: '#8a807c', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+              {isMulti
+                ? `Are you sure you want to delete these ${modalData.ids.length} playlists?`
+                : `Are you sure you want to delete "${modalData.names[0]}"?`}
+            </p>
+          </div>
+        </div>
+
+        {isMulti && (
+          <div
+            style={{
+              margin: '0 20px 16px 20px',
+              maxHeight: '100px',
+              overflowY: 'auto',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: 'rgba(0, 0, 0, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
+            }}
+            className="custom-scrollbar"
+          >
+            {modalData.names.map((name, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: '#aaa',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--v-accent)', flexShrink: 0 }} />
+                {name}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '8px',
+            padding: '12px 20px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            background: 'rgba(255, 255, 255, 0.01)'
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: '7px 14px',
+              borderRadius: '8px',
+              border: `1px solid ${cancelHovered ? 'var(--v-bdr3)' : 'var(--v-bdr2)'}`,
+              color: cancelHovered ? '#e2ddd9' : '#8a817c',
+              background: 'transparent',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.12s ease'
+            }}
+            onMouseEnter={() => setCancelHovered(true)}
+            onMouseLeave={() => setCancelHovered(false)}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirmDelete}
+            style={{
+              padding: '7px 16px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--v-accent)',
+              color: '#0c0b0b',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.12s ease',
+              opacity: btnHovered ? 0.9 : 1
+            }}
+            onMouseEnter={() => setBtnHovered(true)}
+            onMouseLeave={() => setBtnHovered(false)}
+          >
+            Yes, Delete
           </button>
         </div>
       </div>

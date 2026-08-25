@@ -75,7 +75,7 @@ There's no account system, no telemetry, and no ads. It runs the same on Linux a
 ### 🎵 Playlists
 - Create, name, and describe playlists; edit or delete at any time; upload a custom cover image
 - **Enhanced View Selector**, switch between grid and list views with smooth interactive scaling
-- **Collapsible Sidebar Playlists** with glowing active accents and track count subtitles
+- **Collapsible Sidebar Playlists** with clean active indicators and track count subtitles
 - **Search within a playlist**, filter tracks by title or artist in real time
 - **Liked Songs**, a built-in smart playlist. Heart any track anywhere in the app to add it
 - **Import from Spotify**, export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed
@@ -135,6 +135,13 @@ A personal listening analytics dashboard with **All Time** and **Last 7 Days** f
 - **Behavioral Insights**: Favorite Time, Unique Artists, Loyalty Index
 - **Top Rankings**: Top Tracks, Top Artists, Top Genres
 
+### ⚡ Low-Spec & Performance Mode
+- **Zero-Lag Architecture**: Built-in toggle designed specifically for low-end hardware, older dual-core CPUs, and integrated Intel HD/UHD graphics
+- **GPU Blur & Shadow Elimination**: Completely removes GPU-heavy `backdrop-filter: blur(...)` and box shadows in favor of a crisp, high-contrast flat obsidian aesthetic
+- **Animation & Transition Stripping**: Disables all continuous CSS keyframe animations (spinners, equalizer waves, loading streams) and hover transforms for instantaneous, 0ms input response
+- **Background Throttling**: Automatically pauses active animations and throttles background polling intervals when the app is minimized or hidden, reducing idle CPU/GPU usage to **0%**
+- **Top-Left Status Badge**: Displays a quick `⚡ ECO MODE` indicator in the top-left navigation sidebar with instant access to settings
+
 ### 🌙 Sleep Timer
 Preset buttons (5-90 min) or custom input. Live countdown in sidebar. Cancellable any time.
 
@@ -145,7 +152,7 @@ Available on every track: Play, Add to Queue, Add to Playlist, Download, Edit Me
 - **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
 - **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer
 - **Integrations**: Discord Rich Presence, primary lyrics source
-- **Appearance**: 8 built-in themes, custom accent and background color, default startup page, tray toggle
+- **Appearance & Performance**: curated themes, custom accent and background color, default startup page, system tray toggle, and Low-Spec / Performance Mode
 - **Storage**: backup location, create/restore backup, reset app data
 - **Updates**: automatic update check against GitHub Releases
 

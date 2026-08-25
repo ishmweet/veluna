@@ -54,10 +54,11 @@ import {
   Volume2,
   VolumeX,
   X,
-  Youtube
-} from 'lucide-react';;
+  Youtube,
+  Zap
+} from 'lucide-react';
 
-const __APP_VERSION__ = '0.1.2';
+const __APP_VERSION__ = '0.1.3';
 
 
 import { Track, LocalTrack, Playlist, RepeatMode, CtxMenu, AudioInfo, BatchProgress, ListeningEvent, SettingsTab } from './types';
@@ -65,7 +66,7 @@ import { parseDurationToSeconds, lightenColor, hexToRgb, cleanArtist, getTrackGr
 import { TrackRow, TrackRowSkeleton } from './components/TrackRow';
 import { VirtualTrackList } from './components/VirtualTrackList';
 import { SleepTimerPopover } from './components/SleepTimerPopover';
-import { ImportResultModal, CopyButton, CsvImportModal, YtImportModal, MetadataEditModal } from './components/Modals';
+import { ImportResultModal, CopyButton, CsvImportModal, YtImportModal, MetadataEditModal, PlaylistDeleteConfirmModal } from './components/Modals';
 import { SettingsPanel } from './components/SettingsPanel';
 import { DownloadsPanel } from './components/DownloadsPanel';
 
@@ -330,6 +331,32 @@ export default function Veluna() {
     saveLS('vg_accentColor', accentColor);
   }, [accentColor]);
 
+  const [performanceMode, setPerformanceModeState] = useState<boolean>(() => loadLS('vg_perfMode', false));
+  const setPerformanceMode = useCallback((v: boolean) => {
+    setPerformanceModeState(v);
+    saveLS('vg_perfMode', v);
+  }, []);
+
+  useEffect(() => {
+    if (performanceMode) {
+      document.documentElement.classList.add('v-perf-mode');
+    } else {
+      document.documentElement.classList.remove('v-perf-mode');
+    }
+  }, [performanceMode]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        document.documentElement.classList.add('v-app-hidden');
+      } else {
+        document.documentElement.classList.remove('v-app-hidden');
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   const listenSecsRef = useRef(listenSecs);
   useEffect(() => { listenSecsRef.current = listenSecs; }, [listenSecs]);
   const [shuffle, setShuffle] = useState<boolean>(() => loadLS('vg_shuffle', false));
@@ -362,6 +389,9 @@ export default function Veluna() {
     loadLS('vg_playlists', [{ id: 'p1', name: 'Liked Songs', description: '', tracks: [] }])
   );
   const [openPlaylistId, setOpenPlaylistId] = useState<string | null>(null);
+  const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<string[]>([]);
+  const [isPlaylistMultiSelect, setIsPlaylistMultiSelect] = useState<boolean>(false);
+  const [playlistDeleteModal, setPlaylistDeleteModal] = useState<{ ids: string[]; names: string[] } | null>(null);
   const [playlistSearchQ, setPlaylistSearchQ] = useState('');
   const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -595,9 +625,9 @@ export default function Veluna() {
           setSleepTimerState(-1);
         }
       } catch {}
-    }, sleepTimer > 0 ? 2000 : 10000);
+    }, sleepTimer > 0 ? (performanceMode ? 5000 : 2000) : (performanceMode ? 30000 : 10000));
     return () => clearInterval(id);
-  }, [sleepTimer, setIsPlayingSync]);
+  }, [sleepTimer, setIsPlayingSync, performanceMode]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -606,6 +636,24 @@ export default function Veluna() {
     }).then(fn => { unlisten = fn; });
     return () => { unlisten?.(); };
   }, [showToast]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ url: string; percent: number; status: string; error?: string }>('download_progress', e => {
+      const { url, percent, status } = e.payload;
+      if (status === 'downloading') {
+        setDownloadingTracks(p => ({ ...p, [url]: percent }));
+      } else if (status === 'finished') {
+        setDownloadingTracks(p => ({ ...p, [url]: 100 }));
+        setTimeout(() => setDownloadingTracks(p => { const n = {...p}; delete n[url]; return n; }), 1200);
+      } else if (status === 'cancelled') {
+        setDownloadingTracks(p => { const n = {...p}; delete n[url]; return n; });
+      } else if (status === 'error') {
+        setDownloadingTracks(p => { const n = {...p}; delete n[url]; return n; });
+      }
+    }).then(fn => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, []);
 
   const mprisToggleRef    = useRef<() => void>(() => {});
   const mprisNextRef      = useRef<() => void>(() => {});
@@ -688,21 +736,22 @@ export default function Veluna() {
   useEffect(() => {
     if (!isPlaying || !currentTrack || isLoadingTrack) return;
     const url = currentTrack.url;
+    const step = performanceMode ? 10 : 5;
     const id = setInterval(() => {
       setListenSecs(prev => {
-        const next = { ...prev, [url]: (prev[url] || 0) + 5 };
+        const next = { ...prev, [url]: (prev[url] || 0) + step };
         listenSecsRef.current = next;
         return next;
       });
       setListeningHistory(prev => {
         if (prev.length === 0) return prev;
         const next = [...prev];
-        next[0] = { ...next[0], secs: next[0].secs + 5 };
+        next[0] = { ...next[0], secs: next[0].secs + step };
         return next;
       });
-    }, 5000);
+    }, step * 1000);
     return () => clearInterval(id);
-  }, [isPlaying, currentTrack?.url, isLoadingTrack]);
+  }, [isPlaying, currentTrack?.url, isLoadingTrack, performanceMode]);
 
   const lastPrefetchUrl = useRef<string | null>(null);
   useEffect(() => {
@@ -781,10 +830,10 @@ export default function Veluna() {
 
   useEffect(() => {
     if (!isPlaying) return;
-    const id = setInterval(() => { invoke<AudioInfo>('get_audio_info').then(setAudioInfo).catch(() => {}); }, 6000);
+    const id = setInterval(() => { invoke<AudioInfo>('get_audio_info').then(setAudioInfo).catch(() => {}); }, performanceMode ? 15000 : 6000);
     invoke<AudioInfo>('get_audio_info').then(setAudioInfo).catch(() => {});
     return () => clearInterval(id);
-  }, [isPlaying]);
+  }, [isPlaying, performanceMode]);
 
   const setPlaybackSpeed = useCallback((s: number) => {
     setPlaybackSpeedState(s);
@@ -1775,7 +1824,20 @@ export default function Veluna() {
     setCtxMenu({ x, y, ...menu });
   }, []);
 
+  const handleCancelDownload = useCallback(async (url: string) => {
+    try {
+      await invoke('cancel_download', { url });
+    } catch {}
+    setDownloadingTracks(p => { const n = {...p}; delete n[url]; return n; });
+    showToast('Download cancelled');
+  }, [showToast]);
+
   const handleDownload = useCallback(async (track: Track) => {
+    if (downloadingTracks[track.url] !== undefined) {
+      handleCancelDownload(track.url);
+      return;
+    }
+
     if (duplicateDetect) {
       try {
         const scanned: LocalTrack[] = await invoke('scan_downloads', { path: downloadPath });
@@ -1787,24 +1849,20 @@ export default function Veluna() {
       } catch { /* proceed if check fails */ }
     }
     setDownloadingTracks(p => ({ ...p, [track.url]: 1 }));
-    // Simulate smooth progress while yt-dlp runs (actual progress not available via IPC)
-    let prog = 1;
-    const progInterval = setInterval(() => {
-      prog = Math.min(prog + Math.random() * 8, 90);
-      setDownloadingTracks(p => p[track.url] !== undefined ? { ...p, [track.url]: prog } : p);
-    }, 400);
     try {
       await invoke('download_song', { url: track.url, quality: downloadQuality, format: downloadFormat, embedThumbnail, path: downloadPath });
-      clearInterval(progInterval);
       setDownloadingTracks(p => ({ ...p, [track.url]: 100 }));
       setTimeout(() => setDownloadingTracks(p => { const n = {...p}; delete n[track.url]; return n; }), 1200);
       showToast(`Downloaded: ${track.title}`);
-    } catch {
-      clearInterval(progInterval);
-      setDownloadingTracks(p => { const n = {...p}; delete n[track.url]; return n; });
-      showToast('Download failed');
+      setLocalRefreshNonce(n => n + 1);
+    } catch (e: any) {
+      const msg = typeof e === 'string' ? e : e?.message || '';
+      if (!msg.includes('cancelled')) {
+        setDownloadingTracks(p => { const n = {...p}; delete n[track.url]; return n; });
+        showToast('Download failed');
+      }
     }
-  }, [downloadQuality, downloadFormat, embedThumbnail, duplicateDetect, downloadPath, showToast]);
+  }, [downloadingTracks, handleCancelDownload, downloadQuality, downloadFormat, embedThumbnail, duplicateDetect, downloadPath, showToast]);
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
@@ -1837,13 +1895,38 @@ export default function Veluna() {
     showToast(`Playlist "${newPlaylistName.trim()}" created`);
   }, [newPlaylistName, newPlaylistDesc, showToast]);
 
-  const deletePlaylist = useCallback((id: string) => {
+  const requestDeletePlaylist = useCallback((id: string) => {
     if (id === 'p1') return;
-    setPlaylists(p => p.filter(x => x.id !== id));
-    setOpenPlaylistId(prev => prev === id ? null : prev);
+    const pl = playlists.find(p => p.id === id);
+    if (!pl) return;
+    setPlaylistDeleteModal({ ids: [id], names: [pl.name] });
+  }, [playlists]);
+
+  const requestDeleteSelectedPlaylists = useCallback(() => {
+    const validIds = selectedPlaylistIds.filter(id => id !== 'p1');
+    if (validIds.length === 0) return;
+    const names = playlists.filter(p => validIds.includes(p.id)).map(p => p.name);
+    setPlaylistDeleteModal({ ids: validIds, names });
+  }, [selectedPlaylistIds, playlists]);
+
+  const confirmDeletePlaylist = useCallback(() => {
+    if (!playlistDeleteModal) return;
+    const idsToDelete = playlistDeleteModal.ids;
+    setPlaylists(p => p.filter(x => !idsToDelete.includes(x.id)));
+    if (openPlaylistId && idsToDelete.includes(openPlaylistId)) {
+      setOpenPlaylistId(null);
+    }
     playlistContextRef.current = null;
-    showToast('Playlist deleted');
-  }, [showToast]);
+    setSelectedPlaylistIds(prev => prev.filter(id => !idsToDelete.includes(id)));
+    if (idsToDelete.length > 1) {
+      setIsPlaylistMultiSelect(false);
+    }
+    const count = idsToDelete.length;
+    setPlaylistDeleteModal(null);
+    showToast(count === 1 ? 'Playlist deleted' : `${count} playlists deleted`);
+  }, [playlistDeleteModal, openPlaylistId, showToast]);
+
+  const deletePlaylist = requestDeletePlaylist;
 
   const confirmRenamePlaylist = useCallback(() => {
     if (!renameVal.trim() || !renamingPlaylist) return;
@@ -1975,7 +2058,7 @@ export default function Veluna() {
         .v-nav-btn{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:9999px;border:none;background:transparent;color:var(--v-fg3);cursor:pointer;width:100%;text-align:left;font-size:13.5px;font-weight:500;transition:background .18s ease,color .18s ease,box-shadow .18s ease;position:relative;letter-spacing:-0.005em;}
         .v-nav-btn:hover{background:rgba(226,221,217,0.05);color:var(--v-fg2);}
         .v-nav-btn--active{background:rgba(226,221,217,0.07);color:var(--v-fg);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.15);}
-        .v-nav-btn--active::before{content:'';position:absolute;left:5px;top:9px;bottom:9px;width:3px;background:var(--v-accent);border-radius:1.5px;box-shadow:0 0 8px rgba(var(--v-accent-rgb,226,221,217),0.3);}
+        .v-nav-btn--active::before{content:'';position:absolute;left:5px;top:9px;bottom:9px;width:3px;background:var(--v-accent);border-radius:1.5px;}
         .v-nav-btn .v-nav-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;transition:background .18s ease;flex-shrink:0;}
         .v-nav-btn:hover .v-nav-icon{background:rgba(226,221,217,0.06);}
         .v-nav-btn--active .v-nav-icon{background:rgba(226,221,217,0.08);}
@@ -2127,7 +2210,7 @@ export default function Veluna() {
         }
         .v-new-playlist-btn:hover {
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 0 12px var(--v-accent);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
           opacity: 0.95;
         }
         .v-new-playlist-btn:active {
@@ -2148,7 +2231,7 @@ export default function Veluna() {
           background: rgba(255, 255, 255, 0.035);
           border-color: rgba(255, 255, 255, 0.08);
           transform: translateY(-4px);
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(226, 221, 217, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
         .v-pl-card__cover-wrapper {
           position: relative;
@@ -2349,12 +2432,12 @@ export default function Veluna() {
           border: none;
           cursor: pointer;
           flex-shrink: 0;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), 0 0 8px var(--v-accent);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
           transition: transform 0.15s cubic-bezier(0.2,0,0,1), box-shadow 0.15s cubic-bezier(0.2,0,0,1), opacity 0.12s;
         }
         .v-player-btn-play:hover {
           transform: scale(1.08);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 14px var(--v-accent);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
         }
         .v-player-btn-play:active {
           transform: scale(0.96);
@@ -2453,6 +2536,35 @@ export default function Veluna() {
       <div style={{display:"flex",flex:"1 1 0%",minHeight:0,overflow:"hidden"}}>
         {/* 📱 Sleek Navigation Sidebar */}
         <div style={{width:"180px", flexShrink:0, display:"flex", flexDirection:"column", background:"var(--v-bg0)", borderRight:"none", padding:"16px 10px 96px 10px", zIndex:10, overflow:"visible", position:"relative"}}>
+
+          {performanceMode && (
+            <div
+              onClick={() => { navigateTo('settings'); setSettingsTab('appearance'); }}
+              title="Low-Spec Mode active — Click to view in Settings"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                padding: "6px 10px",
+                marginBottom: "8px",
+                marginLeft: "2px",
+                marginRight: "2px",
+                borderRadius: "6px",
+                background: "#161616",
+                border: "1px solid #333333",
+                color: "var(--v-accent)",
+                fontSize: "10.5px",
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                cursor: "pointer"
+              }}
+            >
+              <Zap size={12} style={{ fill: "currentColor" }} />
+              <span>Eco Mode</span>
+            </div>
+          )}
 
           <nav style={{display:"flex",flexDirection:"column",gap:"2px",flexShrink:0,padding:"0 2px"}}>
             <button onClick={() => navigateTo('home')}
@@ -3029,7 +3141,7 @@ export default function Veluna() {
                                      }}>
                                        <svg width="18" height="18" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
                                          <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.2)" strokeWidth="2.5" />
-                                         <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 4px rgba(0,0,0,0.9)) drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                                         <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" />
                                        </svg>
                                      </div>
                                   ) : isActive && isPlaying ? (
@@ -3241,7 +3353,7 @@ export default function Veluna() {
                                              }}>
                                                <svg width="18" height="18" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
                                                  <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5" />
-                                                 <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                                                 <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" />
                                                </svg>
                                              </div>
                                           ) : isActive && isPlaying ? (
@@ -4179,42 +4291,170 @@ export default function Veluna() {
               <div className="flex-1 overflow-y-auto custom-scrollbar" style={{padding:"24px 30px 140px",zIndex:10}}>
                 <div className="v-library-container">
                   <div className="v-library-main">
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'24px'}}>
-                      <h2 style={{fontSize:'20px',fontWeight:800,color:'#e2ddd9',margin:0}}>Playlists</h2>
-                      <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                          <span style={{fontSize:'11.5px',color:'#8a807c',fontWeight:500}}>Layout:</span>
-                          <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.04)',borderRadius:'8px',padding:'2px'}}>
-                            <button onClick={() => setPlaylistViewMode('grid')}
-                              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'24px',flexWrap:'wrap',gap:'12px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                        <h2 style={{fontSize:'20px',fontWeight:800,color:'#e2ddd9',margin:0}}>Playlists</h2>
+                        {isPlaylistMultiSelect && (
+                          <span style={{
+                            fontSize:'11.5px',
+                            fontWeight:700,
+                            color:'var(--v-accent)',
+                            background:'rgba(255,255,255,0.04)',
+                            border:'1px solid rgba(255,255,255,0.08)',
+                            padding:'2px 10px',
+                            borderRadius:'20px',
+                            display:'flex',
+                            alignItems:'center',
+                            gap:'6px'
+                          }}>
+                            {selectedPlaylistIds.length} selected
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+                        {isPlaylistMultiSelect ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                const deletable = playlists.filter(p => p.id !== 'p1').map(p => p.id);
+                                if (selectedPlaylistIds.length === deletable.length) {
+                                  setSelectedPlaylistIds([]);
+                                } else {
+                                  setSelectedPlaylistIds(deletable);
+                                }
+                              }}
                               style={{
-                                background: playlistViewMode === 'grid' ? 'rgba(255,255,255,0.06)' : 'transparent',
-                                border: 'none', borderRadius: '6px', color: playlistViewMode === 'grid' ? '#fff' : '#8a807c',
-                                cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s',
-                                fontSize: '11px', fontWeight: 600
-                              }}>
-                              <LayoutGrid size={13} />
-                              <span>Grid</span>
+                                background: 'rgba(255,255,255,0.04)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                borderRadius: '8px',
+                                color: '#e2ddd9',
+                                cursor: 'pointer',
+                                padding: '6px 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                            >
+                              {selectedPlaylistIds.length === playlists.filter(p => p.id !== 'p1').length ? 'Deselect All' : 'Select All'}
                             </button>
-                            <button onClick={() => setPlaylistViewMode('list')}
-                              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+
+                            <button
+                              onClick={requestDeleteSelectedPlaylists}
+                              disabled={selectedPlaylistIds.length === 0}
                               style={{
-                                background: playlistViewMode === 'list' ? 'rgba(255,255,255,0.06)' : 'transparent',
-                                border: 'none', borderRadius: '6px', color: playlistViewMode === 'list' ? '#fff' : '#8a807c',
-                                cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s',
-                                fontSize: '11px', fontWeight: 600
-                              }}>
-                              <List size={13} />
-                              <span>List</span>
+                                background: selectedPlaylistIds.length > 0 ? 'var(--v-accent)' : 'rgba(255,255,255,0.03)',
+                                color: selectedPlaylistIds.length > 0 ? '#0c0b0b' : '#5c5755',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: selectedPlaylistIds.length > 0 ? 'pointer' : 'not-allowed',
+                                padding: '6px 14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                boxShadow: selectedPlaylistIds.length > 0 ? '0 4px 14px rgba(0,0,0,0.3)' : 'none',
+                                transition: 'all 0.15s',
+                                opacity: selectedPlaylistIds.length > 0 ? 1 : 0.4
+                              }}
+                              onMouseEnter={e => { if (selectedPlaylistIds.length > 0) e.currentTarget.style.transform = 'scale(1.03)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete Selected ({selectedPlaylistIds.length})</span>
                             </button>
-                          </div>
-                        </div>
-                        <button onClick={() => { setNewPlaylistName(''); setNewPlaylistDesc(''); setIsPlaylistModalOpen(true); }}
-                          className="v-new-playlist-btn">
-                          <PlusCircle size={13} /> New Playlist
-                        </button>
+
+                            <button
+                              onClick={() => {
+                                setIsPlaylistMultiSelect(false);
+                                setSelectedPlaylistIds([]);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                borderRadius: '8px',
+                                color: '#8a807c',
+                                cursor: 'pointer',
+                                padding: '6px 12px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.color = '#e2ddd9'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = '#8a807c'; }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                              <span style={{fontSize:'11.5px',color:'#8a807c',fontWeight:500}}>Layout:</span>
+                              <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.04)',borderRadius:'8px',padding:'2px'}}>
+                                <button onClick={() => setPlaylistViewMode('grid')}
+                                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                                  style={{
+                                    background: playlistViewMode === 'grid' ? 'rgba(255,255,255,0.06)' : 'transparent',
+                                    border: 'none', borderRadius: '6px', color: playlistViewMode === 'grid' ? '#fff' : '#8a807c',
+                                    cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s',
+                                    fontSize: '11px', fontWeight: 600
+                                  }}>
+                                  <LayoutGrid size={13} />
+                                  <span>Grid</span>
+                                </button>
+                                <button onClick={() => setPlaylistViewMode('list')}
+                                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+                                  style={{
+                                    background: playlistViewMode === 'list' ? 'rgba(255,255,255,0.06)' : 'transparent',
+                                    border: 'none', borderRadius: '6px', color: playlistViewMode === 'list' ? '#fff' : '#8a807c',
+                                    cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s',
+                                    fontSize: '11px', fontWeight: 600
+                                  }}>
+                                  <List size={13} />
+                                  <span>List</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {playlists.some(p => p.id !== 'p1') && (
+                              <button
+                                onClick={() => setIsPlaylistMultiSelect(true)}
+                                style={{
+                                  background: 'rgba(255,255,255,0.03)',
+                                  border: '1px solid rgba(255,255,255,0.06)',
+                                  borderRadius: '8px',
+                                  color: '#e2ddd9',
+                                  cursor: 'pointer',
+                                  padding: '6px 12px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  transition: 'all 0.15s'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; e.currentTarget.style.color = 'var(--v-accent)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#e2ddd9'; }}
+                              >
+                                <CheckCircle size={13} />
+                                <span>Select</span>
+                              </button>
+                            )}
+
+                            <button onClick={() => { setNewPlaylistName(''); setNewPlaylistDesc(''); setIsPlaylistModalOpen(true); }}
+                              className="v-new-playlist-btn">
+                              <PlusCircle size={13} /> New Playlist
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                     {playlistViewMode === 'grid' ? (
@@ -4222,12 +4462,28 @@ export default function Veluna() {
                         {playlists.map((pl, plIdx) => {
                           const cover = getPlaylistCover(pl);
                           const isDragTarget = dragOverPlaylistCardIdx === plIdx && dragPlaylistCardIdx.current !== null && dragPlaylistCardIdx.current !== plIdx;
+                          const isSelected = selectedPlaylistIds.includes(pl.id);
+                          const toggleSelect = () => {
+                            if (pl.id === 'p1') return;
+                            setSelectedPlaylistIds(prev => prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id]);
+                          };
                           return (
                             <div key={pl.id}
                               onMouseEnter={() => { if (dragPlaylistCardIdx.current !== null) { dragOverPlaylistCardIdxRef.current = plIdx; setDragOverPlaylistCardIdx(plIdx); } }}
                               className="v-pl-card"
-                              style={{ animation: `fadeUp 0.2s cubic-bezier(0.2,0,0,1) ${plIdx * 30}ms both` }}
-                              onClick={() => { if (dragPlaylistCardIdx.current === null) setOpenPlaylistId(pl.id); }}
+                              style={{
+                                animation: `fadeUp 0.2s cubic-bezier(0.2,0,0,1) ${plIdx * 30}ms both`,
+                                position: 'relative',
+                                border: isPlaylistMultiSelect && isSelected ? '1px solid var(--v-accent)' : undefined,
+                                background: isPlaylistMultiSelect && isSelected ? 'rgba(255,255,255,0.04)' : undefined,
+                              }}
+                              onClick={() => {
+                                if (isPlaylistMultiSelect) {
+                                  toggleSelect();
+                                } else if (dragPlaylistCardIdx.current === null) {
+                                  setOpenPlaylistId(pl.id);
+                                }
+                              }}
                               onContextMenu={e => openCtx(e, { type: 'playlist', playlist: pl })}>
                               {isDragTarget && (
                                 <div style={{
@@ -4241,9 +4497,34 @@ export default function Veluna() {
                                   pointerEvents: "none",
                                   left: plIdx < (dragPlaylistCardIdx.current ?? 0) ? "-12px" : "auto",
                                   right: plIdx > (dragPlaylistCardIdx.current ?? 0) ? "-12px" : "auto",
-                                  boxShadow: "0 0 10px var(--v-accent)"
                                 }} />
                               )}
+
+                              {isPlaylistMultiSelect && pl.id !== 'p1' && (
+                                <div
+                                  onClick={e => { e.stopPropagation(); toggleSelect(); }}
+                                  style={{
+                                    position: 'absolute',
+                                    top: '10px',
+                                    right: '10px',
+                                    width: '22px',
+                                    height: '22px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: isSelected ? 'var(--v-accent)' : 'rgba(0,0,0,0.65)',
+                                    border: isSelected ? 'none' : '1.5px solid rgba(255,255,255,0.3)',
+                                    color: '#0c0b0b',
+                                    cursor: 'pointer',
+                                    zIndex: 10,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  {isSelected && <Check size={13} strokeWidth={3} />}
+                                </div>
+                              )}
+
                               <div
                                 className="v-pl-card__cover-wrapper"
                                 style={{
@@ -4252,6 +4533,7 @@ export default function Veluna() {
                                   transition: "opacity 0.2s, transform 0.2s"
                                 }}
                                 onMouseDown={e => {
+                                  if (isPlaylistMultiSelect) return;
                                   e.preventDefault();
                                   dragPlaylistCardIdx.current = plIdx;
                                   dragOverPlaylistCardIdxRef.current = plIdx;
@@ -4283,21 +4565,23 @@ export default function Veluna() {
                                 {cover && (
                                   <img src={cover} style={{position: "absolute", inset: 0, width:"100%",height:"100%",objectFit:"cover"}} onError={e => { e.currentTarget.style.display = 'none'; }} alt=""/>
                                 )}
-                                <div className="pl-hover-overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",opacity:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .25s ease",zIndex:5}}>
-                                  <button onClick={e=>{e.stopPropagation();playAll(pl.tracks);}}
-                                    style={{width:"42px",height:"42px",background:"var(--v-accent)",color:"#0c0b0b",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",border:"none",cursor:"pointer",boxShadow:"0 6px 16px rgba(0,0,0,0.5)",transition:"all 0.15s cubic-bezier(0.2,0,0,1)"}}
-                                    onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.1)";e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.6), 0 0 10px var(--v-accent)";}}
-                                    onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 6px 16px rgba(0,0,0,0.5)";}}>
-                                    <Play size={16} style={{fill:"currentColor",color:"currentColor",marginLeft:"2px"}}/>
-                                  </button>
-                                </div>
+                                {!isPlaylistMultiSelect && (
+                                  <div className="pl-hover-overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.6)",opacity:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .25s ease",zIndex:5}}>
+                                    <button onClick={e=>{e.stopPropagation();playAll(pl.tracks);}}
+                                      style={{width:"42px",height:"42px",background:"var(--v-accent)",color:"#0c0b0b",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",border:"none",cursor:"pointer",boxShadow:"0 6px 16px rgba(0,0,0,0.5)",transition:"all 0.15s cubic-bezier(0.2,0,0,1)"}}
+                                      onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.1)";e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.6)";}}
+                                      onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 6px 16px rgba(0,0,0,0.5)";}}>
+                                      <Play size={16} style={{fill:"currentColor",color:"currentColor",marginLeft:"2px"}}/>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                               <div style={{fontSize:"14px",fontWeight:700,color:"#e2ddd9",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{pl.name}</div>
                               <div style={{fontSize:"11px",color:"#8a807c",marginTop:"4px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                                 {pl.description?pl.description:`${pl.tracks.length} track${pl.tracks.length!==1?'s':''}`}
                               </div>
-                              {pl.id!=='p1'&&(
-                                <button onClick={e=>{e.stopPropagation();deletePlaylist(pl.id);}}
+                              {pl.id!=='p1' && !isPlaylistMultiSelect && (
+                                <button onClick={e=>{e.stopPropagation();requestDeletePlaylist(pl.id);}}
                                   className="pl-card-del"
                                   style={{position:"absolute",top:"10px",right:"10px",opacity:0,width:"26px",height:"26px",display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.75)",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.06)",cursor:"pointer",color:"#8a807c",transition:"all .2s cubic-bezier(0.2,0,0,1)",zIndex:6}}
                                   onMouseEnter={e=>{e.currentTarget.style.color="#ff6060";e.currentTarget.style.background="rgba(160,40,40,0.2)";e.currentTarget.style.borderColor="rgba(255,96,96,0.2)";e.currentTarget.style.transform="scale(1.05)";}}
@@ -4314,6 +4598,11 @@ export default function Veluna() {
                         {playlists.map((pl, plIdx) => {
                           const cover = getPlaylistCover(pl);
                           const isDragTarget = dragOverPlaylistCardIdx === plIdx && dragPlaylistCardIdx.current !== null && dragPlaylistCardIdx.current !== plIdx;
+                          const isSelected = selectedPlaylistIds.includes(pl.id);
+                          const toggleSelect = () => {
+                            if (pl.id === 'p1') return;
+                            setSelectedPlaylistIds(prev => prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id]);
+                          };
                           return (
                             <div key={pl.id}
                               onMouseEnter={e => {
@@ -4321,12 +4610,18 @@ export default function Veluna() {
                                   dragOverPlaylistCardIdxRef.current = plIdx;
                                   setDragOverPlaylistCardIdx(plIdx);
                                 } else {
-                                  e.currentTarget.style.background = "rgba(255,255,255,0.035)";
-                                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                                  e.currentTarget.style.background = isPlaylistMultiSelect && isSelected ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.035)";
+                                  e.currentTarget.style.borderColor = isPlaylistMultiSelect && isSelected ? "var(--v-accent)" : "rgba(255,255,255,0.06)";
                                 }
                               }}
                               className="v-pl-list-row"
-                              onClick={() => { if (dragPlaylistCardIdx.current === null) setOpenPlaylistId(pl.id); }}
+                              onClick={() => {
+                                if (isPlaylistMultiSelect) {
+                                  toggleSelect();
+                                } else if (dragPlaylistCardIdx.current === null) {
+                                  setOpenPlaylistId(pl.id);
+                                }
+                              }}
                               onContextMenu={e => openCtx(e, { type: 'playlist', playlist: pl })}
                               style={{
                                 position: "relative",
@@ -4335,9 +4630,9 @@ export default function Veluna() {
                                 gap: "14px",
                                 padding: "10px 14px",
                                 borderRadius: "10px",
-                                background: "rgba(255,255,255,0.015)",
-                                border: "1px solid rgba(255,255,255,0.03)",
-                                cursor: "grab",
+                                background: isPlaylistMultiSelect && isSelected ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)",
+                                border: isPlaylistMultiSelect && isSelected ? "1px solid var(--v-accent)" : "1px solid rgba(255,255,255,0.03)",
+                                cursor: isPlaylistMultiSelect ? "pointer" : "grab",
                                 transition: "all 0.15s ease",
                                 animation: `fadeUp 0.15s cubic-bezier(0.2,0,0,1) ${plIdx * 20}ms both`,
                                 opacity: dragPlaylistCardIdxState === plIdx ? 0.45 : 1,
@@ -4346,10 +4641,11 @@ export default function Veluna() {
                                 WebkitUserSelect: "none",
                               }}
                               onMouseLeave={e => {
-                                e.currentTarget.style.background = "rgba(255,255,255,0.015)";
-                                e.currentTarget.style.borderColor = "rgba(255,255,255,0.03)";
+                                e.currentTarget.style.background = isPlaylistMultiSelect && isSelected ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)";
+                                e.currentTarget.style.borderColor = isPlaylistMultiSelect && isSelected ? "var(--v-accent)" : "rgba(255,255,255,0.03)";
                               }}
                               onMouseDown={() => {
+                                if (isPlaylistMultiSelect) return;
                                 dragPlaylistCardIdx.current = plIdx;
                                 dragOverPlaylistCardIdxRef.current = plIdx;
                                 setDragOverPlaylistCardIdx(plIdx);
@@ -4385,9 +4681,31 @@ export default function Veluna() {
                                   pointerEvents: "none",
                                   top: plIdx < (dragPlaylistCardIdx.current ?? 0) ? "-6px" : "auto",
                                   bottom: plIdx > (dragPlaylistCardIdx.current ?? 0) ? "-6px" : "auto",
-                                  boxShadow: "0 0 10px var(--v-accent)"
                                 }} />
                               )}
+
+                              {isPlaylistMultiSelect && pl.id !== 'p1' && (
+                                <div
+                                  onClick={e => { e.stopPropagation(); toggleSelect(); }}
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    background: isSelected ? "var(--v-accent)" : "rgba(0,0,0,0.4)",
+                                    border: isSelected ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+                                    color: "#0c0b0b",
+                                    cursor: "pointer",
+                                    flexShrink: 0,
+                                    transition: "all 0.15s ease"
+                                  }}
+                                >
+                                  {isSelected && <Check size={12} strokeWidth={3} />}
+                                </div>
+                              )}
+
                               <div
                                 style={{
                                   width: "42px",
@@ -4417,26 +4735,28 @@ export default function Veluna() {
                               <div style={{fontSize:"11.5px",color:"#5c5755",marginRight:"8px",fontWeight:500}}>
                                 {pl.tracks.length} track{pl.tracks.length!==1?'s':''}
                               </div>
-                              <div style={{display:"flex",alignItems:"center",gap:"8px"}} onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
-                                <button onClick={() => playAll(pl.tracks)}
-                                  style={{width:"28px",height:"28px",background:"rgba(255,255,255,0.03)",color:"#e2ddd9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.06)",cursor:"pointer",transition:"all 0.15s"}}
-                                  onMouseEnter={e=>{e.currentTarget.style.background="var(--v-accent)";e.currentTarget.style.color="#0c0b0b";e.currentTarget.style.transform="scale(1.08)";}}
-                                  onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color="#e2ddd9";e.currentTarget.style.transform="scale(1)";}}
-                                  title="Play playlist"
-                                >
-                                  <Play size={10} style={{fill:"currentColor",marginLeft:"1px"}}/>
-                                </button>
-                                {pl.id!=='p1'&&(
-                                  <button onClick={() => deletePlaylist(pl.id)}
-                                    style={{width:"28px",height:"28px",background:"rgba(255,255,255,0.03)",color:"#8a807c",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.05)",cursor:"pointer",transition:"all 0.15s"}}
-                                    onMouseEnter={e=>{e.currentTarget.style.color="#ff6060";e.currentTarget.style.background="rgba(160,40,40,0.15)";e.currentTarget.style.borderColor="rgba(255,96,96,0.15)";e.currentTarget.style.transform="scale(1.05)";}}
-                                    onMouseLeave={e=>{e.currentTarget.style.color="#8a807c";e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.borderColor="rgba(255,255,255,0.05)";e.currentTarget.style.transform="scale(1)";}}
-                                    title="Delete playlist"
+                              {!isPlaylistMultiSelect && (
+                                <div style={{display:"flex",alignItems:"center",gap:"8px"}} onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
+                                  <button onClick={() => playAll(pl.tracks)}
+                                    style={{width:"28px",height:"28px",background:"rgba(255,255,255,0.03)",color:"#e2ddd9",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.06)",cursor:"pointer",transition:"all 0.15s"}}
+                                    onMouseEnter={e=>{e.currentTarget.style.background="var(--v-accent)";e.currentTarget.style.color="#0c0b0b";e.currentTarget.style.transform="scale(1.08)";}}
+                                    onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.color="#e2ddd9";e.currentTarget.style.transform="scale(1)";}}
+                                    title="Play playlist"
                                   >
-                                    <Trash2 size={11}/>
+                                    <Play size={10} style={{fill:"currentColor",marginLeft:"1px"}}/>
                                   </button>
-                                )}
-                              </div>
+                                  {pl.id!=='p1'&&(
+                                    <button onClick={() => requestDeletePlaylist(pl.id)}
+                                      style={{width:"28px",height:"28px",background:"rgba(255,255,255,0.03)",color:"#8a807c",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,0.05)",cursor:"pointer",transition:"all 0.15s"}}
+                                      onMouseEnter={e=>{e.currentTarget.style.color="#ff6060";e.currentTarget.style.background="rgba(160,40,40,0.15)";e.currentTarget.style.borderColor="rgba(255,96,96,0.15)";e.currentTarget.style.transform="scale(1.05)";}}
+                                      onMouseLeave={e=>{e.currentTarget.style.color="#8a807c";e.currentTarget.style.background="rgba(255,255,255,0.03)";e.currentTarget.style.borderColor="rgba(255,255,255,0.05)";e.currentTarget.style.transform="scale(1)";}}
+                                      title="Delete playlist"
+                                    >
+                                      <Trash2 size={11}/>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4971,6 +5291,7 @@ export default function Veluna() {
               customBgColor={customBgColor} setCustomBgColorState={setCustomBgColorState}
               autoCheckUpdates={autoCheckUpdates} setAutoCheckUpdates={setAutoCheckUpdates}
               isCheckingUpdate={isCheckingUpdate} handleCheckUpdate={handleCheckUpdate}
+              performanceMode={performanceMode} setPerformanceMode={setPerformanceMode}
             />
           )}
           </div>
@@ -5057,7 +5378,7 @@ export default function Veluna() {
                           <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
                             <svg width="16" height="16" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
                               <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5" />
-                              <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 3px rgba(226,221,217,0.6))" }} />
+                              <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" />
                             </svg>
                           </div>
                         ) : isPlaying ? (
@@ -5239,7 +5560,7 @@ export default function Veluna() {
       <div className="v-player-dock">
         {isLoadingTrack && (
           <div style={{position:"absolute",top:0,left:0,width:"100%",height:"2px",overflow:"hidden",background:"rgba(255,255,255,0.03)",zIndex:10}}>
-            <div style={{position:"absolute",top:0,height:"100%",background:"linear-gradient(90deg, transparent, rgba(226,221,217,0.3), #ffffff, #e2ddd9, transparent)",boxShadow:"0 0 10px rgba(226,221,217,0.8), 0 0 3px #fff",borderRadius:"999px",animation:"velunaLoadStream 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}/>
+            <div style={{position:"absolute",top:0,height:"100%",background:"linear-gradient(90deg, transparent, rgba(226,221,217,0.3), #ffffff, #e2ddd9, transparent)",borderRadius:"999px",animation:"velunaLoadStream 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}/>
           </div>
         )}
         {isPlaying&&!isLoadingTrack&&<div style={{position:"absolute",top:0,left:0,right:0,height:"1px",background:"rgba(226,221,217,0.06)"}}/>}
@@ -5269,7 +5590,7 @@ export default function Veluna() {
                   ? <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                       <svg width="22" height="22" viewBox="0 0 24 24" style={{animation:"spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite"}}>
                         <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(226,221,217,0.2)" strokeWidth="2.2"/>
-                        <circle cx="12" cy="12" r="9" fill="none" stroke="#e2ddd9" strokeWidth="2.2" strokeDasharray="56.5" strokeDashoffset="38" strokeLinecap="round" style={{filter:"drop-shadow(0 0 4px rgba(0,0,0,0.9)) drop-shadow(0 0 3px rgba(226,221,217,0.7))"}}/>
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="#e2ddd9" strokeWidth="2.2" strokeDasharray="56.5" strokeDashoffset="38" strokeLinecap="round"/>
                       </svg>
                     </div>
                   : !currentTrack.url.startsWith('local://')
@@ -5283,7 +5604,7 @@ export default function Veluna() {
                 {isLoadingTrack
                   ? <div style={{display:"flex",alignItems:"center",height:"16px"}}>
                       <div style={{display:"flex",gap:"3px",alignItems:"center",height:"12px"}}>
-                        {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",boxShadow:"0 0 4px rgba(226,221,217,0.5)",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
+                        {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
                       </div>
                     </div>
                   : <div style={{fontSize:"12px",color:"#8a807c",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentTrack.artist||""}</div>}
@@ -5302,10 +5623,20 @@ export default function Veluna() {
                     <Heart size={16} style={isTrackLiked(currentTrack.url)?{color:"#e05555",fill:"#e05555"}:{color:"#5c5755"}}/>
                   </button>
                   {(()=>{ const dl=downloadingTracks[currentTrack.url]; return (
-                    <button onClick={()=>handleDownload(currentTrack)} title="Download" style={{background:"none",border:"none",cursor:"pointer",padding:"5px",display:"flex",color:"#5c5755",transition:"color .12s,transform .1s"}}
-                      onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.15)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
+                    <button
+                      onClick={()=>handleDownload(currentTrack)}
+                      title={dl>0 && dl<100 ? `Downloading ${Math.round(dl)}% (Click to cancel)` : "Download"}
+                      style={{background:"none",border:"none",cursor:"pointer",padding:"5px",display:"flex",alignItems:"center",gap:"4px",color:"#5c5755",transition:"color .12s,transform .1s"}}
+                      onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.1)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
                       {dl>0
-                        ? <svg width="15" height="15" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round" strokeDasharray={`${2*Math.PI*5.5}`} strokeDashoffset={`${2*Math.PI*5.5*(1-Math.min(dl,100)/100)}`} style={{transformOrigin:"7px 7px",transform:"rotate(-90deg)",transition:"stroke-dashoffset .3s"}}/>{dl>=100&&<path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}</svg>
+                        ? <>
+                            <span style={{fontSize:"10px",fontWeight:700,color:"#e2ddd9",fontVariantNumeric:"tabular-nums"}}>{Math.round(dl)}%</span>
+                            <svg width="15" height="15" viewBox="0 0 14 14">
+                              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5"/>
+                              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round" strokeDasharray={`${2*Math.PI*5.5}`} strokeDashoffset={`${2*Math.PI*5.5*(1-Math.min(dl,100)/100)}`} style={{transformOrigin:"7px 7px",transform:"rotate(-90deg)",transition:"stroke-dashoffset .25s"}}/>
+                              {dl>=100&&<path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}
+                            </svg>
+                          </>
                         : <Download size={15}/>}
                     </button>
                   ); })()}
@@ -5506,16 +5837,21 @@ export default function Veluna() {
               {!track.url.startsWith('local://') && (
                 <button onClick={() => { handleDownload(track); setCtxMenu(null); }} className="v-ctx__item">
                   {(downloadingTracks[track.url] ?? 0) > 0
-                    ? <svg width="16" height="16" viewBox="0 0 16 16">
-                        <circle cx="8" cy="8" r="6" fill="none" stroke="#333" strokeWidth="1.5"/>
-                        <circle cx="8" cy="8" r="6" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round"
-                          strokeDasharray={`${2 * Math.PI * 6}`}
-                          strokeDashoffset={`${2 * Math.PI * 6 * (1 - Math.min(downloadingTracks[track.url] ?? 0, 100) / 100)}`}
-                          style={{ transformOrigin: '8px 8px', transform: 'rotate(-90deg)', transition: 'stroke-dashoffset 0.3s ease' }}
-                        />
-                      </svg>
-                    : <Download size={15} />}
-                  Download MP3
+                    ? <>
+                        <svg width="16" height="16" viewBox="0 0 16 16">
+                          <circle cx="8" cy="8" r="6" fill="none" stroke="#333" strokeWidth="1.5"/>
+                          <circle cx="8" cy="8" r="6" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round"
+                            strokeDasharray={`${2 * Math.PI * 6}`}
+                            strokeDashoffset={`${2 * Math.PI * 6 * (1 - Math.min(downloadingTracks[track.url] ?? 0, 100) / 100)}`}
+                            style={{ transformOrigin: '8px 8px', transform: 'rotate(-90deg)', transition: 'stroke-dashoffset 0.25s ease' }}
+                          />
+                        </svg>
+                        Cancel Download ({Math.round(downloadingTracks[track.url] ?? 0)}%)
+                      </>
+                    : <>
+                        <Download size={15} />
+                        Download MP3
+                      </>}
                 </button>
               )}
               {track.url.startsWith('local://') && (
@@ -6043,6 +6379,15 @@ export default function Veluna() {
         />
       )}
 
+      {playlistDeleteModal && (
+        <PlaylistDeleteConfirmModal
+          isOpen={!!playlistDeleteModal}
+          modalData={playlistDeleteModal}
+          onClose={() => setPlaylistDeleteModal(null)}
+          onConfirmDelete={confirmDeletePlaylist}
+        />
+      )}
+
       {/* Custom confirm dialog — replaces window.confirm to avoid double native boxes */}
       {confirmModal && (
         <div style={{position:"fixed",inset:0,zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(var(--v-bg0-rgb),0.88)"}}
@@ -6086,7 +6431,7 @@ export default function Veluna() {
             e.currentTarget.style.borderColor = "rgba(29, 185, 84, 0.4)";
             e.currentTarget.style.background = "rgba(28, 25, 25, 0.85)";
             e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 12px 30px rgba(0,0,0,0.8), 0 0 15px rgba(29,185,84,0.15)";
+            e.currentTarget.style.boxShadow = "0 12px 30px rgba(0,0,0,0.8)";
           }}
           onMouseLeave={e => {
             e.currentTarget.style.borderColor = "rgba(29, 185, 84, 0.15)";
@@ -6126,7 +6471,7 @@ export default function Veluna() {
               <span style={{fontSize:"10.5px", fontWeight:600, color:"#8a807c", fontVariantNumeric:"tabular-nums"}}>{bgImport.matched}/{bgImport.total}</span>
             </div>
             <div style={{height:"3px", borderRadius:"1.5px", background:"rgba(255,255,255,0.06)", overflow:"hidden", position:"relative"}}>
-              <div style={{height:"100%", borderRadius:"1.5px", background:"linear-gradient(90deg, #1db954 0%, #1ed760 100%)", width:`${(bgImport.matched/bgImport.total)*100}%`, transition:"width .3s ease", boxShadow:"0 0 6px rgba(29,185,84,0.5)"}}/>
+              <div style={{height:"100%", borderRadius:"1.5px", background:"linear-gradient(90deg, #1db954 0%, #1ed760 100%)", width:`${(bgImport.matched/bgImport.total)*100}%`, transition:"width .3s ease"}}/>
             </div>
           </div>
 
@@ -6189,7 +6534,7 @@ export default function Veluna() {
             e.currentTarget.style.borderColor = "rgba(255, 30, 39, 0.4)";
             e.currentTarget.style.background = "rgba(28, 25, 25, 0.85)";
             e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 12px 30px rgba(0,0,0,0.8), 0 0 15px rgba(255,30,39,0.15)";
+            e.currentTarget.style.boxShadow = "0 12px 30px rgba(0,0,0,0.8)";
           }}
           onMouseLeave={e => {
             e.currentTarget.style.borderColor = "rgba(255, 30, 39, 0.15)";
@@ -6228,7 +6573,7 @@ export default function Veluna() {
               <span style={{fontSize:"10.5px", fontWeight:600, color:"#ff1e27", fontVariantNumeric:"tabular-nums"}}>{Math.round(bgYtImport.progress)}%</span>
             </div>
             <div style={{height:"3px", borderRadius:"1.5px", background:"rgba(255,255,255,0.06)", overflow:"hidden", position:"relative"}}>
-              <div style={{height:"100%", borderRadius:"1.5px", background:"linear-gradient(90deg, #ff1e27 0%, #ff4b55 100%)", width:`${bgYtImport.progress}%`, transition:"width .3s ease", boxShadow:"0 0 6px rgba(255,30,39,0.5)"}}/>
+              <div style={{height:"100%", borderRadius:"1.5px", background:"linear-gradient(90deg, #ff1e27 0%, #ff4b55 100%)", width:`${bgYtImport.progress}%`, transition:"width .3s ease"}}/>
             </div>
           </div>
 

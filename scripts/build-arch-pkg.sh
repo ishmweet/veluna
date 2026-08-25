@@ -7,13 +7,13 @@ ROOT_DIR="$(pwd)"
 VERSION="${1:-}"
 if [ -z "${VERSION}" ]; then
   if [ -f "package.json" ]; then
-    VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.2")
+    VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.3")
   else
-    VERSION="0.1.2"
+    VERSION="0.1.3"
   fi
 fi
 
-# Strip leading 'v' if present (e.g. v0.1.2 -> 0.1.2)
+# Strip leading 'v' if present (e.g. v0.1.3 -> 0.1.3)
 VERSION="${VERSION#v}"
 
 BINARY_PATH="src-tauri/target/release/veluna"

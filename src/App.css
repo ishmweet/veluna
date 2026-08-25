@@ -406,7 +406,7 @@ button.rounded-full[class*="bg-white"] {
 }
 button.rounded-full.bg-white:hover {
   transform: scale(1.06) !important;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.6), 0 0 14px var(--v-accent) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.6) !important;
 }
 button.rounded-full.bg-white:active {
   transform: scale(0.95) !important;
@@ -561,9 +561,9 @@ kbd {
 }
 
 @keyframes ytPulse {
-  0% { transform: scale(1); opacity: 0.8; filter: drop-shadow(0 0 10px rgba(255, 30, 39, 0.4)); }
-  50% { transform: scale(1.05); opacity: 1; filter: drop-shadow(0 0 24px rgba(255, 30, 39, 0.85)); }
-  100% { transform: scale(1); opacity: 0.8; filter: drop-shadow(0 0 10px rgba(255, 30, 39, 0.4)); }
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
 }
 @keyframes ytRotate {
   0% { transform: rotate(0deg); }
@@ -835,7 +835,6 @@ kbd {
   width: 3px;
   background: var(--v-accent);
   border-radius: 1.5px;
-  box-shadow: 0 0 10px var(--v-accent);
 }
 
 .v-pl-item {
@@ -872,7 +871,6 @@ kbd {
   width: 3px;
   background: var(--v-accent);
   border-radius: 0 3px 3px 0;
-  box-shadow: 0 0 10px var(--v-accent);
 }
 .v-pl-item__art {
   width: 34px;
@@ -1115,7 +1113,6 @@ kbd {
   width: 3px;
   background: var(--v-accent);
   border-radius: 0 4px 4px 0;
-  box-shadow: 0 0 10px var(--v-accent);
 }
 
 /* 🎛️ Premium Context Menu & Popover Glass Design System Surface */
@@ -1420,4 +1417,106 @@ kbd {
   max-width: 1000px;
   margin: 24px auto 0;
   width: 100%;
+}
+
+/* ==========================================================================
+   Low-Spec / Extreme Performance Mode Overrides
+   Ultra-low GPU profile, zero animations/transitions, instant response
+   ========================================================================== */
+
+/* 1. Global Complete GPU Disabling */
+.v-perf-mode *,
+.v-perf-mode *::before,
+.v-perf-mode *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 2. Ultra-Sharp Solid Contrast Palette */
+.v-perf-mode {
+  --v-bg0: #060606 !important;
+  --v-bg1: #060606 !important;
+  --v-bg2: #0f0f0f !important;
+  --v-bg3: #171717 !important;
+  --v-bg4: #202020 !important;
+  --v-bg5: #2a2a2a !important;
+  --v-bdr: #222222 !important;
+  --v-bdr2: #303030 !important;
+  --v-bdr3: #444444 !important;
+}
+
+/* 3. Flat Opaque Fast Surfaces */
+.v-perf-mode .v-ctx,
+.v-perf-mode .v-glass-popover,
+.v-perf-mode .v-popover-glass,
+.v-perf-mode [style*="backdropFilter"],
+.v-perf-mode [style*="backdrop-filter"] {
+  background: #0e0e0e !important;
+  border-color: #333333 !important;
+}
+
+/* 4. Instant Containment & Zero-Layout Thrashing */
+.v-perf-mode .v-track,
+.v-perf-mode .v-pl-card,
+.v-perf-mode .v-nav-btn,
+.v-perf-mode .yt-track-card,
+.v-perf-mode .v-player-dock {
+  contain: paint layout !important;
+  will-change: auto !important;
+}
+
+/* 5. Flat Crisp Component Styling */
+.v-perf-mode .v-track {
+  border: 1px solid #1c1c1c !important;
+  background: #0d0d0d !important;
+  border-radius: 6px !important;
+}
+.v-perf-mode .v-track:hover {
+  background: #181818 !important;
+  border-color: #383838 !important;
+  transform: none !important;
+}
+.v-perf-mode .v-track--active {
+  background: #202020 !important;
+  border-color: var(--v-accent) !important;
+}
+.v-perf-mode .v-nav-btn {
+  border-radius: 6px !important;
+}
+.v-perf-mode .v-nav-btn--active {
+  background: #202020 !important;
+  border: 1px solid #383838 !important;
+  color: #ffffff !important;
+}
+.v-perf-mode .v-pl-card {
+  border: 1px solid #222222 !important;
+  background: #101010 !important;
+  border-radius: 8px !important;
+}
+.v-perf-mode .v-pl-card:hover {
+  border-color: #404040 !important;
+  background: #181818 !important;
+  transform: none !important;
+}
+.v-perf-mode .v-player-dock {
+  background: #080808 !important;
+  border-top: 1px solid #282828 !important;
+}
+.v-perf-mode .v-player-btn-play {
+  background: var(--v-accent) !important;
+  color: #000000 !important;
+  transform: none !important;
+}
+.v-perf-mode img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* 6. Background Tab Optimization: Pause animations when window is minimized */
+.v-app-hidden * {
+  animation-play-state: paused !important;
 }

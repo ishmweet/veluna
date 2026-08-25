@@ -35,7 +35,7 @@ export const TrackRow = React.memo(({
       {isActive && isLoadingTrack
         ? <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
             <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
-            <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" style={{filter:"drop-shadow(0 0 3px rgba(226,221,217,0.5))"}}/>
+            <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
           </svg>
         : isActive && isPlaying
           ? <div style={{display:'flex',gap:'2px',alignItems:'flex-end',height:'14px',justifyContent:'center'}}>
@@ -62,17 +62,25 @@ export const TrackRow = React.memo(({
       <button className="v-track__btn" onClick={e => { e.stopPropagation(); onLike(); }}>
         <Heart size={13} style={isLiked?{color:'#e05555',fill:'#e05555'}:{color:'#5c5755'}}/>
       </button>
-      <button className="v-track__btn" onClick={e => { e.stopPropagation(); onDownload(); }}>
+      <button
+        className="v-track__btn"
+        title={isDownloading > 0 && isDownloading < 100 ? `Downloading ${Math.round(isDownloading)}% (Click to cancel)` : "Download"}
+        onClick={e => { e.stopPropagation(); onDownload(); }}
+        style={isDownloading > 0 ? {display:'flex',alignItems:'center',gap:'3px'} : undefined}
+      >
         {isDownloading > 0
-          ? <svg width="13" height="13" viewBox="0 0 14 14">
-              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5"/>
-              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round"
-                strokeDasharray={`${2*Math.PI*5.5}`}
-                strokeDashoffset={`${2*Math.PI*5.5*(1-Math.min(isDownloading,100)/100)}`}
-                style={{transformOrigin:'7px 7px',transform:'rotate(-90deg)',transition:'stroke-dashoffset 0.3s ease'}}
-              />
-              {isDownloading>=100&&<path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}
-            </svg>
+          ? <>
+              <span style={{fontSize:'10px',fontWeight:700,color:'#e2ddd9',fontVariantNumeric:'tabular-nums'}}>{Math.round(isDownloading)}%</span>
+              <svg width="13" height="13" viewBox="0 0 14 14">
+                <circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5"/>
+                <circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round"
+                  strokeDasharray={`${2*Math.PI*5.5}`}
+                  strokeDashoffset={`${2*Math.PI*5.5*(1-Math.min(isDownloading,100)/100)}`}
+                  style={{transformOrigin:'7px 7px',transform:'rotate(-90deg)',transition:'stroke-dashoffset 0.25s ease'}}
+                />
+                {isDownloading>=100&&<path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}
+              </svg>
+            </>
           : <Download size={13} />}
       </button>
       {showRemove && onRemove

@@ -222,8 +222,8 @@ fn bin_ffmpeg()  -> &'static str { BIN_FFMPEG.get().map(|s| s.as_str()).unwrap_o
 struct CacheEntry { url: String, ts: std::time::Instant }
 
 lazy_static::lazy_static! {
-    static ref PREFETCH_CACHE: Arc<Mutex<HashMap<String, CacheEntry>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    static ref PREFETCH_CACHE: Arc<std::sync::RwLock<HashMap<String, CacheEntry>>> =
+        Arc::new(std::sync::RwLock::new(HashMap::new()));
 
     static ref SLEEP_TIMER: Arc<Mutex<Option<(std::time::Instant, u64)>>> =
         Arc::new(Mutex::new(None));
@@ -288,16 +288,130 @@ fn safe_f64(v: f64) -> f64 {
     if v.is_finite() { v } else { 0.0 }
 }
 
+async fn search_youtube_direct(query: &str) -> Option<String> {
+    let q = query.trim();
+    if q.is_empty() { return None; }
+    let client = get_http_client();
+
+    let body = serde_json::json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240801.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "query": q,
+        "params": "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"
+    });
+
+    let res = client.post("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+        .header("Origin", "https://music.youtube.com")
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() { return None; }
+    let json: serde_json::Value = res.json().await.ok()?;
+
+    let mut items = Vec::new();
+    fn extract_music_items(val: &serde_json::Value, items: &mut Vec<String>) {
+        if let Some(obj) = val.as_object() {
+            if let Some(item) = obj.get("musicResponsiveListItemRenderer") {
+                let mut title = String::from("Unknown");
+                let mut uploader = String::from("Unknown");
+                let mut duration = String::from("0:00");
+                let mut video_id = None;
+
+                if let Some(flex_cols) = item.get("flexColumns").and_then(|f| f.as_array()) {
+                    if let Some(col0) = flex_cols.get(0) {
+                        if let Some(runs) = col0.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            if let Some(run0) = runs.get(0) {
+                                if let Some(t) = run0.get("text").and_then(|t| t.as_str()) {
+                                    title = t.to_string();
+                                }
+                                if let Some(v_id) = run0.pointer("/navigationEndpoint/watchEndpoint/videoId").and_then(|id| id.as_str()) {
+                                    video_id = Some(v_id.to_string());
+                                }
+                            }
+                        }
+                    }
+                    if video_id.is_none() {
+                        if let Some(v_id) = item.pointer("/overlay/musicItemThumbnailOverlayRenderer/content/musicPlayButtonRenderer/playNavigationEndpoint/watchEndpoint/videoId").and_then(|id| id.as_str()) {
+                            video_id = Some(v_id.to_string());
+                        }
+                    }
+                    if let Some(col1) = flex_cols.get(1) {
+                        if let Some(runs) = col1.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            let parts: Vec<&str> = runs.iter().filter_map(|r| r.get("text").and_then(|t| t.as_str())).filter(|t| !t.trim().is_empty() && *t != "•" && *t != "·").collect();
+                            if !parts.is_empty() {
+                                uploader = parts[0].to_string();
+                                if parts.len() > 1 && parts.last().map(|p| p.contains(':')).unwrap_or(false) {
+                                    duration = parts.last().unwrap().to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(fixed_cols) = item.get("fixedColumns").and_then(|f| f.as_array()) {
+                    if let Some(col0) = fixed_cols.get(0) {
+                        if let Some(runs) = col0.pointer("/musicResponsiveListItemFixedColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            if let Some(run0) = runs.get(0) {
+                                if let Some(d) = run0.get("text").and_then(|t| t.as_str()) {
+                                    duration = d.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(vid) = video_id {
+                    if !title.is_empty() {
+                        items.push(format!("{}===={}===={}===={}", title, uploader, duration, vid));
+                    }
+                }
+            }
+            for v in obj.values() {
+                extract_music_items(v, items);
+            }
+        } else if let Some(arr) = val.as_array() {
+            for v in arr {
+                extract_music_items(v, items);
+            }
+        }
+    }
+
+    extract_music_items(&json, &mut items);
+
+    if items.is_empty() {
+        None
+    } else {
+        Some(items.join("\n"))
+    }
+}
+
 #[tauri::command]
 async fn search_youtube(query: String) -> Result<String, String> {
+    let q_trim = query.trim().to_string();
+    let is_url = q_trim.starts_with("http://") 
+        || q_trim.starts_with("https://") 
+        || q_trim.contains("youtube.com") 
+        || q_trim.contains("youtu.be");
+
+    if !is_url {
+        // Fast-path: Direct YouTube Music in-memory JSON search (~150-250ms)
+        if let Some(direct_results) = search_youtube_direct(&q_trim).await {
+            return Ok(direct_results);
+        }
+    }
+
     tokio::task::spawn_blocking(move || {
-        let q_trim = query.trim();
-        let is_url = q_trim.starts_with("http://") 
-            || q_trim.starts_with("https://") 
-            || q_trim.contains("youtube.com") 
-            || q_trim.contains("youtu.be");
         let search_arg = if is_url {
-            q_trim.to_string()
+            q_trim
         } else {
             format!("ytsearch25:{}", q_trim)
         };
@@ -471,13 +585,13 @@ fn parse_csv_row(line: &str) -> Vec<String> {
 #[tauri::command]
 async fn prefetch_track(url: String) -> Result<(), String> {
     if url.starts_with("local://") { return Ok(()); }
-    if PREFETCH_CACHE.lock().unwrap().contains_key(&url) { return Ok(()); }
+    if PREFETCH_CACHE.read().unwrap().contains_key(&url) { return Ok(()); }
     let cache = Arc::clone(&PREFETCH_CACHE);
     tokio::spawn(async move {
         let permit = prefetch_semaphore().acquire().await.ok();
-        if PREFETCH_CACHE.lock().unwrap().contains_key(&url) { return; }
+        if cache.read().unwrap().contains_key(&url) { return; }
         if let Some(stream_url) = extract_stream_url_async(url.clone(), None).await {
-            let mut c = cache.lock().unwrap();
+            let mut c = cache.write().unwrap();
             let now = std::time::Instant::now();
             c.retain(|_, v| now.duration_since(v.ts) < std::time::Duration::from_secs(4 * 3600));
             if c.len() >= 200 { c.retain(|_, v| std::time::Instant::now().duration_since(v.ts) < std::time::Duration::from_secs(3600)); }
@@ -557,8 +671,11 @@ fn ensure_mpv_running() -> bool {
         "--ytdl=yes".into(),
         "--ytdl-format=ba/b/bestaudio/best/18/22".into(),
         "--ytdl-raw-options=extractor-args=youtube:player_client=android,format=ba/b/bestaudio/best/18/22,no-check-certificates=,no-warnings=".into(),
-        "--demuxer-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5".into(),
+        "--demuxer-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,reconnect_at_eof=1".into(),
         "--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5".into(),
+        "--hr-seek=yes".into(),
+        "--hr-seek-framedrop=yes".into(),
+        "--audio-stream-silence=yes".into(),
         format!("--input-ipc-server={}", socket_path()),
     ];
     if let Some(af) = mpv_af_flag() { args.push(af); }
@@ -904,7 +1021,7 @@ async fn play_audio(url: String) -> Result<(), String> {
     log_debug(&format!("Assigned my_id: {} for {}", my_id, safe_url));
 
     let cached = {
-        let cache = PREFETCH_CACHE.lock().unwrap();
+        let cache = PREFETCH_CACHE.read().unwrap();
         cache.get(&safe_url).and_then(|entry| {
             let age = std::time::Instant::now().duration_since(entry.ts);
             
@@ -934,7 +1051,7 @@ async fn play_audio(url: String) -> Result<(), String> {
         }
 
         {
-            let mut cache = PREFETCH_CACHE.lock().unwrap();
+            let mut cache = PREFETCH_CACHE.write().unwrap();
             let now = std::time::Instant::now();
             cache.insert(safe_url.clone(), CacheEntry { url: extracted.clone(), ts: now });
         }
@@ -998,7 +1115,7 @@ async fn play_local_file(path: String) -> Result<(), String> {
 #[tauri::command]
 async fn pause_audio() -> Result<(), String> {
     tokio::task::spawn_blocking(|| {
-        send_ipc_command_with_retry(r#"{"command": ["set_property", "pause", true]}"#, 2).map(|_| ())
+        send_ipc_fire_and_forget(r#"{"command": ["set_property", "pause", true]}"#)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1007,7 +1124,7 @@ async fn pause_audio() -> Result<(), String> {
 #[tauri::command]
 async fn resume_audio() -> Result<(), String> {
     tokio::task::spawn_blocking(|| {
-        send_ipc_command_with_retry(r#"{"command": ["set_property", "pause", false]}"#, 2).map(|_| ())
+        send_ipc_fire_and_forget(r#"{"command": ["set_property", "pause", false]}"#)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1019,7 +1136,7 @@ async fn seek_audio(time: f64) -> Result<(), String> {
     let t = safe_f64(time);
     tokio::task::spawn_blocking(move || {
         let cmd = format!(r#"{{"command": ["seek", {}, "absolute"]}}"#, t);
-        send_ipc_command_with_retry(&cmd, 2).map(|_| ())
+        send_ipc_fire_and_forget(&cmd)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1029,7 +1146,7 @@ async fn seek_audio(time: f64) -> Result<(), String> {
 async fn seek_relative(seconds: f64) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let cmd = format!(r#"{{"command": ["seek", {}, "relative"]}}"#, seconds);
-        send_ipc_command_with_retry(&cmd, 2).map(|_| ())
+        send_ipc_fire_and_forget(&cmd)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1040,7 +1157,7 @@ async fn set_volume(volume: f64) -> Result<(), String> {
     let vol = safe_f64(volume).clamp(0.0, 150.0);
     tokio::task::spawn_blocking(move || {
         let cmd = format!(r#"{{"command": ["set_property", "volume", {}]}}"#, vol);
-        send_ipc_command_with_retry(&cmd, 2).map(|_| ())
+        send_ipc_fire_and_forget(&cmd)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1118,7 +1235,7 @@ async fn seek_to_start() -> Result<(), String> {
 async fn set_playback_speed(speed: f64) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let cmd = format!(r#"{{"command": ["set_property", "speed", {}]}}"#, speed);
-        send_ipc_command_with_retry(&cmd, 2).map(|_| ())
+        send_ipc_fire_and_forget(&cmd)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1220,68 +1337,208 @@ async fn set_equalizer(bass: f64, mid: f64, treble: f64) -> Result<(), String> {
         if eq_active   { ln_owned = eq_chain.clone(); parts.push(&ln_owned); }
 
         if parts.is_empty() {
-            
             let cmd = r#"{"command": ["set_property", "af", ""]}"#;
-            return send_ipc_command_with_retry(cmd, 2).map(|_| ());
+            return send_ipc_fire_and_forget(cmd);
         }
 
         let af_value = parts.join(",");
         let cmd = serde_json::json!({"command": ["set_property", "af", af_value]}).to_string();
-        send_ipc_command_with_retry(&cmd, 2).map(|_| ())
+        send_ipc_fire_and_forget(&cmd)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+struct ActiveDownload {
+    child_id: u32,
+    target_dir: std::path::PathBuf,
+}
+
+static ACTIVE_DOWNLOADS: std::sync::OnceLock<Arc<Mutex<HashMap<String, ActiveDownload>>>> = std::sync::OnceLock::new();
+fn active_downloads() -> &'static Arc<Mutex<HashMap<String, ActiveDownload>>> {
+    ACTIVE_DOWNLOADS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct DownloadProgressPayload {
+    url: String,
+    percent: f64,
+    status: String,
+    error: Option<String>,
+}
+
+#[tauri::command]
+async fn download_song(
+    app_handle: tauri::AppHandle,
+    url: String,
+    quality: String,
+    format: Option<String>,
+    embed_thumbnail: Option<bool>,
+    path: String,
+) -> Result<String, String> {
+    use std::process::{Command, Stdio};
+    use std::io::{BufRead, BufReader};
+
+    let resolved_path = expand_tilde(&path);
+    let target_dir = std::path::PathBuf::from(&resolved_path);
+    let fmt = format.as_deref().unwrap_or("mp3");
+    let do_embed = embed_thumbnail.unwrap_or(true);
+    let audio_format = match fmt {
+        "opus" => "opus",
+        "m4a"  => "m4a",
+        "flac" => "flac",
+        _      => "mp3",
+    };
+    let audio_quality = match quality.as_str() {
+        "Low"    => "9",
+        "Medium" => "4",
+        _        => "0",
+    };
+    let sep = std::path::MAIN_SEPARATOR;
+    let output_template = if resolved_path.ends_with('/') || resolved_path.ends_with('\\') {
+        format!("{}%(title)s.%(ext)s", resolved_path)
+    } else {
+        format!("{}{}%(title)s.%(ext)s", resolved_path, sep)
+    };
+
+    let mut args = vec![
+        "--newline".to_string(),
+        "--extract-audio".to_string(),
+        "--audio-format".to_string(), audio_format.to_string(),
+        "--audio-quality".to_string(), audio_quality.to_string(),
+        "--add-metadata".to_string(),
+        "--no-check-certificates".to_string(),
+        "--no-warnings".to_string(),
+        "-o".to_string(), output_template.clone(),
+    ];
+    if do_embed {
+        args.push("--embed-thumbnail".to_string());
+    }
+    args.push(url.clone());
+
+    let url_key = url.clone();
+    let url_for_events = url.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let mut child = Command::new(bin_ytdlp())
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .no_window()
+            .spawn()
+            .map_err(|e| format!("yt-dlp not found: {}", e))?;
+
+        let child_id = child.id();
+        {
+            let mut map = active_downloads().lock().unwrap();
+            map.insert(url_key.clone(), ActiveDownload {
+                child_id,
+                target_dir: target_dir.clone(),
+            });
+        }
+
+        let stdout = child.stdout.take();
+        let mut last_percent = 0.0;
+
+        if let Some(out) = stdout {
+            let reader = BufReader::new(out);
+            for line in reader.lines().flatten() {
+                if line.contains("[download]") && line.contains('%') {
+                    if let Some(pct_idx) = line.find('%') {
+                        let prefix = &line[..pct_idx];
+                        if let Some(space_idx) = prefix.rfind(|c: char| c.is_whitespace()) {
+                            let pct_str = prefix[space_idx..].trim();
+                            if let Ok(pct) = pct_str.parse::<f64>() {
+                                if (pct - last_percent).abs() >= 1.0 || pct >= 100.0 {
+                                    last_percent = pct;
+                                    let _ = app_handle.emit("download_progress", &DownloadProgressPayload {
+                                        url: url_for_events.clone(),
+                                        percent: pct.clamp(0.0, 100.0),
+                                        status: "downloading".to_string(),
+                                        error: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let status = child.wait().map_err(|e| e.to_string())?;
+
+        {
+            let mut map = active_downloads().lock().unwrap();
+            map.remove(&url_key);
+        }
+
+        if status.success() {
+            let _ = app_handle.emit("download_progress", &DownloadProgressPayload {
+                url: url_for_events.clone(),
+                percent: 100.0,
+                status: "finished".to_string(),
+                error: None,
+            });
+            Ok("Downloaded successfully".to_string())
+        } else {
+            let _ = app_handle.emit("download_progress", &DownloadProgressPayload {
+                url: url_for_events.clone(),
+                percent: 0.0,
+                status: "error".to_string(),
+                error: Some("Download failed".to_string()),
+            });
+            Err("Download failed".to_string())
+        }
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-async fn download_song(url: String, quality: String, format: Option<String>, embed_thumbnail: Option<bool>, path: String) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || {
-        let resolved_path = expand_tilde(&path);
-        let fmt = format.as_deref().unwrap_or("mp3");
-        let do_embed = embed_thumbnail.unwrap_or(true);
-        let audio_format = match fmt {
-            "opus" => "opus",
-            "m4a"  => "m4a",
-            "flac" => "flac",
-            _      => "mp3",
-        };
-        let audio_quality = match quality.as_str() {
-            "Low"    => "9",
-            "Medium" => "4",
-            _        => "0",
-        };
-        let sep = std::path::MAIN_SEPARATOR;
-        let output_template = if resolved_path.ends_with('/') || resolved_path.ends_with('\\') {
-            format!("{}%(title)s.%(ext)s", resolved_path)
-        } else {
-            format!("{}{}%(title)s.%(ext)s", resolved_path, sep)
-        };
-        let mut args = vec![
-            "--extract-audio".to_string(),
-            "--audio-format".to_string(), audio_format.to_string(),
-            "--audio-quality".to_string(), audio_quality.to_string(),
-            "--add-metadata".to_string(),
-            "--no-check-certificates".to_string(),
-            "--no-warnings".to_string(),
-            "-o".to_string(), output_template.clone(),
-        ];
-        if do_embed {
-            args.push("--embed-thumbnail".to_string());
+async fn cancel_download(app_handle: tauri::AppHandle, url: String) -> Result<(), String> {
+    let dl_opt = {
+        let mut map = active_downloads().lock().unwrap();
+        map.remove(&url)
+    };
+
+    if let Some(dl) = dl_opt {
+        #[cfg(unix)]
+        {
+            let _ = std::process::Command::new("kill")
+                .args(["-9", &dl.child_id.to_string()])
+                .output();
         }
-        args.push(url.clone());
-        let output = Command::new(bin_ytdlp())
-            .args(&args)
-            .no_window()
-            .output()
-            .map_err(|e| format!("yt-dlp not found: {}", e))?;
-        if output.status.success() {
-            Ok("Downloaded successfully".to_string())
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        #[cfg(windows)]
+        {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/PID", &dl.child_id.to_string()])
+                .output();
         }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+
+        // Clean up partial / leftover download files (.part, .ytdl, .temp)
+        if let Ok(entries) = std::fs::read_dir(&dl.target_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                    let ext_lower = ext.to_lowercase();
+                    if ext_lower == "part" || ext_lower == "ytdl" || ext_lower == "temp" {
+                        let _ = std::fs::remove_file(p);
+                    }
+                }
+            }
+        }
+
+        let _ = app_handle.emit("download_progress", &DownloadProgressPayload {
+            url: url.clone(),
+            percent: 0.0,
+            status: "cancelled".to_string(),
+            error: None,
+        });
+
+        Ok(())
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -1301,50 +1558,63 @@ async fn batch_download(
     path: String,
 ) -> Result<(), String> {
     let total = urls.len();
-    let resolved_path = expand_tilde(&path);
+    let resolved_path = Arc::new(expand_tilde(&path));
+    let quality_arc = Arc::new(quality);
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
+    let mut set = tokio::task::JoinSet::new();
 
-    for (i, url) in urls.iter().enumerate() {
-        let url_clone     = url.clone();
-        let quality_clone = quality.clone();
-        let path_clone    = resolved_path.clone();
+    for (i, url) in urls.into_iter().enumerate() {
+        let sem = Arc::clone(&semaphore);
+        let path_clone = Arc::clone(&resolved_path);
+        let quality_clone = Arc::clone(&quality_arc);
+        let app = app_handle.clone();
 
-        let result: Result<String, String> = tokio::task::spawn_blocking(move || {
-            let format = match quality_clone.as_str() {
-                "Low"    => "worstaudio/worst",
-                "Medium" => "bestaudio[abr<=160]/bestaudio/best",
-                _        => "bestaudio/best",
+        set.spawn(async move {
+            let _permit = sem.acquire().await.ok();
+            let url_clone = url.clone();
+            let p = path_clone.clone();
+            let q = quality_clone.clone();
+
+            let result: Result<String, String> = tokio::task::spawn_blocking(move || {
+                let format = match q.as_str() {
+                    "Low"    => "worstaudio/worst",
+                    "Medium" => "bestaudio[abr<=160]/bestaudio/best",
+                    _        => "bestaudio/best",
+                };
+                let audio_quality = match q.as_str() {
+                    "Low"    => "9",
+                    "Medium" => "4",
+                    _        => "0",
+                };
+                let sep = std::path::MAIN_SEPARATOR;
+                let tpl = format!("{}{}%(title)s.%(ext)s", p, sep);
+                let out = Command::new(bin_ytdlp())
+                    .args(["-f", format, "--extract-audio", "--audio-format", "mp3",
+                           "--audio-quality", audio_quality, "--embed-thumbnail", "--add-metadata",
+                           "--no-check-certificates", "--no-warnings", "-o", &tpl, &url_clone])
+                    .no_window()
+                    .output()
+                    .map_err(|e| format!("yt-dlp not found: {}", e))?;
+                if out.status.success() {
+                    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+                } else {
+                    Err(String::from_utf8_lossy(&out.stderr).to_string())
+                }
+            })
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+
+            let (success, error) = match &result {
+                Ok(_)  => (true, None),
+                Err(e) => (false, Some(e.clone())),
             };
-            let audio_quality = match quality_clone.as_str() {
-                "Low"    => "9",
-                "Medium" => "4",
-                _        => "0",
-            };
-            let sep = std::path::MAIN_SEPARATOR;
-            let tpl = format!("{}{}%(title)s.%(ext)s", path_clone, sep);
-            let out = Command::new(bin_ytdlp())
-                .args(["-f", format, "--extract-audio", "--audio-format", "mp3",
-                       "--audio-quality", audio_quality, "--embed-thumbnail", "--add-metadata",
-                       "--no-check-certificates", "--no-warnings", "-o", &tpl, &url_clone])
-                .no_window()
-                .output()
-                .map_err(|e| format!("yt-dlp not found: {}", e))?;
-            if out.status.success() {
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
-            } else {
-                Err(String::from_utf8_lossy(&out.stderr).to_string())
-            }
-        })
-        .await
-        .map_err(|e| e.to_string())?;
-
-        let (success, error) = match &result {
-            Ok(_)  => (true, None),
-            Err(e) => (false, Some(e.clone())),
-        };
-        let _ = app_handle.emit("batch_download_progress", &BatchProgress {
-            index: i, total, title: url.clone(), success, error,
+            let _ = app.emit("batch_download_progress", &BatchProgress {
+                index: i, total, title: url, success, error,
+            });
         });
     }
+
+    while let Some(_) = set.join_next().await {}
     Ok(())
 }
 
@@ -1849,6 +2119,31 @@ fn send_ipc_batch(cmds: &[&str]) -> Vec<Result<String, String>> {
         let mut out: Vec<Result<String, String>> = results.into_iter().map(Ok).collect();
         while out.len() < n { out.push(Err("No response from mpv".to_string())); }
         out
+    }
+}
+
+fn send_ipc_fire_and_forget(cmd: &str) -> Result<(), String> {
+    let sock = socket_path();
+    #[cfg(unix)]
+    {
+        let mut stream = UnixStream::connect(sock)
+            .map_err(|e| format!("IPC connect failed: {}", e))?;
+        stream.set_write_timeout(Some(std::time::Duration::from_millis(150))).ok();
+        stream.write_all(cmd.as_bytes()).map_err(|e| e.to_string())?;
+        stream.write_all(b"\n").map_err(|e| e.to_string())?;
+        stream.flush().map_err(|e| e.to_string())?;
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let mut file = OpenOptions::new().write(true)
+            .open(sock)
+            .map_err(|e| format!("IPC connect failed: {}", e))?;
+        file.write_all(cmd.as_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(b"\n").map_err(|e| e.to_string())?;
+        file.flush().map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 
@@ -2621,6 +2916,7 @@ fn main() {
             cancel_sleep_timer,
             get_sleep_timer_remaining,
             download_song,
+            cancel_download,
             batch_download,
             scan_downloads,
             delete_local_file,
