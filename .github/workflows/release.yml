@@ -14,17 +14,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'ubuntu-22.04'
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
-
-    runs-on: ${{ matrix.platform }}
+  release-linux:
+    name: 'Release (Linux)'
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -45,7 +37,6 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -62,15 +53,60 @@ jobs:
             zstd \
             libarchive-tools
 
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri Application & Publish Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'v__VERSION__'
+          releaseBody: 'See the assets below to download Veluna for your platform.'
+          releaseDraft: false
+          prerelease: false
+
+      - name: Build Arch Linux package (.pkg.tar.zst)
+        run: |
+          chmod +x ./scripts/build-arch-pkg.sh
+          ./scripts/build-arch-pkg.sh "${{ github.ref_name }}"
+
+      - name: Upload Arch Linux .pkg.tar.zst to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} veluna-*.pkg.tar.zst --clobber
+
+  release-windows:
+    name: 'Release (Windows)'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Download Windows bundled binaries
-        if: matrix.platform == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node ./scripts/setup-deps.js
 
       - name: Create binaries.zip
-        if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
           Compress-Archive -Path "src-tauri/binaries/*.exe" -DestinationPath "binaries.zip" -Force
@@ -88,23 +124,8 @@ jobs:
           releaseBody: 'See the assets below to download Veluna for your platform.'
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
-
-      - name: Build Arch Linux package (.pkg.tar.zst)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          chmod +x ./scripts/build-arch-pkg.sh
-          ./scripts/build-arch-pkg.sh "${{ github.ref_name }}"
-
-      - name: Upload Arch Linux .pkg.tar.zst to Release
-        if: matrix.platform == 'ubuntu-22.04'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ github.ref_name }} veluna-*.pkg.tar.zst --clobber
 
       - name: Upload binaries.zip to Release
-        if: matrix.platform == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
