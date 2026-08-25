@@ -23,7 +23,7 @@ Thank you for your interest in contributing to Veluna. Veluna is an open-source 
 
 ## Code of Conduct
 
-All contributors and maintainers are expected to maintain a welcoming, respectful, and professional environment. Focus on constructive feedback and collaboration.
+All contributors and maintainers are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md) to maintain a welcoming, respectful, and professional environment. Focus on constructive feedback and collaboration.
 
 ---
 
