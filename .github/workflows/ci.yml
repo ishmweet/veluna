@@ -14,13 +14,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  check:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-22.04, windows-latest]
-
-    runs-on: ${{ matrix.platform }}
+  check-linux:
+    name: 'Check (Linux)'
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
@@ -41,7 +37,6 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -55,8 +50,38 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Check Rust Backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+  check-windows:
+    name: 'Check (Windows)'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Download Windows bundled binaries
-        if: matrix.platform == 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
