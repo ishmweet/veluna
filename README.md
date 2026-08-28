@@ -110,6 +110,12 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - Interactive buttons for "Listen on YouTube" and "View on GitHub"
 - Live progress synchronization on play, seek, and track switches
 
+### 🎧 Last.fm & ListenBrainz Scrobbling
+- **Now Playing Updates**, automatically updates your active listening status on both Last.fm and ListenBrainz profiles as soon as a track begins
+- **Smart 50% Scrobbling**, automatically submits standard scrobbles once 50% of the track length (or 4 minutes) is played, with anti-spam duration filters
+- **Instant Connection**, connect to ListenBrainz with a single User Token, or connect to Last.fm via Session Key with built-in or custom API credentials
+- **Live Connection Tester**, built-in verification tool confirms account connectivity directly within the Settings menu
+
 ### 🖥️ System Tray *(optional)*
 - Left-click to show/hide the window; tray menu with Play/Pause, Next, Previous, Show, Quit
 - Closing the window hides to tray instead of exiting
@@ -323,9 +329,14 @@ veluna/
 │   │   ├── useLyrics.ts              # Multi-source LRC lyrics fetcher & auto-scroll synchronizer
 │   │   ├── usePlaylists.ts           # Playlist state management & localStorage persistence
 │   │   ├── useQueue.ts               # Persistent playback queue with contextual autoplays
+│   │   ├── useScrobbler.ts           # Last.fm & ListenBrainz 50% threshold scrobble scheduler
 │   │   ├── useSearch.ts              # Dual-tab YouTube search & LRU query history cache
 │   │   ├── useTheme.ts               # Theme palette injector & Low-Spec ECO mode manager
 │   │   └── useToast.ts               # Notification toast dispatcher
+│   ├── services/
+│   │   └── scrobbler.ts              # Last.fm 2.0 API (MD5 signed) & ListenBrainz HTTP clients
+│   ├── utils/
+│   │   └── md5.ts                    # Pure TypeScript MD5 cryptographic hashing utility
 │   ├── App.tsx                       # Root view router, global keybindings & background sync
 │   ├── App.css                       # Design tokens, theme variables, reset & micro-animations
 │   ├── constants.ts                  # Genres, default configuration & audio presets

@@ -3,7 +3,8 @@ import {
   Search, X, ArrowUpCircle, ExternalLink, RefreshCw,
   FolderDown, FolderOpen, Image, Zap, BarChart2, Globe,
   Moon, Database, Upload, ArchiveRestore, Trash2,
-  Download, GitBranch
+  Download, GitBranch, Radio, CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { SettingsTab, DiskInfo } from '../types';
 import { loadLS, saveLS, lightenColor, validateSettingsChange, formatBytes } from '../utils';
@@ -11,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ThemedSelect } from './ThemedSelect';
+import { validateListenBrainzToken, validateLastFmSession, DEFAULT_LASTFM_API_KEY, DEFAULT_LASTFM_API_SECRET } from '../services/scrobbler';
 
 const SettingsSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => {
   const [hovered, setHovered] = useState(false);
@@ -71,6 +73,14 @@ export type SettingsPanelProps = {
   lyricsSource: string; setLyricsSource: (v: string) => void;
   trayEnabled: boolean; setTrayEnabled: (v: boolean) => void;
   discordRpcEnabled: boolean; setDiscordRpcEnabled: (v: boolean) => void;
+  listenbrainzEnabled?: boolean; setListenbrainzEnabled?: (v: boolean) => void;
+  listenbrainzToken?: string; setListenbrainzToken?: (t: string) => void;
+  listenbrainzUsername?: string; setListenbrainzUsername?: (u: string) => void;
+  lastfmEnabled?: boolean; setLastfmEnabled?: (v: boolean) => void;
+  lastfmSessionKey?: string; setLastfmSessionKey?: (k: string) => void;
+  lastfmApiKey?: string; setLastfmApiKey?: (k: string) => void;
+  lastfmApiSecret?: string; setLastfmApiSecret?: (s: string) => void;
+  lastfmUsername?: string; setLastfmUsername?: (u: string) => void;
   theme: string; setThemeState: (t: string) => void;
   accentColor: string; setAccentColorState: (a: string) => void;
   customBgColor: string; setCustomBgColorState: (c: string) => void;
@@ -97,6 +107,14 @@ export function SettingsPanel({
   lyricsSource, setLyricsSource,
   trayEnabled, setTrayEnabled,
   discordRpcEnabled, setDiscordRpcEnabled,
+  listenbrainzEnabled = false, setListenbrainzEnabled = () => {},
+  listenbrainzToken = '', setListenbrainzToken = () => {},
+  listenbrainzUsername = '', setListenbrainzUsername = () => {},
+  lastfmEnabled = false, setLastfmEnabled = () => {},
+  lastfmSessionKey = '', setLastfmSessionKey = () => {},
+  lastfmApiKey = DEFAULT_LASTFM_API_KEY, setLastfmApiKey = () => {},
+  lastfmApiSecret = DEFAULT_LASTFM_API_SECRET, setLastfmApiSecret = () => {},
+  lastfmUsername = '', setLastfmUsername = () => {},
   theme, setThemeState,
   accentColor, setAccentColorState,
   customBgColor, setCustomBgColorState,
@@ -105,6 +123,12 @@ export function SettingsPanel({
   performanceMode, setPerformanceMode,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'playback');
+  const [lbTesting, setLbTesting] = useState(false);
+  const [lbStatus, setLbStatus] = useState<{ ok?: boolean; msg?: string } | null>(null);
+  const [lfmTesting, setLfmTesting] = useState(false);
+  const [lfmStatus, setLfmStatus] = useState<{ ok?: boolean; msg?: string } | null>(null);
+  const [showAdvancedLfm, setShowAdvancedLfm] = useState(false);
+
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
@@ -846,6 +870,299 @@ export function SettingsPanel({
                   { value: 'netease', label: 'NetEase', desc: 'Best for C/K-pop' },
                 ]} />
               </div>
+            </div>
+
+            <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <Radio size={15} style={{color:"#d51007"}} />
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Last.fm Scrobbling</h3>
+                </div>
+                <button
+                  onClick={() => openUrl('https://www.last.fm/api/account/create')}
+                  style={{fontSize:"11.5px",color:"#8a817c",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",padding:0}}
+                  onMouseEnter={e => e.currentTarget.style.color = '#e2ddd9'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#8a817c'}
+                >
+                  <span>Last.fm API Portal</span>
+                  <ExternalLink size={12} />
+                </button>
+              </div>
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable Last.fm Scrobbling</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                    {lastfmEnabled ? 'Logs Now Playing updates and scrobbles to your Last.fm profile' : 'Disabled — scrobbles are not sent'}
+                  </p>
+                </div>
+                <SettingsSwitch checked={lastfmEnabled} onChange={() => setLastfmEnabled(!lastfmEnabled)} />
+              </div>
+
+              {lastfmEnabled && (
+                <div style={{padding:"0 16px 16px 16px",display:"flex",flexDirection:"column",gap:"12px",borderTop:"1px solid rgba(255,255,255,0.03)",paddingTop:"14px"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <label style={{fontSize:"11.5px",fontWeight:600,color:"#8a817c",letterSpacing:".04em",textTransform:"uppercase"}}>
+                        Session Key (sk)
+                      </label>
+                      {lastfmUsername && (
+                        <span style={{fontSize:"11.5px",fontWeight:600,color:"#10b981",display:"flex",alignItems:"center",gap:"4px"}}>
+                          <CheckCircle2 size={12} />
+                          Connected as @{lastfmUsername}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                      <input
+                        type="password"
+                        value={lastfmSessionKey}
+                        onChange={e => {
+                          setLastfmSessionKey(e.target.value);
+                          setLfmStatus(null);
+                        }}
+                        placeholder="Enter your Last.fm Session Key"
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          background: "var(--v-bg2)",
+                          border: "1px solid var(--v-bdr2)",
+                          color: "#e2ddd9",
+                          fontSize: "12.5px",
+                          outline: "none"
+                        }}
+                      />
+                      <button
+                        disabled={lfmTesting || !lastfmSessionKey.trim()}
+                        onClick={async () => {
+                          setLfmTesting(true);
+                          setLfmStatus(null);
+                          const res = await validateLastFmSession(lastfmSessionKey, lastfmApiKey, lastfmApiSecret);
+                          setLfmTesting(false);
+                          if (res.valid && res.username) {
+                            setLastfmUsername(res.username);
+                            setLfmStatus({ ok: true, msg: `Verified as @${res.username}` });
+                            showToast(`Last.fm connected: @${res.username}`);
+                          } else {
+                            setLfmStatus({ ok: false, msg: res.error || 'Invalid session' });
+                            showToast(`Last.fm error: ${res.error || 'Invalid session'}`);
+                          }
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--v-bdr2)",
+                          background: "var(--v-bg2)",
+                          color: lastfmSessionKey.trim() ? "#e2ddd9" : "#5c5755",
+                          fontWeight: 600,
+                          fontSize: "12px",
+                          cursor: lastfmSessionKey.trim() ? "pointer" : "not-allowed",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        <RefreshCw size={12} className={lfmTesting ? "animate-spin" : ""} />
+                        <span>{lfmTesting ? 'Checking...' : 'Test Connection'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {lfmStatus && (
+                    <div style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: lfmStatus.ok ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                      border: `1px solid ${lfmStatus.ok ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
+                      color: lfmStatus.ok ? "#10b981" : "#ef4444"
+                    }}>
+                      {lfmStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                      <span>{lfmStatus.msg}</span>
+                    </div>
+                  )}
+
+                  {/* Advanced Custom API Keys toggle */}
+                  <div style={{marginTop:"4px"}}>
+                    <button
+                      onClick={() => setShowAdvancedLfm(!showAdvancedLfm)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        fontSize: "11.5px",
+                        color: "#8a817c",
+                        cursor: "pointer",
+                        padding: 0,
+                        textDecoration: "underline"
+                      }}
+                    >
+                      {showAdvancedLfm ? 'Hide Custom API Key Settings' : 'Custom Last.fm API Key / Secret (Optional)'}
+                    </button>
+
+                    {showAdvancedLfm && (
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginTop:"10px"}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                          <label style={{fontSize:"11px",color:"#6f6966"}}>API Key</label>
+                          <input
+                            type="text"
+                            value={lastfmApiKey}
+                            onChange={e => setLastfmApiKey(e.target.value)}
+                            placeholder={DEFAULT_LASTFM_API_KEY}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              background: "var(--v-bg2)",
+                              border: "1px solid var(--v-bdr2)",
+                              color: "#e2ddd9",
+                              fontSize: "11.5px",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                          <label style={{fontSize:"11px",color:"#6f6966"}}>API Secret</label>
+                          <input
+                            type="password"
+                            value={lastfmApiSecret}
+                            onChange={e => setLastfmApiSecret(e.target.value)}
+                            placeholder={DEFAULT_LASTFM_API_SECRET}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              background: "var(--v-bg2)",
+                              border: "1px solid var(--v-bdr2)",
+                              color: "#e2ddd9",
+                              fontSize: "11.5px",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <Radio size={15} style={{color:"#eb743b"}} />
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>ListenBrainz Scrobbling</h3>
+                </div>
+                <button
+                  onClick={() => openUrl('https://listenbrainz.org/profile/')}
+                  style={{fontSize:"11.5px",color:"#8a817c",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",padding:0}}
+                  onMouseEnter={e => e.currentTarget.style.color = '#e2ddd9'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#8a817c'}
+                >
+                  <span>Get User Token</span>
+                  <ExternalLink size={12} />
+                </button>
+              </div>
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable ListenBrainz Scrobbling</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                    {listenbrainzEnabled ? 'Submits Now Playing status and scrobbles after 50% track duration' : 'Disabled — listens are not submitted'}
+                  </p>
+                </div>
+                <SettingsSwitch checked={listenbrainzEnabled} onChange={() => setListenbrainzEnabled(!listenbrainzEnabled)} />
+              </div>
+
+              {listenbrainzEnabled && (
+                <div style={{padding:"0 16px 16px 16px",display:"flex",flexDirection:"column",gap:"12px",borderTop:"1px solid rgba(255,255,255,0.03)",paddingTop:"14px"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <label style={{fontSize:"11.5px",fontWeight:600,color:"#8a817c",letterSpacing:".04em",textTransform:"uppercase"}}>
+                        User Token
+                      </label>
+                      {listenbrainzUsername && (
+                        <span style={{fontSize:"11.5px",fontWeight:600,color:"#10b981",display:"flex",alignItems:"center",gap:"4px"}}>
+                          <CheckCircle2 size={12} />
+                          Connected as @{listenbrainzUsername}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                      <input
+                        type="password"
+                        value={listenbrainzToken}
+                        onChange={e => {
+                          setListenbrainzToken(e.target.value);
+                          setLbStatus(null);
+                        }}
+                        placeholder="Paste your ListenBrainz User Token"
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          background: "var(--v-bg2)",
+                          border: "1px solid var(--v-bdr2)",
+                          color: "#e2ddd9",
+                          fontSize: "12.5px",
+                          outline: "none"
+                        }}
+                      />
+                      <button
+                        disabled={lbTesting || !listenbrainzToken.trim()}
+                        onClick={async () => {
+                          setLbTesting(true);
+                          setLbStatus(null);
+                          const res = await validateListenBrainzToken(listenbrainzToken);
+                          setLbTesting(false);
+                          if (res.valid && res.username) {
+                            setListenbrainzUsername(res.username);
+                            setLbStatus({ ok: true, msg: `Verified as @${res.username}` });
+                            showToast(`ListenBrainz connected: @${res.username}`);
+                          } else {
+                            setLbStatus({ ok: false, msg: res.error || 'Invalid token' });
+                            showToast(`ListenBrainz error: ${res.error || 'Invalid token'}`);
+                          }
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--v-bdr2)",
+                          background: "var(--v-bg2)",
+                          color: listenbrainzToken.trim() ? "#e2ddd9" : "#5c5755",
+                          fontWeight: 600,
+                          fontSize: "12px",
+                          cursor: listenbrainzToken.trim() ? "pointer" : "not-allowed",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        <RefreshCw size={12} className={lbTesting ? "animate-spin" : ""} />
+                        <span>{lbTesting ? 'Checking...' : 'Test Connection'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {lbStatus && (
+                    <div style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: lbStatus.ok ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                      border: `1px solid ${lbStatus.ok ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
+                      color: lbStatus.ok ? "#10b981" : "#ef4444"
+                    }}>
+                      {lbStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                      <span>{lbStatus.msg}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

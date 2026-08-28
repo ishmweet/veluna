@@ -35,6 +35,7 @@ import { useLyrics } from './hooks/useLyrics';
 import { useSearch } from './hooks/useSearch';
 import { usePlaylists } from './hooks/usePlaylists';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { useScrobbler } from './hooks/useScrobbler';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
@@ -269,6 +270,31 @@ export function App() {
     setLyricsSource,
     lyricsScrollContainerRef,
   } = useLyrics(currentTrack, trackDurationSeconds, progressSeconds);
+
+  const {
+    listenbrainzEnabled,
+    setListenbrainzEnabled,
+    listenbrainzToken,
+    setListenbrainzToken,
+    listenbrainzUsername,
+    setListenbrainzUsername,
+    lastfmEnabled,
+    setLastfmEnabled,
+    lastfmSessionKey,
+    setLastfmSessionKey,
+    lastfmApiKey,
+    setLastfmApiKey,
+    lastfmApiSecret,
+    setLastfmApiSecret,
+    lastfmUsername,
+    setLastfmUsername,
+  } = useScrobbler({
+    currentTrack,
+    isPlaying,
+    progressSeconds,
+    trackDurationSeconds,
+    showToast,
+  });
 
   // Local tracks & downloads state
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
@@ -1020,6 +1046,22 @@ export function App() {
             setTrayEnabled={setTrayEnabled}
             discordRpcEnabled={discordRpcEnabled}
             setDiscordRpcEnabled={setDiscordRpcEnabled}
+            listenbrainzEnabled={listenbrainzEnabled}
+            setListenbrainzEnabled={setListenbrainzEnabled}
+            listenbrainzToken={listenbrainzToken}
+            setListenbrainzToken={setListenbrainzToken}
+            listenbrainzUsername={listenbrainzUsername}
+            setListenbrainzUsername={setListenbrainzUsername}
+            lastfmEnabled={lastfmEnabled}
+            setLastfmEnabled={setLastfmEnabled}
+            lastfmSessionKey={lastfmSessionKey}
+            setLastfmSessionKey={setLastfmSessionKey}
+            lastfmApiKey={lastfmApiKey}
+            setLastfmApiKey={setLastfmApiKey}
+            lastfmApiSecret={lastfmApiSecret}
+            setLastfmApiSecret={setLastfmApiSecret}
+            lastfmUsername={lastfmUsername}
+            setLastfmUsername={setLastfmUsername}
             autoplayEnabled={autoplayEnabled}
             setAutoplayEnabled={setAutoplayEnabled}
             eq={eq}
