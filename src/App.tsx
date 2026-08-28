@@ -148,6 +148,7 @@ export function App() {
 
   // Settings & Storage State
   const [cacheEnabled, setCacheEnabledState] = useState<boolean>(() => loadLS('vg_cacheEnabled', true));
+  const [uiScale, setUiScaleState] = useState<number>(() => loadLS('vg_uiScale', 0));
   const [volume, setVolume] = useState<number>(() => loadLS('vg_volume', 100));
   const [previousVolume, setPreviousVolume] = useState(100);
   const [playbackSpeed, setPlaybackSpeedState] = useState<number>(() => loadLS('vg_speed', 1));
@@ -173,6 +174,16 @@ export function App() {
     saveLS('vg_cacheEnabled', enabled);
     invoke('set_cache_enabled', { enabled }).catch(() => {});
   }, []);
+
+  const setUiScale = useCallback((scale: number) => {
+    setUiScaleState(scale);
+    saveLS('vg_uiScale', scale);
+    (document.documentElement.style as any).zoom = `${100 + scale * 5}%`;
+  }, []);
+
+  useEffect(() => {
+    (document.documentElement.style as any).zoom = `${100 + uiScale * 5}%`;
+  }, [uiScale]);
 
   useEffect(() => {
     invoke('set_cache_enabled', { enabled: cacheEnabled }).catch(() => {});
@@ -1263,6 +1274,8 @@ export function App() {
             setStartupNav={setStartupNav}
             cacheEnabled={cacheEnabled}
             setCacheEnabled={setCacheEnabled}
+            uiScale={uiScale}
+            setUiScale={setUiScale}
             showToast={showToast}
           />
         )}

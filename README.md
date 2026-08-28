@@ -126,9 +126,12 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 ### 🎨 Themes & Design System
 - Built-in curated palettes: **Obsidian**, **Midnight Navy**, **Forest Emerald**, **Cyberpunk**, **Sunset Crimson**, **Pure Black**
 - **Custom Theme** support with custom background color picker and accent selector
+- **Interface Scaling (UI Scale)**: adjust UI scale smoothly from -5 to +5 (75% to 125%) with page-level zoom and a one-click header reset
 - Solid, theme-harmonized context menus and popovers with zero bleed-through
 
 ### ⌨️ Controls & Shortcuts
+
+> Click the **Veluna** brand logo in the top bar or press `?` anywhere to bring up the interactive Keyboard Shortcuts guide.
 
 | Action | Shortcut |
 |---|---|
@@ -176,11 +179,12 @@ Preset buttons (5–90 min) or custom numeric input with a live countdown indica
 Available on every track and playlist: Play, Add to Queue, Add to Playlist, Download, Edit Metadata, Copy URL, Copy Title, Open in YouTube, Track Info.
 
 ### ⚙️ Settings
+- **Searchable Settings Engine**: Real-time per-card search filtering shows only the exact setting you are looking for
 - **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
 - **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer, crossfade duration
-- **Integrations**: Discord Rich Presence, primary lyrics source
-- **Appearance & Performance**: curated themes, custom accent and background color, default startup page, system tray toggle, and Low-Spec / Performance Mode
-- **Storage**: backup location, create/restore backup, reset app data
+- **Integrations**: Discord Rich Presence, primary lyrics source (lrclib / Musixmatch / NetEase), Last.fm & ListenBrainz scrobbling
+- **Appearance & Performance**: curated themes, custom accent and background color, default startup view, system tray toggle, **UI Scale** (-5 to +5), and Low-Spec / Performance Mode
+- **Storage & Cache**: toggle stream prefetching & audio caching, set auto-cleaner disk limits (500MB to Unlimited), one-click cache purge, backup location, create/restore backup, reset app data
 - **Updates**: automatic update check against GitHub Releases
 
 ### 💾 Backup & Restore
