@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ARCH_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.3/veluna-0.1.3-1-x86_64.pkg.tar.zst"
 DEB_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.3/veluna_0.1.3_amd64.deb"
 RPM_URL="https://github.com/rry0ku/veluna/releases/download/v0.1.3/veluna-0.1.3-1.x86_64.rpm"
 
@@ -14,12 +15,9 @@ error() {
 
 main() {
   if command -v pacman >/dev/null 2>&1; then
-    echo -e "\033[1;32mDetected Arch Linux system.\033[0m"
-    sudo pacman -S --needed --noconfirm mpv yt-dlp ffmpeg webkit2gtk-4.1 libayatana-appindicator git base-devel
-    git clone https://github.com/rry0ku/veluna.git "$TEMP_DIR/veluna"
-    cd "$TEMP_DIR/veluna/packaging"
-    makepkg -si --noconfirm
-    echo -e "\033[1;32mSuccessfully installed Veluna native Arch Linux package!\033[0m"
+    PACKAGE_PATH="$TEMP_DIR/veluna-0.1.3-1-x86_64.pkg.tar.zst"
+    curl -fsSL# "$ARCH_URL" -o "$PACKAGE_PATH" || error "Download failed."
+    sudo pacman -U --noconfirm "$PACKAGE_PATH"
   elif command -v apt >/dev/null 2>&1; then
     PACKAGE_PATH="$TEMP_DIR/veluna_0.1.3_amd64.deb"
     curl -fsSL# "$DEB_URL" -o "$PACKAGE_PATH" || error "Download failed."
