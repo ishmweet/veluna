@@ -28,15 +28,30 @@ export const SpeedSelector = React.memo(({ speed, onChange }: SpeedSelectorProps
           alignItems: "center",
           gap: "5px",
           padding: "5px 12px",
-          borderRadius: "9999px",
+          borderRadius: "8px",
           fontSize: "11px",
           fontWeight: 700,
-          border: `1px solid ${speed !== 1 ? "rgba(226,221,217,0.2)" : "rgba(255,255,255,0.12)"}`,
-          background: speed !== 1 ? "rgba(226,221,217,0.07)" : "transparent",
+          border: open || speed !== 1 ? "1px solid var(--v-bdr2)" : "1px solid var(--v-bdr)",
+          background: open || speed !== 1 ? "var(--v-bg3)" : "var(--v-bg2)",
           cursor: "pointer",
-          color: speed !== 1 ? "rgba(226,221,217,0.9)" : "rgba(255,255,255,0.5)",
-          transition: "all .12s"
+          color: open || speed !== 1 ? "var(--v-accent)" : "var(--v-fg2)",
+          transition: "all 0.12s cubic-bezier(0.16, 1, 0.3, 1)"
         }}
+        onMouseEnter={e => {
+          if (!open && speed === 1) {
+            e.currentTarget.style.color = "var(--v-fg)";
+            e.currentTarget.style.borderColor = "var(--v-bdr2)";
+            e.currentTarget.style.background = "var(--v-bg3)";
+          }
+        }}
+        onMouseLeave={e => {
+          if (!open && speed === 1) {
+            e.currentTarget.style.color = "var(--v-fg2)";
+            e.currentTarget.style.borderColor = "var(--v-bdr)";
+            e.currentTarget.style.background = "var(--v-bg2)";
+          }
+        }}
+        title="Playback Speed"
       >
         <Gauge size={11} />
         {speed}x
@@ -49,55 +64,59 @@ export const SpeedSelector = React.memo(({ speed, onChange }: SpeedSelectorProps
             bottom: "calc(100% + 10px)",
             left: "50%",
             transform: "translateX(-50%)",
-            borderRadius: "18px",
+            borderRadius: "14px",
             padding: "6px",
-            boxShadow: "0 20px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.08)",
+            boxShadow: "0 20px 48px rgba(0,0,0,0.85), 0 0 0 1px var(--v-bdr)",
             zIndex: 100,
             minWidth: "170px",
             animation: "speedPopoverDropIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards"
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 12px 6px", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 12px 6px", borderBottom: "1px solid var(--v-bdr)", marginBottom: "4px" }}>
             <Gauge size={11} style={{ color: "var(--v-fg2)", opacity: 0.7 }} />
             <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--v-fg2)" }}>Playback Speed</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {speeds.map(s => (
-              <button
-                key={s}
-                onClick={() => { onChange(s); setOpen(false); }}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "8px 14px",
-                  fontSize: "12px",
-                  fontWeight: speed === s ? 700 : 500,
-                  border: "none",
-                  borderRadius: "9999px",
-                  background: speed === s ? "rgba(255, 255, 255, 0.1)" : "transparent",
-                  cursor: "pointer",
-                  color: speed === s ? "#ffffff" : "var(--v-fg2)",
-                  transition: "all 0.12s ease"
-                }}
-                onMouseEnter={e => {
-                  if (speed !== s) {
-                    (e.currentTarget as HTMLElement).style.background = "rgba(255, 255, 255, 0.05)";
-                    (e.currentTarget as HTMLElement).style.color = "#ffffff";
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (speed !== s) {
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                    (e.currentTarget as HTMLElement).style.color = "var(--v-fg2)";
-                  }
-                }}
-              >
-                <span>{s}× {s === 1 && <span style={{ opacity: 0.5, fontSize: "10.5px", fontWeight: 400, marginLeft: "4px" }}>(Normal)</span>}</span>
-                {speed === s && <Check size={13} style={{ color: "var(--v-accent)" }} />}
-              </button>
-            ))}
+            {speeds.map(s => {
+              const isSelected = speed === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => { onChange(s); setOpen(false); }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    fontSize: "12.5px",
+                    fontWeight: isSelected ? 700 : 500,
+                    border: isSelected ? "1px solid var(--v-bdr2)" : "1px solid transparent",
+                    borderRadius: "10px",
+                    background: isSelected ? "var(--v-bg3)" : "transparent",
+                    cursor: "pointer",
+                    color: isSelected ? "var(--v-accent)" : "var(--v-fg)",
+                    transition: "all 0.12s ease",
+                    boxSizing: "border-box"
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLElement).style.background = "var(--v-bg3)";
+                      (e.currentTarget as HTMLElement).style.color = "var(--v-fg)";
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelected) {
+                      (e.currentTarget as HTMLElement).style.background = "transparent";
+                      (e.currentTarget as HTMLElement).style.color = "var(--v-fg)";
+                    }
+                  }}
+                >
+                  <span>{s}× {s === 1 && <span style={{ opacity: 0.5, fontSize: "10.5px", fontWeight: 400, marginLeft: "4px", color: "var(--v-fg2)" }}>(Normal)</span>}</span>
+                  {isSelected && <Check size={13} style={{ color: "var(--v-accent)" }} />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

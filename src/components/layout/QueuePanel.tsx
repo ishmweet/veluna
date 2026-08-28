@@ -92,9 +92,11 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
             borderBottom: '1px solid var(--v-bdr2)',
             flexShrink: 0
           }}>
-            <span style={{ fontWeight: 700, color: 'var(--v-fg)', fontSize: '13px', letterSpacing: '.01em' }}>
-              Play Queue
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: 700, color: 'var(--v-fg)', fontSize: '13px', letterSpacing: '.01em' }}>
+                Play Queue
+              </span>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {queue.length > 0 && (
                 <button

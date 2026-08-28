@@ -3,11 +3,12 @@ import ReactDOM from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
   HardDrive, FolderOpen, FileOutput, RefreshCw, Search, X,
-  AlertCircle, FileMusic, Play, Pencil, Trash2
+  AlertCircle, FileMusic, Play, Pencil, Trash2, ArrowUpDown
 } from 'lucide-react';
 import { LocalTrack, DiskInfo } from '../types';
-import { cleanArtist, formatBytes } from '../utils';
+import { cleanArtist, formatBytes, parseDurationToSeconds } from '../utils';
 import { VirtualTrackList } from './VirtualTrackList';
+import { ThemedSelect } from './ThemedSelect';
 
 export const LocalTrackCover = React.memo(({ path, hasCover, cover, isActive }: { path: string; hasCover?: boolean; cover?: string; isActive: boolean }) => {
   const [coverUrl, setCoverUrl] = useState<string | null>(cover || null);
@@ -86,17 +87,35 @@ export function DownloadsPanel({
   const [renameCancelHovered, setRenameCancelHovered] = useState(false);
   const [renameSaveHovered, setRenameSaveHovered] = useState(false);
   const [searchQ, setSearchQ] = useState('');
+  const [downloadsSortBy, setDownloadsSortBy] = useState<'default' | 'title_asc' | 'title_desc' | 'artist_asc' | 'duration_asc' | 'duration_desc' | 'size_desc'>('default');
   const dragLocalIdx = useRef<number | null>(null);
   const dragOverLocalIdxRef = useRef<number | null>(null);
   const [dragOverLocalIdx, setDragOverLocalIdx] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const filtered = searchQ.trim()
-    ? tracks.filter(t => {
-        const q = searchQ.toLowerCase();
-        return t.title.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q);
-      })
-    : tracks;
+  const filtered = (() => {
+    let list = searchQ.trim()
+      ? tracks.filter(t => {
+          const q = searchQ.toLowerCase();
+          return t.title.toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q);
+        })
+      : [...tracks];
+
+    if (downloadsSortBy === 'title_asc') {
+      list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    } else if (downloadsSortBy === 'title_desc') {
+      list.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+    } else if (downloadsSortBy === 'artist_asc') {
+      list.sort((a, b) => (a.artist || '').localeCompare(b.artist || ''));
+    } else if (downloadsSortBy === 'duration_asc') {
+      list.sort((a, b) => parseDurationToSeconds(a.duration || '0:00') - parseDurationToSeconds(b.duration || '0:00'));
+    } else if (downloadsSortBy === 'duration_desc') {
+      list.sort((a, b) => parseDurationToSeconds(b.duration || '0:00') - parseDurationToSeconds(a.duration || '0:00'));
+    } else if (downloadsSortBy === 'size_desc') {
+      list.sort((a, b) => (b.size_bytes || 0) - (a.size_bytes || 0));
+    }
+    return list;
+  })();
 
   const scan = useCallback(async () => {
     const existingTracks = tracksRef.current;
@@ -319,38 +338,59 @@ export function DownloadsPanel({
         </div>
       </div>
       {!scanning && tracks.length > 0 && (
-        <div style={{position:"relative",marginBottom:"18px"}}>
-          <Search size={14} style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",color:searchQ?"#fff":"#5c5755",pointerEvents:"none",transition:"color 0.2s"}}/>
-          <input ref={searchRef} type="text" placeholder="Search offline tracks…" value={searchQ}
-            onChange={e=>setSearchQ(e.target.value)}
-            style={{
-              width:"100%",
-              height:"38px",
-              background:"rgba(255, 255, 255, 0.01)",
-              border:"1px solid var(--v-bdr)",
-              color:"#e2ddd9",
-              borderRadius:"19px",
-              padding:"0 32px 0 36px",
-              fontSize:"13px",
-              outline:"none",
-              transition:"all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
-            }}
-            onFocus={e => {
-              e.currentTarget.style.borderColor = "var(--v-accent)";
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
-              e.currentTarget.style.boxShadow = "0 0 0 3px rgba(255,255,255,0.02), 0 0 8px rgba(255,255,255,0.04)";
-            }}
-            onBlur={e => {
-              e.currentTarget.style.borderColor = "var(--v-bdr)";
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.01)";
-              e.currentTarget.style.boxShadow = "none";
-            }}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "18px",
+          flexWrap: "wrap"
+        }}>
+          <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
+            <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: searchQ ? "var(--v-accent)" : "var(--v-fg3)", pointerEvents: "none", transition: "color 0.2s" }} />
+            <input ref={searchRef} type="text" placeholder="Filter offline tracks…" value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              style={{
+                width: "100%",
+                height: "36px",
+                background: "var(--v-bg2)",
+                border: "1px solid var(--v-bdr2)",
+                color: "var(--v-fg)",
+                borderRadius: "10px",
+                padding: "0 32px 0 34px",
+                fontSize: "12.5px",
+                outline: "none",
+                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+              }}
+              onFocus={e => {
+                e.currentTarget.style.borderColor = "var(--v-bdr3)";
+                e.currentTarget.style.background = "var(--v-bg3)";
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = "var(--v-bdr2)";
+                e.currentTarget.style.background = "var(--v-bg2)";
+              }}
+            />
+            {searchQ && (
+              <button onClick={() => setSearchQ('')} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--v-fg3)", display: "flex", padding: "2px" }} onMouseEnter={e => (e.currentTarget.style.color = "var(--v-fg)")} onMouseLeave={e => (e.currentTarget.style.color = "var(--v-fg3)")}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <ThemedSelect
+            value={downloadsSortBy}
+            onChange={v => setDownloadsSortBy(v as any)}
+            icon={<ArrowUpDown size={13} style={{ color: "var(--v-accent)" }} />}
+            options={[
+              { value: 'default', label: 'Recently Added' },
+              { value: 'title_asc', label: 'Title (A → Z)' },
+              { value: 'title_desc', label: 'Title (Z → A)' },
+              { value: 'artist_asc', label: 'Artist (A → Z)' },
+              { value: 'duration_asc', label: 'Duration (Shortest)' },
+              { value: 'duration_desc', label: 'Duration (Longest)' },
+              { value: 'size_desc', label: 'File Size (Largest)' },
+            ]}
           />
-          {searchQ && (
-            <button onClick={()=>setSearchQ('')} style={{position:"absolute",right:"8px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#5c5755",display:"flex",padding:"2px"}} onMouseEnter={e=>(e.currentTarget.style.color="#9e9894")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
-              <X size={13}/>
-            </button>
-          )}
         </div>
       )}
 

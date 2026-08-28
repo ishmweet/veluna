@@ -61,5 +61,15 @@ export type NavView = 'home' | 'downloads' | 'playlists' | 'library' | 'stats' |
 export type AudioInfo = { codec: string; bitrate: number; samplerate: number; channels: string; format: string; url: string };
 export type DiskInfo = { used_bytes: number; track_count: number };
 export type CacheInfo = { total_bytes: number; file_count: number; formatted_size: string; cache_dir: string };
+export type ActiveDownload = {
+  url: string;
+  title: string;
+  artist: string;
+  cover?: string;
+  progress: number;
+  status: 'downloading' | 'completed' | 'error';
+  error?: string;
+  startedAt: number;
+};
 export type BatchProgress = { index: number; total: number; title: string; success: boolean; error?: string };
 export type SettingsTab = 'updates' | 'downloads' | 'playback' | 'storage' | 'appearance' | 'integrations';

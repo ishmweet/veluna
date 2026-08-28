@@ -213,16 +213,40 @@ mod tests {
         let f1 = temp_dir.join("f1.tmp");
         let f2 = temp_dir.join("f2.tmp");
         let f3 = temp_dir.join("f3.tmp");
+        let f_db = temp_dir.join("veluna.db");
 
         fs::write(&f1, vec![1u8; 1000]).unwrap();
         fs::write(&f2, vec![2u8; 1000]).unwrap();
         fs::write(&f3, vec![3u8; 1000]).unwrap();
+        fs::write(&f_db, vec![9u8; 5000]).unwrap();
 
         let mut files = Vec::new();
         scan_directory(&temp_dir, &mut files);
+        // Only the 3 .tmp files should be scanned; veluna.db is protected
         assert_eq!(files.len(), 3);
         let total: u64 = files.iter().map(|(_, len, _)| *len).sum();
         assert_eq!(total, 3000);
+
+        // Verify pruning logic: if max is 2000, target is 1700 (85%), so at least 2 files must be pruned
+        files.sort_by_key(|(_, _, modified)| *modified);
+        let max_bytes = 2000u64;
+        let target_bytes = (max_bytes as f64 * 0.85) as u64;
+        let mut current_bytes = total;
+        let mut pruned = 0u64;
+
+        for (path, len, _) in files {
+            if current_bytes <= target_bytes {
+                break;
+            }
+            if fs::remove_file(&path).is_ok() {
+                current_bytes = current_bytes.saturating_sub(len);
+                pruned += len;
+            }
+        }
+
+        assert_eq!(pruned, 2000);
+        assert_eq!(current_bytes, 1000);
+        assert!(f_db.exists()); // Protected DB file still intact!
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Track, LocalTrack, AudioInfo, RepeatMode } from '../types';
-import { loadLS, saveLS, parseDurationToSeconds } from '../utils';
+import { loadLS, saveLS, parseDurationToSeconds, cleanArtist } from '../utils';
 
 interface UseAudioPlayerProps {
   volume: number;
@@ -16,6 +16,7 @@ interface UseAudioPlayerProps {
   autoplayEnabled: boolean;
   queue: Track[];
   setQueue: React.Dispatch<React.SetStateAction<Track[]>>;
+  queueRef?: React.MutableRefObject<Track[]>;
   playHistory: Track[];
   setPlayHistory: React.Dispatch<React.SetStateAction<Track[]>>;
   setQuickPicks: React.Dispatch<React.SetStateAction<Track[]>>;
@@ -35,6 +36,7 @@ export function useAudioPlayer({
   autoplayEnabled,
   queue,
   setQueue,
+  queueRef: externalQueueRef,
   playHistory,
   setPlayHistory,
   setQuickPicks,
@@ -59,7 +61,6 @@ export function useAudioPlayer({
   const [audioInfo, setAudioInfo] = useState<AudioInfo | null>(null);
   const [progressSeconds, setProgressSeconds] = useState(0);
   const progressSecondsRef = useRef(0);
-
   const [trackDurationSeconds, setTrackDurationSeconds] = useState(0);
   const trackDurationRef = useRef(0);
 
@@ -75,8 +76,9 @@ export function useAudioPlayer({
   const localTracksListRef = useRef<LocalTrack[]>([]);
   const localTrackIndexRef = useRef<number>(0);
 
-  const queueRef = useRef<Track[]>(queue);
-  useEffect(() => { queueRef.current = queue; }, [queue]);
+  const internalQueueRef = useRef<Track[]>(queue);
+  const queueRef = externalQueueRef || internalQueueRef;
+  useEffect(() => { queueRef.current = queue; }, [queue, queueRef]);
 
   const [sleepTimer, setSleepTimer] = useState<number>(0);
   const [showSleepPopover, setShowSleepPopover] = useState(false);
@@ -141,35 +143,25 @@ export function useAudioPlayer({
     });
   }, [showToast]);
 
-  const getOrSearchVideoId = useCallback(async (track: Track): Promise<string | null> => {
-    const match = track.url.match(/[?&]v=([^&]+)/) || track.url.match(/youtu\.be\/([^?]+)/);
-    if (match?.[1]) return match[1];
+  const fetchAutoplayTracks = useCallback(async (track: Track): Promise<Track[]> => {
     try {
-      const res = await invoke<string>('search_youtube', { query: `${track.title} ${track.artist}` });
-      const lines = res.trim().split('\n').filter(Boolean);
-      if (lines.length > 0) {
-        const parts = lines[0].split('====');
-        if (parts.length >= 4) return parts[3].trim();
-      }
-    } catch {}
-    return null;
-  }, []);
-
-  const fetchAutoplayTracks = useCallback(async (videoId: string): Promise<Track[]> => {
-    try {
-      const res = await invoke<string>('get_autoplay_recommendations', { videoId });
+      const artist = cleanArtist(track.artist);
+      const query = artist && artist !== 'Unknown' && artist !== 'YouTube'
+        ? `${artist} ${track.title} mix songs`
+        : `${track.title} music songs`;
+      const res = await invoke<string>('search_youtube', { query });
       const lines = res.trim().split('\n').filter(Boolean);
       return lines.map((line, i): Track | null => {
         const parts = line.split('====');
         const title = parts[0]?.trim() || '';
-        const artist = parts[1]?.trim() || 'YouTube';
+        const art = cleanArtist(parts[1]) || artist || 'YouTube Music';
         const duration = parts[2]?.trim() || '0:00';
         const id = parts[3]?.trim() || '';
         if (!id || id === 'NA') return null;
         return {
-          id: i,
+          id: i + 2000,
           title: title || 'Unknown Track',
-          artist: artist || 'YouTube',
+          artist: art,
           duration: duration || '0:00',
           url: `https://youtube.com/watch?v=${id}`,
           cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`
@@ -252,11 +244,16 @@ export function useAudioPlayer({
         setTimeout(() => invoke('seek_audio', { time: bm }).catch(() => {}), 500);
       }
     } catch (err: any) {
+      if (currentTrackRef.current?.url !== track.url) return;
       setIsPlayingSync(false);
       setLoadingTrackUrlSync(null);
+      setIsLoadingTrackSync(false);
       const errMsg = typeof err === 'string' ? err : err?.message || '';
-      if (!errMsg.includes('Superseded')) {
-        showToast('Track unavailable on YouTube');
+      if (!errMsg.toLowerCase().includes('superseded') &&
+          !errMsg.toLowerCase().includes('abort') &&
+          !errMsg.toLowerCase().includes('cancel') &&
+          !errMsg.toLowerCase().includes('pause')) {
+        console.warn('Track playback issue:', errMsg);
       }
     }
   }, [volume, playbackSpeed, eq, onTrackPlayed, setPlayHistory, setQuickPicks, setIsPlayingSync, setLoadingTrackUrlSync, showToast, setLyricsData]);
@@ -395,7 +392,16 @@ export function useAudioPlayer({
     }
     const track = currentTrackRef.current;
     const repeat = repeatModeRef.current;
-    const isLocal = track?.url?.startsWith('local://');
+
+    // 1. MANUALLY QUEUED TRACKS ALWAYS TAKE HIGHEST PRIORITY OVER EVERYTHING
+    const q = queueRef.current;
+    if (q.length > 0) {
+      const [next, ...rest] = q;
+      queueRef.current = rest;
+      setQueue(rest);
+      setTimeout(() => handlePlayTrack(next, true), 0);
+      return;
+    }
 
     if (repeat === 'one' && track) {
       invoke('seek_to_start').catch(() => {
@@ -408,6 +414,7 @@ export function useAudioPlayer({
       return;
     }
 
+    const isLocal = track?.url?.startsWith('local://');
     if (isLocal) {
       const list = localTracksListRef.current;
       const idx = localTrackIndexRef.current;
@@ -439,15 +446,6 @@ export function useAudioPlayer({
       return;
     }
 
-    const q = queueRef.current;
-    if (q.length > 0) {
-      const [next, ...rest] = q;
-      queueRef.current = rest;
-      setQueue(rest);
-      setTimeout(() => handlePlayTrack(next, true), 0);
-      return;
-    }
-
     const ctx = playlistContextRef.current;
     if (ctx && ctx.tracks.length > 1) {
       let nextIdx: number;
@@ -473,38 +471,44 @@ export function useAudioPlayer({
       return;
     }
 
-    if (autoplayEnabled && track) {
+    if (autoplayEnabled && track && !isLocal) {
       setIsLoadingTrack(true);
-      getOrSearchVideoId(track).then(videoId => {
-        if (videoId) {
-          fetchAutoplayTracks(videoId).then(async (recs) => {
-            if (recs.length > 0) {
-              const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
-              const toAdd = filteredRecs.slice(0, 10);
-              if (toAdd.length > 0) {
-                const [next, ...rest] = toAdd;
-                queueRef.current = rest;
-                setQueue(rest);
-                showToast("Autoplay: Queueing recommendations");
-                await handlePlayTrack(next, true);
-                return;
-              }
-            }
-            setIsPlayingSync(false);
-            setIsLoadingTrack(false);
-          });
-        } else {
-          setIsPlayingSync(false);
-          setIsLoadingTrack(false);
+      fetchAutoplayTracks(track).then(async (recs) => {
+        if (recs.length > 0) {
+          const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
+          const toAdd = (filteredRecs.length > 0 ? filteredRecs : recs).slice(0, 8);
+          if (toAdd.length > 0) {
+            const [next, ...rest] = toAdd;
+            queueRef.current = rest;
+            setQueue(rest);
+            showToast("Song Radio: Playing recommendations");
+            await handlePlayTrack(next, true);
+            return;
+          }
         }
+        setIsPlayingSync(false);
+        setIsLoadingTrack(false);
+      }).catch(() => {
+        setIsPlayingSync(false);
+        setIsLoadingTrack(false);
       });
       return;
     }
 
     setIsPlayingSync(false);
-  }, [handlePlayTrack, handlePlayLocalTrack, setIsPlayingSync, shuffle, autoplayEnabled, getOrSearchVideoId, fetchAutoplayTracks, playHistory, setQueue, showToast]);
+  }, [handlePlayTrack, handlePlayLocalTrack, setIsPlayingSync, shuffle, autoplayEnabled, fetchAutoplayTracks, playHistory, setQueue, showToast]);
 
   const handleSkipForward = useCallback(async () => {
+    // 1. MANUALLY QUEUED TRACKS ALWAYS TAKE HIGHEST PRIORITY OVER EVERYTHING
+    const q = queueRef.current;
+    if (q.length > 0) {
+      const [next, ...rest] = q;
+      queueRef.current = rest;
+      setQueue(rest);
+      await handlePlayTrack(next, true);
+      return;
+    }
+
     const track = currentTrackRef.current;
     const isLocal = track?.url?.startsWith('local://');
 
@@ -527,14 +531,6 @@ export function useAudioPlayer({
       return;
     }
 
-    const q = queueRef.current;
-    if (q.length > 0) {
-      const [next, ...rest] = q;
-      setQueue(rest);
-      await handlePlayTrack(next, true);
-      return;
-    }
-
     const ctx = playlistContextRef.current;
     if (ctx && ctx.tracks.length > 1) {
       let nextIdx: number;
@@ -547,13 +543,33 @@ export function useAudioPlayer({
       if (nextIdx < ctx.tracks.length) {
         playlistContextRef.current = { ...ctx, index: nextIdx };
         await handlePlayTrack(ctx.tracks[nextIdx], true);
+        return;
       } else if (repeatModeRef.current === 'all') {
         playlistContextRef.current = { ...ctx, index: 0 };
         await handlePlayTrack(ctx.tracks[0], true);
+        return;
       }
-      return;
     }
-  }, [handlePlayTrack, handlePlayLocalTrack, shuffle, setQueue]);
+
+    if (autoplayEnabled && track) {
+      setIsLoadingTrack(true);
+      fetchAutoplayTracks(track).then(async (recs) => {
+        if (recs.length > 0) {
+          const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
+          const toAdd = (filteredRecs.length > 0 ? filteredRecs : recs).slice(0, 8);
+          if (toAdd.length > 0) {
+            const [next, ...rest] = toAdd;
+            queueRef.current = rest;
+            setQueue(rest);
+            showToast("Song Radio: Playing recommendations");
+            await handlePlayTrack(next, true);
+            return;
+          }
+        }
+        setIsLoadingTrack(false);
+      }).catch(() => setIsLoadingTrack(false));
+    }
+  }, [handlePlayTrack, handlePlayLocalTrack, shuffle, setQueue, autoplayEnabled, fetchAutoplayTracks, playHistory, showToast]);
 
   const handleSkipBack = useCallback(async () => {
     const track = currentTrackRef.current;
@@ -699,7 +715,6 @@ export function useAudioPlayer({
       }
       setLoadingTrackUrlSync(null);
       setIsPlayingSync(false);
-      showToast("Track unavailable on YouTube");
     }).then(fn => { unlistenError = fn; });
 
     listen('mpv_track_end', () => {

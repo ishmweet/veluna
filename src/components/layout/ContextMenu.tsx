@@ -39,6 +39,8 @@ interface ContextMenuProps {
   playlists: Playlist[];
   setPlaylists: React.Dispatch<React.SetStateAction<Playlist[]>>;
   setQueue: React.Dispatch<React.SetStateAction<Track[]>>;
+  playNext?: (track: Track) => void;
+  addToQueue?: (tracks: Track | Track[], silent?: boolean) => void;
   handlePlayTrack: (track: Track, fromQueue?: boolean) => Promise<void>;
   handlePlayLocalTrack: (local: LocalTrack, localList?: LocalTrack[], localIndex?: number) => Promise<void>;
   handleDownload: (track: Track) => void;
@@ -72,6 +74,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   playlists,
   setPlaylists,
   setQueue,
+  playNext,
+  addToQueue,
   handlePlayTrack,
   handlePlayLocalTrack,
   handleDownload,
@@ -99,16 +103,64 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   audioInfo,
 }) => {
   const copyToClipboard = async (text: string) => {
+    if (!text) return;
+    let copied = false;
     try {
-      await navigator.clipboard.writeText(text);
-      showToast('Copied to clipboard');
-    } catch {
-      showToast('Failed to copy');
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch {}
+
+    if (!copied) {
+      try {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.setAttribute('readonly', '');
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        el.style.top = '-9999px';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(el);
+      } catch {}
     }
+
+    showToast('Copied link to clipboard');
   };
 
-  const openInYouTube = (url: string) => {
-    openUrl(url).catch(() => {});
+  const getTrackShareUrl = (track: Track) => {
+    if (!track) return '';
+    if (track.url?.includes('youtube.com') || track.url?.includes('youtu.be')) {
+      return track.url;
+    }
+    if (track.url && /^[a-zA-Z0-9_-]{11}$/.test(track.url)) {
+      return `https://www.youtube.com/watch?v=${track.url}`;
+    }
+    if (track.url?.startsWith('http')) {
+      return track.url;
+    }
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${track.title} ${cleanArtist(track.artist)}`)}`;
+  };
+
+  const openInYouTube = (trackOrUrl: Track | string) => {
+    let url = typeof trackOrUrl === 'string' ? trackOrUrl : trackOrUrl.url;
+    if (typeof trackOrUrl !== 'string' && (!url || (!url.includes('youtube.com') && !url.includes('youtu.be')))) {
+      const ytId = trackOrUrl.url?.match(/[?&]v=([^&]+)/)?.[1] || trackOrUrl.url?.split('youtu.be/')?.[1]?.split('?')?.[0];
+      if (ytId) {
+        url = `https://www.youtube.com/watch?v=${ytId}`;
+      } else {
+        url = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${trackOrUrl.title} ${cleanArtist(trackOrUrl.artist)}`)}`;
+      }
+    }
+    if (url) {
+      openUrl(url).catch(() => {
+        window.open(url, '_blank');
+      });
+    }
   };
 
   const addTrackToPlaylist = (pid: string, track: Track) => {
@@ -156,8 +208,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 </div>
               </div>
               <button onClick={() => { handlePlayLocalTrack(localTrack, localTracksList, localTrackIndex); setCtxMenu(null); }} className="v-ctx__item"><Play size={14} /> Play</button>
-              <button onClick={() => { setQueue(p => [track, ...p]); showToast('Playing next'); setCtxMenu(null); }} className="v-ctx__item"><PlaySquare size={14} /> Play Next</button>
-              <button onClick={() => { setQueue(p => [...p, track]); showToast('Added to queue'); setCtxMenu(null); }} className="v-ctx__item"><ListPlus size={14} /> Add to Queue</button>
+              <button onClick={() => { if (playNext) playNext(track); else { setQueue(p => [track, ...p.filter(t => t.url !== track.url)]); showToast('Playing next'); } setCtxMenu(null); }} className="v-ctx__item"><PlaySquare size={14} /> Play Next</button>
+              <button onClick={() => { if (addToQueue) addToQueue(track); else { setQueue(p => [...p.filter(t => t.url !== track.url), track]); showToast('Added to queue'); } setCtxMenu(null); }} className="v-ctx__item"><ListPlus size={14} /> Add to Queue</button>
               <button onClick={() => { setMetadataEditingTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Pencil size={13} /> Edit Metadata</button>
               <button onClick={() => { handleOpenInFileManager(localTrack.path); setCtxMenu(null); }} className="v-ctx__item"><FolderOpen size={13} /> Show in Folder</button>
               <div className="v-ctx__sep" />
@@ -191,8 +243,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 </div>
               </div>
               <button onClick={() => { handlePlayTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Play size={14} /> Play Now</button>
-              <button onClick={() => { setQueue(p => [track, ...p]); showToast('Playing next'); setCtxMenu(null); }} className="v-ctx__item"><PlaySquare size={14} /> Play Next</button>
-              <button onClick={() => { setQueue(p => [...p, track]); showToast('Added to queue'); setCtxMenu(null); }} className="v-ctx__item"><ListPlus size={14} /> Add to Queue</button>
+              <button onClick={() => { if (playNext) playNext(track); else { setQueue(p => [track, ...p.filter(t => t.url !== track.url)]); showToast('Playing next'); } setCtxMenu(null); }} className="v-ctx__item"><PlaySquare size={14} /> Play Next</button>
+              <button onClick={() => { if (addToQueue) addToQueue(track); else { setQueue(p => [...p.filter(t => t.url !== track.url), track]); showToast('Added to queue'); } setCtxMenu(null); }} className="v-ctx__item"><ListPlus size={14} /> Add to Queue</button>
               <button onClick={() => { toggleLikeTrack(track); setCtxMenu(null); }} className="v-ctx__item">
                 <Heart size={14} style={isTrackLiked(track.url) ? { color: 'var(--v-accent)', fill: 'currentColor' } : {}} />
                 {isTrackLiked(track.url) ? 'Remove from Liked' : 'Like'}
@@ -205,7 +257,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               {!track.url.startsWith('local://') && (
                 <>
                   <button onClick={() => { setInfoModalTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Info size={14} /> Track Info</button>
-                  <button onClick={() => { copyToClipboard(track.url); setCtxMenu(null); }} className="v-ctx__item"><Share2 size={14} /> Copy Link</button>
+                  <button onClick={() => { copyToClipboard(getTrackShareUrl(track)); setCtxMenu(null); }} className="v-ctx__item"><Share2 size={14} /> Copy Link</button>
                   <button onClick={() => {
                     if (downloadingTracks[track.url] !== undefined) handleCancelDownload(track.url);
                     else handleDownload(track);
@@ -213,7 +265,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   }} className="v-ctx__item">
                     {(downloadingTracks[track.url] ?? 0) > 0 ? 'Cancel Download' : <><Download size={14} /> Download</>}
                   </button>
-                  <button onClick={() => { openInYouTube(track.url); setCtxMenu(null); }} className="v-ctx__item"><ExternalLink size={13} /> Open in YouTube</button>
+                  <button onClick={() => { openInYouTube(track); setCtxMenu(null); }} className="v-ctx__item"><ExternalLink size={13} /> Open in YouTube</button>
                 </>
               )}
             </div>
@@ -301,14 +353,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
       {/* Add to Playlist dialog */}
       {addToPlaylistTrack && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(var(--v-bg0-rgb),0.9)' }} onClick={() => setAddToPlaylistTrack(null)}>
-          <div className="v-ctx" style={{ width: '280px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }} onClick={() => setAddToPlaylistTrack(null)}>
+          <div className="v-ctx" style={{ width: '280px', background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '16px', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid var(--v-bdr2)' }}>
               <div>
                 <div style={{ fontWeight: 700, color: 'var(--v-fg)', fontSize: '13px' }}>Add to Playlist</div>
-                <div style={{ fontSize: '11px', color: 'var(--v-fg2)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>{addToPlaylistTrack.title}</div>
+                <div style={{ fontSize: '11px', color: 'var(--v-fg3)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>{addToPlaylistTrack.title}</div>
               </div>
-              <button onClick={() => setAddToPlaylistTrack(null)} style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '7px', border: 'none', background: 'transparent', color: 'var(--v-fg2)', cursor: 'pointer' }}>
+              <button onClick={() => setAddToPlaylistTrack(null)} style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '7px', border: 'none', background: 'var(--v-bg3)', color: 'var(--v-fg3)', cursor: 'pointer', transition: 'color 0.15s ease' }}>
                 <X size={13} />
               </button>
             </div>
@@ -323,8 +375,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     className="v-ctx__item"
                     style={{ opacity: alreadyIn ? 0.4 : 1, cursor: alreadyIn ? 'not-allowed' : 'pointer' }}
                   >
-                    <div style={{ width: '24px', height: '24px', borderRadius: '5px', overflow: 'hidden', flexShrink: 0, background: 'var(--v-bdr2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {p.id === 'p1' ? <Heart size={12} style={{ color: 'var(--v-accent)', fill: 'currentColor' }} /> : <ListMusic size={13} />}
+                    <div style={{ width: '24px', height: '24px', borderRadius: '5px', overflow: 'hidden', flexShrink: 0, background: 'var(--v-bg3)', border: '1px solid var(--v-bdr)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {p.id === 'p1' ? <Heart size={12} style={{ color: 'var(--v-accent)', fill: 'currentColor' }} /> : <ListMusic size={13} style={{ color: 'var(--v-fg2)' }} />}
                     </div>
                     <span style={{ fontSize: '13px', color: 'var(--v-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{p.name}</span>
                     {alreadyIn ? <span style={{ fontSize: '9.5px', color: 'var(--v-fg3)', fontWeight: 700 }}>Added</span> : <span style={{ fontSize: '10px', color: 'var(--v-fg3)' }}>{p.tracks.length}</span>}
@@ -345,11 +397,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
         return (
           <div
-            style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
             onClick={() => setInfoModalTrack(null)}
           >
             <div
-              style={{ borderRadius: '22px', width: '100%', maxWidth: '400px', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'rgba(15,14,13,0.96)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+              style={{ borderRadius: '22px', width: '100%', maxWidth: '400px', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}
               onClick={e => e.stopPropagation()}
             >
               {/* Hero */}
@@ -359,15 +411,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, background: getTrackGradient(infoModalTrack.title, infoModalTrack.artist), opacity: 0.4 }} />
                 )}
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom,rgba(15,14,13,0) 0%,rgba(15,14,13,0.95) 100%)' }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 0%, var(--v-bg2) 100%)' }} />
                 <button
                   onClick={() => setInfoModalTrack(null)}
-                  style={{ position: 'absolute', top: '12px', right: '12px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', zIndex: 2 }}
+                  style={{ position: 'absolute', top: '12px', right: '12px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr)', cursor: 'pointer', color: 'var(--v-fg3)', zIndex: 2, transition: 'color 0.15s ease' }}
                 >
                   <X size={12} />
                 </button>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: '16px' }}>
-                  <div style={{ width: '88px', height: '88px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 12px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)', background: getTrackGradient(infoModalTrack.title, infoModalTrack.artist), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '88px', height: '88px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 12px 32px rgba(0,0,0,0.7), 0 0 0 1px var(--v-bdr2)', background: getTrackGradient(infoModalTrack.title, infoModalTrack.artist), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <Music size={24} style={{ color: 'rgba(255,255,255,0.2)', position: 'absolute' }} />
                     {infoModalTrack.cover && <img src={infoModalTrack.cover} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} alt="" />}
                   </div>
@@ -376,8 +428,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
               {/* Title + artist */}
               <div style={{ padding: '0 20px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '16px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{infoModalTrack.title}</div>
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{infoModalTrack.artist}</div>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--v-fg)', letterSpacing: '-0.02em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{infoModalTrack.title}</div>
+                <div style={{ fontSize: '12px', color: 'var(--v-fg3)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{infoModalTrack.artist}</div>
               </div>
 
               {/* Pills */}
@@ -390,14 +442,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   trackAudioInfo?.channels && { icon: <AlignLeft size={9} />, label: trackAudioInfo.channels },
                   trackAudioInfo?.format && { icon: <FileCode2 size={9} />, label: trackAudioInfo.format },
                 ].filter(Boolean).map((item: any, i) => (
-                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)', padding: '4px 10px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr2)', padding: '4px 10px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600, color: 'var(--v-fg2)' }}>
                     {item.icon}{item.label}
                   </span>
                 ))}
               </div>
 
               {/* Info rows */}
-              <div style={{ margin: '0 14px 14px', borderRadius: '14px', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ margin: '0 14px 14px', borderRadius: '14px', overflow: 'hidden', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr)' }}>
                 {[
                   { icon: Music, label: 'Title', value: infoModalTrack.title },
                   { icon: FileBadge2, label: 'Artist', value: infoModalTrack.artist },
@@ -405,18 +457,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 ].map(({ icon: Icon, label, value }, idx, arr) => (
                   <div
                     key={label}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderBottom: idx < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderBottom: idx < arr.length - 1 ? '1px solid var(--v-bdr)' : 'none' }}
                     onClick={() => copyToClipboard(value)}
                     title={`Click to copy ${label}`}
                   >
-                    <div style={{ width: '30px', height: '30px', borderRadius: '9999px', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'rgba(255,255,255,0.35)' }}>
+                    <div style={{ width: '30px', height: '30px', borderRadius: '9999px', background: 'var(--v-bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--v-fg3)' }}>
                       <Icon size={13} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.25)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>{label}</div>
-                      <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{value || '—'}</div>
+                      <div style={{ fontSize: '9.5px', color: 'var(--v-fg3)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>{label}</div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--v-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{value || '—'}</div>
                     </div>
-                    <Copy size={11} style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
+                    <Copy size={11} style={{ color: 'var(--v-fg3)', flexShrink: 0 }} />
                   </div>
                 ))}
               </div>
@@ -428,7 +480,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   <CopyButton text={ytUrl} label="Copy Link" icon={Share2} />
                 </div>
                 <button
-                  onClick={() => openInYouTube(ytUrl)}
+                  onClick={() => openInYouTube(infoModalTrack)}
                   disabled={!ytUrl}
                   style={{ width: '100%', padding: '10px', borderRadius: '9999px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', background: 'rgb(220,38,38)', color: 'white', cursor: ytUrl ? 'pointer' : 'not-allowed', opacity: ytUrl ? 1 : 0.4 }}
                 >

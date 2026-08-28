@@ -15,10 +15,13 @@ import {
   Search,
   Trash2,
   X,
+  ArrowUpDown,
+  Layers,
 } from 'lucide-react';
 import { Track, Playlist, CtxMenu } from '../../types';
-import { getTrackGradient, saveLS, cleanArtist } from '../../utils';
+import { getTrackGradient, saveLS, cleanArtist, parseDurationToSeconds } from '../../utils';
 import { TrackRow } from '../TrackRow';
+import { ThemedSelect } from '../ThemedSelect';
 
 interface PlaylistsViewProps {
   openPlaylistId: string | null;
@@ -144,6 +147,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
   showToast,
 }) => {
   const [internalHoveredTrackUrl, setInternalHoveredTrackUrl] = useState<string | null>(null);
+  const [playlistSortBy, setPlaylistSortBy] = useState<'default' | 'title_asc' | 'title_desc' | 'artist_asc' | 'duration_asc' | 'duration_desc'>('default');
   const hoveredTrackUrl = customHoveredTrackUrl !== undefined ? customHoveredTrackUrl : internalHoveredTrackUrl;
   const setHoveredTrackUrl = customSetHoveredTrackUrl || setInternalHoveredTrackUrl;
   const prefetchOnHover = customPrefetchOnHover || (() => {});
@@ -361,6 +365,68 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                   }}>
                   <Play size={16} fill="currentColor"/> Play All
                 </button>
+
+                {(() => {
+                  const seen = new Set<string>();
+                  let dupes = 0;
+                  for (const t of openPlaylist.tracks) {
+                    const key = `${(t.title || '').toLowerCase().trim()}|${(t.artist || '').toLowerCase().trim()}` || t.url;
+                    if (seen.has(key)) dupes++;
+                    else seen.add(key);
+                  }
+
+                  if (dupes > 0) {
+                    return (
+                      <button
+                        onClick={() => {
+                          setPlaylists(prev => prev.map(p => {
+                            if (p.id !== openPlaylist.id) return p;
+                            const trackSeen = new Set<string>();
+                            const uniqueTracks: Track[] = [];
+                            for (const tr of p.tracks) {
+                              const k = `${(tr.title || '').toLowerCase().trim()}|${(tr.artist || '').toLowerCase().trim()}` || tr.url;
+                              if (!trackSeen.has(k)) {
+                                trackSeen.add(k);
+                                uniqueTracks.push(tr);
+                              }
+                            }
+                            return { ...p, tracks: uniqueTracks };
+                          }));
+                          showToast(`Removed ${dupes} duplicate track${dupes > 1 ? 's' : ''}`);
+                        }}
+                        title={`Remove ${dupes} duplicate track${dupes > 1 ? 's' : ''}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "9px 14px",
+                          color: "var(--v-accent)",
+                          borderRadius: "10px",
+                          background: "var(--v-bg3)",
+                          border: "1px solid var(--v-bdr3)",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all .2s cubic-bezier(0.2,0,0,1)"
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = "var(--v-bg4)";
+                          e.currentTarget.style.borderColor = "var(--v-accent)";
+                          e.currentTarget.style.transform = "translateY(-1px)";
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = "var(--v-bg3)";
+                          e.currentTarget.style.borderColor = "var(--v-bdr3)";
+                          e.currentTarget.style.transform = "translateY(0)";
+                        }}
+                      >
+                        <Layers size={14} /> Remove {dupes} Duplicate{dupes > 1 ? 's' : ''}
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {openPlaylist.id !== 'p1' && (
                   <button onClick={()=>{setRenamingPlaylist(openPlaylist);setRenameVal(openPlaylist.name);setRenameDescVal(openPlaylist.description);}}
                     style={{
@@ -426,50 +492,83 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
             ? <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"140px",color:"var(--v-fg3)",gap:"10px",position:"relative",zIndex:1}}><Music size={28} strokeWidth={1}/><p style={{fontSize:"13px",color:"var(--v-fg2)"}}>No tracks yet.</p></div>
             : (() => {
                 const q = playlistSearchQ.trim().toLowerCase();
-                const filteredTracks = q
+                let filteredTracks = q
                   ? openPlaylist.tracks.filter(t => {
                       const title = (t.title || '').toLowerCase();
                       const artist = (t.artist || '').toLowerCase();
                       return title.includes(q) || artist.includes(q);
                     })
-                  : openPlaylist.tracks;
+                  : [...openPlaylist.tracks];
+
+                if (playlistSortBy === 'title_asc') {
+                  filteredTracks.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                } else if (playlistSortBy === 'title_desc') {
+                  filteredTracks.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+                } else if (playlistSortBy === 'artist_asc') {
+                  filteredTracks.sort((a, b) => (a.artist || '').localeCompare(b.artist || ''));
+                } else if (playlistSortBy === 'duration_asc') {
+                  filteredTracks.sort((a, b) => parseDurationToSeconds(a.duration) - parseDurationToSeconds(b.duration));
+                } else if (playlistSortBy === 'duration_desc') {
+                  filteredTracks.sort((a, b) => parseDurationToSeconds(b.duration) - parseDurationToSeconds(a.duration));
+                }
+
                 return (
                   <div style={{display:"flex",flexDirection:"column",gap:"4px",position:"relative",zIndex:1}}>
-                    <div style={{position:"relative",marginBottom:"18px"}}>
-                      <Search size={15} style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",color:"var(--v-fg3)",pointerEvents:"none"}} />
-                      <input
-                        type="text"
-                        value={playlistSearchQ}
-                        onChange={e => setPlaylistSearchQ(e.target.value)}
-                        placeholder="Search in playlist..."
-                        style={{
-                          width:"100%",
-                          background:"var(--v-bg2)",
-                          border:"1px solid var(--v-bdr2)",
-                          borderRadius:"21px",
-                          padding:"10px 38px",
-                          fontSize:"14px",
-                          color:"var(--v-fg)",
-                          outline:"none",
-                          boxSizing:"border-box",
-                          transition:"all 0.2s cubic-bezier(0.2,0,0,1)"
-                        }}
-                        onFocus={e => {
-                          e.currentTarget.style.background = "var(--v-bg3)";
-                          e.currentTarget.style.borderColor = "var(--v-bdr3)";
-                          e.currentTarget.style.boxShadow = "none";
-                        }}
-                        onBlur={e => {
-                          e.currentTarget.style.background = "var(--v-bg2)";
-                          e.currentTarget.style.borderColor = "var(--v-bdr2)";
-                          e.currentTarget.style.boxShadow = "none";
-                        }}
+                    <div style={{
+                      display:"flex",
+                      alignItems:"center",
+                      gap:"10px",
+                      marginBottom:"14px",
+                      flexWrap:"wrap"
+                    }}>
+                      <div style={{position:"relative",flex:1,minWidth:"200px"}}>
+                        <Search size={14} style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",color:"var(--v-fg3)",pointerEvents:"none"}} />
+                        <input
+                          type="text"
+                          value={playlistSearchQ}
+                          onChange={e => setPlaylistSearchQ(e.target.value)}
+                          placeholder="Filter songs in playlist..."
+                          style={{
+                            width:"100%",
+                            background:"var(--v-bg2)",
+                            border:"1px solid var(--v-bdr2)",
+                            borderRadius:"10px",
+                            padding:"8px 34px",
+                            fontSize:"12.5px",
+                            color:"var(--v-fg)",
+                            outline:"none",
+                            boxSizing:"border-box",
+                            transition:"all 0.2s cubic-bezier(0.2,0,0,1)"
+                          }}
+                          onFocus={e => {
+                            e.currentTarget.style.background = "var(--v-bg3)";
+                            e.currentTarget.style.borderColor = "var(--v-bdr3)";
+                          }}
+                          onBlur={e => {
+                            e.currentTarget.style.background = "var(--v-bg2)";
+                            e.currentTarget.style.borderColor = "var(--v-bdr2)";
+                          }}
+                        />
+                        {playlistSearchQ && (
+                          <button onClick={() => setPlaylistSearchQ('')} style={{position:"absolute",right:"10px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--v-fg3)",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      <ThemedSelect
+                        value={playlistSortBy}
+                        onChange={v => setPlaylistSortBy(v as any)}
+                        icon={<ArrowUpDown size={13} style={{ color: "var(--v-accent)" }} />}
+                        options={[
+                          { value: 'default', label: 'Default Order' },
+                          { value: 'title_asc', label: 'Title (A → Z)' },
+                          { value: 'title_desc', label: 'Title (Z → A)' },
+                          { value: 'artist_asc', label: 'Artist (A → Z)' },
+                          { value: 'duration_asc', label: 'Duration (Shortest)' },
+                          { value: 'duration_desc', label: 'Duration (Longest)' },
+                        ]}
                       />
-                      {playlistSearchQ && (
-                        <button onClick={() => setPlaylistSearchQ('')} style={{position:"absolute",right:"12px",top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--v-fg3)",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                          <X size={15} />
-                        </button>
-                      )}
                     </div>
                     <div style={{
                       display:"flex",

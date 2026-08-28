@@ -85,6 +85,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   getTrackCover,
   isPlaying,
   isLoadingTrack,
+  loadingTrackUrl: _loadingTrackUrl,
   audioInfo,
   progressSeconds,
   trackDurationSeconds,
@@ -298,14 +299,29 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 else{setAbLoop({a:null,b:null});if(abLoopRef)abLoopRef.current={a:null,b:null};showToast('Loop cleared');}
               }}
               style={{
-                display:"flex",alignItems:"center",gap:"3px",padding:"3px 10px",
-                borderRadius:"9999px",border:"1px solid",
+                display:"flex",alignItems:"center",gap:"3px",padding:"3px 9px",
+                borderRadius:"8px",
+                border:`1px solid ${abLoop.b!==null ? "var(--v-accent)" : abLoop.a!==null ? "var(--v-bdr2)" : "var(--v-bdr)"}`,
                 fontSize:"10px",fontWeight:700,flexShrink:0,cursor:"pointer",
-                background:abLoop.b!==null?"rgba(226,221,217,0.08)":abLoop.a!==null?"rgba(226,221,217,0.04)":"transparent",
-                borderColor:abLoop.b!==null?"rgba(226,221,217,0.25)":abLoop.a!==null?"rgba(226,221,217,0.12)":"var(--v-bdr2)",
-                color:abLoop.b!==null?"#e2ddd9":abLoop.a!==null?"#9e9894":"#363230",
-                transition:"all .12s",
-              }}>
+                background:abLoop.b!==null ? "var(--v-bg3)" : abLoop.a!==null ? "var(--v-bg3)" : "var(--v-bg2)",
+                color:abLoop.b!==null ? "var(--v-accent)" : abLoop.a!==null ? "var(--v-fg)" : "var(--v-fg3)",
+                transition:"all .12s cubic-bezier(0.16, 1, 0.3, 1)",
+              }}
+              onMouseEnter={e => {
+                if (abLoop.a === null && abLoop.b === null) {
+                  e.currentTarget.style.color = "var(--v-fg)";
+                  e.currentTarget.style.borderColor = "var(--v-bdr2)";
+                  e.currentTarget.style.background = "var(--v-bg3)";
+                }
+              }}
+              onMouseLeave={e => {
+                if (abLoop.a === null && abLoop.b === null) {
+                  e.currentTarget.style.color = "var(--v-fg3)";
+                  e.currentTarget.style.borderColor = "var(--v-bdr)";
+                  e.currentTarget.style.background = "var(--v-bg2)";
+                }
+              }}
+            >
               A·B{abLoop.b!==null?" ✓":abLoop.a!==null?" …":""}
             </button>
           </div>

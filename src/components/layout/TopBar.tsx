@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
-import { Track } from '../../types';
+import { ChevronLeft, Download } from 'lucide-react';
+import { Track, ActiveDownload } from '../../types';
 
 interface TopBarProps {
   activeNav: string;
@@ -16,6 +16,10 @@ interface TopBarProps {
   navHistory: any[];
   navigateBack?: () => void;
   resetSearch: () => void;
+  activeDownloads?: ActiveDownload[];
+  isDownloadsFlyoutOpen?: boolean;
+  setIsDownloadsFlyoutOpen?: (v: boolean) => void;
+  downloadPulseKey?: number;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -32,6 +36,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   navHistory,
   navigateBack: customNavigateBack,
   resetSearch,
+  activeDownloads = [],
+  isDownloadsFlyoutOpen = false,
+  setIsDownloadsFlyoutOpen,
+  downloadPulseKey = 0,
 }) => {
   const _navigateTo = _setActiveNav || customNavigateTo || (() => {});
   const navigateBack = customNavigateBack || (() => {
@@ -85,6 +93,74 @@ export const TopBar: React.FC<TopBarProps> = ({
             {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : activeNav === 'library' ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
           </span>
         </div>
+
+        {/* Active Downloads Icon Button */}
+        {(() => {
+          const activeCount = activeDownloads.filter(d => d.status === 'downloading').length;
+          return (
+            <button
+              key={downloadPulseKey}
+              onClick={() => setIsDownloadsFlyoutOpen?.(!isDownloadsFlyoutOpen)}
+              className={downloadPulseKey ? 'animate-dl-pulse' : ''}
+              style={{
+                position: "fixed",
+                top: "14px",
+                right: "64px",
+                zIndex: 100,
+                width: "34px",
+                height: "34px",
+                borderRadius: "8px",
+                background: isDownloadsFlyoutOpen || activeCount > 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
+                border: isDownloadsFlyoutOpen || activeCount > 0 ? "1px solid var(--v-accent)" : "1px solid rgba(255, 255, 255, 0.08)",
+                color: isDownloadsFlyoutOpen || activeCount > 0 ? "var(--v-accent)" : "#c4beba",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                padding: 0,
+              }}
+              onMouseEnter={e => {
+                if (!isDownloadsFlyoutOpen && activeCount === 0) {
+                  e.currentTarget.style.color = '#fff';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!isDownloadsFlyoutOpen && activeCount === 0) {
+                  e.currentTarget.style.color = '#c4beba';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                }
+              }}
+              title="Active Downloads"
+            >
+              <Download size={16} />
+              {activeCount > 0 && (
+                <span style={{
+                  position: "absolute",
+                  top: "-4px",
+                  right: "-4px",
+                  minWidth: "15px",
+                  height: "15px",
+                  borderRadius: "8px",
+                  background: "var(--v-accent, #ff7a00)",
+                  color: "#0e0d0d",
+                  fontSize: "9.5px",
+                  fontWeight: 800,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "0 3px",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.6)",
+                }}>
+                  {activeCount}
+                </span>
+              )}
+            </button>
+          );
+        })()}
 
         {/* Veluna Logo at the Far Top Right of the Window */}
         <div style={{

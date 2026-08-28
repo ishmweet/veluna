@@ -626,9 +626,9 @@ export function SettingsPanel({
                   value={downloadQuality}
                   onChange={setDownloadQuality}
                   options={[
-                    { value: 'High', label: 'High', desc: 'Best quality · largest files' },
-                    { value: 'Medium', label: 'Medium', desc: 'Balanced · ~128kbps' },
-                    { value: 'Low', label: 'Low', desc: 'Smallest files' },
+                    { value: 'High', label: 'High' },
+                    { value: 'Medium', label: 'Medium' },
+                    { value: 'Low', label: 'Low' },
                   ]}
                 />
               </div>
@@ -644,10 +644,10 @@ export function SettingsPanel({
                   value={downloadFormat}
                   onChange={setDownloadFormat}
                   options={[
-                    { value: 'mp3',  label: 'MP3',  desc: 'Most compatible' },
-                    { value: 'opus', label: 'Opus', desc: 'Best compression' },
-                    { value: 'm4a',  label: 'M4A',  desc: 'AAC / Apple' },
-                    { value: 'flac', label: 'FLAC', desc: 'Lossless' },
+                    { value: 'mp3',  label: 'MP3' },
+                    { value: 'opus', label: 'Opus' },
+                    { value: 'm4a',  label: 'M4A' },
+                    { value: 'flac', label: 'FLAC' },
                   ]}
                 />
               </div>
@@ -728,7 +728,7 @@ export function SettingsPanel({
                 <SettingsSwitch checked={loudnormEnabled} onChange={() => {
                   const next = !loudnormEnabled;
                   const warn = validateSettingsChange('loudnormEnabled', next, { loudnormEnabled, skipSilence, eq });
-                  if (warn) { showToast(`⚠ ${warn}`); }
+                  if (warn) { showToast(warn); }
                   setLoudnormEnabled(next);
                 }} />
               </div>
@@ -741,7 +741,7 @@ export function SettingsPanel({
                 <SettingsSwitch checked={skipSilence} onChange={() => {
                   const next = !skipSilence;
                   const warn = validateSettingsChange('skipSilence', next, { loudnormEnabled, skipSilence, eq });
-                  if (warn) { showToast(`⚠ ${warn}`); }
+                  if (warn) { showToast(warn); }
                   setSkipSilence(next);
                 }} />
               </div>
@@ -917,9 +917,9 @@ export function SettingsPanel({
                   </p>
                 </div>
                 <ThemedSelect value={lyricsSource} onChange={setLyricsSource} options={[
-                  { value: 'lrclib', label: 'lrclib', desc: 'Open source, fast' },
-                  { value: 'musixmatch', label: 'Musixmatch', desc: 'Word-level sync' },
-                  { value: 'netease', label: 'NetEase', desc: 'Best for C/K-pop' },
+                  { value: 'lrclib', label: 'lrclib' },
+                  { value: 'musixmatch', label: 'Musixmatch' },
+                  { value: 'netease', label: 'NetEase' },
                 ]} />
               </div>
             </div>
@@ -1541,12 +1541,12 @@ export function SettingsPanel({
                   value={startupNav === 'library' ? 'playlists' : startupNav}
                   onChange={handleStartupNavChange}
                   options={[
-                    { value: 'home', label: 'Home', desc: 'Main discovery dashboard' },
-                    { value: 'downloads', label: 'Offline', desc: 'Your downloaded local tracks' },
-                    { value: 'playlists', label: 'Playlists', desc: 'Your playlists and Liked Songs' },
-                    { value: 'stats', label: 'Stats', desc: 'Your personal listening insights' },
-                    { value: 'settings', label: 'Settings', desc: 'Preferences and configurations' },
-                    { value: 'last', label: 'Last Opened', desc: 'Resume where you left off' },
+                    { value: 'home', label: 'Home' },
+                    { value: 'downloads', label: 'Offline' },
+                    { value: 'playlists', label: 'Playlists' },
+                    { value: 'stats', label: 'Stats' },
+                    { value: 'settings', label: 'Settings' },
+                    { value: 'last', label: 'Last Opened' },
                   ]}
                 />
               </div>
@@ -1613,7 +1613,24 @@ export function SettingsPanel({
                 </button>
               </div>
 
-              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
+              <div
+                className="v-settings-row"
+                style={{
+                  padding: "14px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderBottom: "1px solid var(--v-bdr)",
+                  cursor: cacheInfo?.cache_dir ? "pointer" : "default",
+                  transition: "background 0.15s ease-out",
+                }}
+                onClick={() => {
+                  if (cacheInfo?.cache_dir) {
+                    invoke('open_in_file_manager', { path: cacheInfo.cache_dir }).catch(() => {});
+                  }
+                }}
+                title={cacheInfo?.cache_dir ? "Click to open cache folder" : undefined}
+              >
                 <div>
                   <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Current Cache Size</p>
                   <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
@@ -1621,9 +1638,30 @@ export function SettingsPanel({
                   </p>
                 </div>
                 {cacheInfo?.cache_dir && (
-                  <div className="v-settings-path-capsule" style={{ maxWidth: "260px" }} title={cacheInfo.cache_dir}>
-                    <HardDrive size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cacheInfo.cache_dir}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="v-settings-path-capsule" style={{ maxWidth: "260px" }}>
+                      <FolderOpen size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cacheInfo.cache_dir}</span>
+                    </div>
+                    <button
+                      title="Open Cache Folder"
+                      style={{
+                        padding: "6px",
+                        marginLeft: "4px",
+                        color: "#5c5755",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        borderRadius: "7px",
+                        display: "flex",
+                        transition: "color .12s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#e2ddd9")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#5c5755")}
+                    >
+                      <FolderOpen size={16} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -1639,11 +1677,11 @@ export function SettingsPanel({
                   value={cacheLimit}
                   onChange={handleCacheLimitChange}
                   options={[
-                    { value: '500mb', label: '500 MB', desc: 'Lightweight — recommended for SSDs' },
-                    { value: '1gb', label: '1 GB', desc: 'Balanced — standard for daily listeners' },
-                    { value: '2gb', label: '2 GB', desc: 'Generous — faster track reloads' },
-                    { value: '5gb', label: '5 GB', desc: 'Large — extensive offline buffering' },
-                    { value: 'unlimited', label: 'Unlimited', desc: 'Never auto-prune cached files' },
+                    { value: '500mb', label: '500 MB' },
+                    { value: '1gb', label: '1 GB' },
+                    { value: '2gb', label: '2 GB' },
+                    { value: '5gb', label: '5 GB' },
+                    { value: 'unlimited', label: 'Unlimited' },
                   ]}
                 />
               </div>

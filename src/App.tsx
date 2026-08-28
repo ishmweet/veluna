@@ -8,6 +8,7 @@ import {
   Maximize2,
   Music,
   X,
+  Trash2,
 } from 'lucide-react';
 
 import {
@@ -17,6 +18,7 @@ import {
   CtxMenu,
   NavView,
   SettingsTab,
+  ActiveDownload,
 } from './types';
 import {
   loadLS,
@@ -40,6 +42,7 @@ import { useScrobbler } from './hooks/useScrobbler';
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
+import { DownloadsFlyout } from './components/layout/DownloadsFlyout';
 import { QueuePanel } from './components/layout/QueuePanel';
 import { PlayerBar } from './components/layout/PlayerBar';
 import { ContextMenu } from './components/layout/ContextMenu';
@@ -101,6 +104,7 @@ export function App() {
   const {
     queue,
     setQueue,
+    queueRef,
     isQueueOpen,
     setIsQueueOpen,
     showClearConfirm,
@@ -113,6 +117,8 @@ export function App() {
     clearQueue,
     removeFromQueue,
     reorderQueue: moveQueueItem,
+    playNext,
+    addToQueue,
   } = useQueue(showToast);
 
   // 5. Search hook
@@ -253,6 +259,7 @@ export function App() {
     autoplayEnabled,
     queue,
     setQueue,
+    queueRef,
     playHistory,
     setPlayHistory,
     setQuickPicks,
@@ -300,7 +307,33 @@ export function App() {
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
   const [localRefreshNonce, setLocalRefreshNonce] = useState(0);
   const [downloadingTracks, setDownloadingTracks] = useState<Record<string, number>>({});
+  const [activeDownloads, setActiveDownloads] = useState<ActiveDownload[]>([]);
+  const [isDownloadsFlyoutOpen, setIsDownloadsFlyoutOpen] = useState(false);
+  const [downloadPulseKey, setDownloadPulseKey] = useState(0);
+  const flyoutAutoCloseTimerRef = useRef<any>(null);
   const [metadataEditingTrack, setMetadataEditingTrack] = useState<Track | null>(null);
+
+  // Listen to live download progress events from Rust
+  useEffect(() => {
+    const unlistenPromise = listen<{ url: string; percent: number; status: string; error?: string }>('download_progress', (event) => {
+      const { url, percent, status, error } = event.payload;
+      setDownloadingTracks(p => ({ ...p, [url]: percent }));
+      setActiveDownloads(prev => prev.map(item => {
+        if (item.url === url) {
+          return {
+            ...item,
+            progress: percent,
+            status: status === 'completed' || percent >= 100 ? 'completed' : error ? 'error' : 'downloading',
+            error,
+          };
+        }
+        return item;
+      }));
+    });
+    return () => {
+      unlistenPromise.then(fn => fn());
+    };
+  }, []);
 
   const getTrackCover = useCallback((track: Track | null | undefined) => {
     if (!track) return '';
@@ -595,6 +628,7 @@ export function App() {
   const handleCancelDownload = useCallback(async (url: string) => {
     try { await invoke('cancel_download', { url }); } catch {}
     setDownloadingTracks(p => { const n = { ...p }; delete n[url]; return n; });
+    setActiveDownloads(prev => prev.filter(d => d.url !== url));
     showToast('Download cancelled');
   }, [showToast]);
 
@@ -614,6 +648,27 @@ export function App() {
       } catch {}
     }
     setDownloadingTracks(p => ({ ...p, [track.url]: 1 }));
+    setActiveDownloads(prev => [
+      {
+        url: track.url,
+        title: track.title,
+        artist: track.artist || 'YouTube Music',
+        cover: track.cover,
+        progress: 5,
+        status: 'downloading',
+        startedAt: Date.now(),
+      },
+      ...prev.filter(d => d.url !== track.url),
+    ]);
+
+    // Animate TopBar downloads icon and pop the flyout window to grab user's attention
+    setDownloadPulseKey(k => k + 1);
+    setIsDownloadsFlyoutOpen(true);
+    if (flyoutAutoCloseTimerRef.current) clearTimeout(flyoutAutoCloseTimerRef.current);
+    flyoutAutoCloseTimerRef.current = setTimeout(() => {
+      setIsDownloadsFlyoutOpen(false);
+    }, 6500);
+
     try {
       await invoke('download_song', {
         url: track.url,
@@ -623,6 +678,7 @@ export function App() {
         path: downloadPath,
       });
       setDownloadingTracks(p => ({ ...p, [track.url]: 100 }));
+      setActiveDownloads(prev => prev.map(item => item.url === track.url ? { ...item, progress: 100, status: 'completed' } : item));
       setTimeout(() => setDownloadingTracks(p => { const n = { ...p }; delete n[track.url]; return n; }), 1200);
       showToast(`Downloaded: ${track.title}`);
       setLocalRefreshNonce(n => n + 1);
@@ -630,6 +686,7 @@ export function App() {
       const msg = typeof e === 'string' ? e : e?.message || '';
       if (!msg.includes('cancelled')) showToast(`Download failed: ${msg}`);
       setDownloadingTracks(p => { const n = { ...p }; delete n[track.url]; return n; });
+      setActiveDownloads(prev => prev.map(item => item.url === track.url ? { ...item, status: 'error', error: msg } : item));
     }
   }, [downloadingTracks, duplicateDetect, downloadPath, downloadQuality, downloadFormat, embedThumbnail, handleCancelDownload, showToast]);
 
@@ -904,6 +961,23 @@ export function App() {
           navHistory={navHistory}
           navigateBack={navigateBack}
           resetSearch={resetSearch}
+          activeDownloads={activeDownloads}
+          isDownloadsFlyoutOpen={isDownloadsFlyoutOpen}
+          setIsDownloadsFlyoutOpen={setIsDownloadsFlyoutOpen}
+          downloadPulseKey={downloadPulseKey}
+        />
+
+        <DownloadsFlyout
+          isOpen={isDownloadsFlyoutOpen}
+          onClose={() => setIsDownloadsFlyoutOpen(false)}
+          downloads={activeDownloads}
+          onCancelDownload={handleCancelDownload}
+          onClearCompleted={() => setActiveDownloads(prev => prev.filter(d => d.status === 'downloading'))}
+          onOpenFolder={() => handleOpenInFileManager(downloadPath)}
+          onNavigateToDownloads={() => {
+            setActiveNav('downloads');
+            setIsDownloadsFlyoutOpen(false);
+          }}
         />
 
         {/* View Routing */}
@@ -1215,6 +1289,8 @@ export function App() {
         playlists={playlists}
         setPlaylists={setPlaylists}
         setQueue={setQueue}
+        playNext={playNext}
+        addToQueue={addToQueue}
         handlePlayTrack={handlePlayTrack}
         handlePlayLocalTrack={handlePlayLocalTrack}
         handleDownload={handleDownload}
@@ -1628,66 +1704,247 @@ export function App() {
 
       {/* Duplicate Finder Modal */}
       {showDuplicatesPlaylist && (() => {
-        const seen = new Map<string, Track>();
-        const dupes: Track[] = [];
-        showDuplicatesPlaylist.tracks.forEach(t => {
-          const key = `${t.title.toLowerCase().trim()}|||${t.artist.toLowerCase().trim()}`;
-          if (seen.has(key)) dupes.push(t);
-          else seen.set(key, t);
+        const seenUrls = new Set<string>();
+        const seenTrackKeys = new Set<string>();
+        const duplicatesWithIndex: { track: Track; originalIndex: number }[] = [];
+
+        showDuplicatesPlaylist.tracks.forEach((t, index) => {
+          const normKey = `${cleanArtist(t.artist).toLowerCase()}|||${t.title.toLowerCase().trim()}`;
+          const hasUrl = Boolean(t.url && t.url.trim() !== '');
+          const isUrlDupe = hasUrl && seenUrls.has(t.url);
+          const isTitleDupe = seenTrackKeys.has(normKey);
+
+          if (isUrlDupe || isTitleDupe) {
+            duplicatesWithIndex.push({ track: t, originalIndex: index });
+          } else {
+            if (hasUrl) seenUrls.add(t.url);
+            seenTrackKeys.add(normKey);
+          }
         });
+
+        const handleRemoveSingle = (indexToRemove: number) => {
+          setPlaylists(prev => prev.map(p => {
+            if (p.id !== showDuplicatesPlaylist.id) return p;
+            return {
+              ...p,
+              tracks: p.tracks.filter((_, idx) => idx !== indexToRemove)
+            };
+          }));
+          setShowDuplicatesPlaylist(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              tracks: prev.tracks.filter((_, idx) => idx !== indexToRemove)
+            };
+          });
+          showToast('Duplicate track removed');
+        };
+
+        const handleRemoveAll = () => {
+          const dupeIndices = new Set(duplicatesWithIndex.map(d => d.originalIndex));
+          const cleanedTracks = showDuplicatesPlaylist.tracks.filter((_, idx) => !dupeIndices.has(idx));
+          const removedCount = duplicatesWithIndex.length;
+
+          setPlaylists(prev => prev.map(p => {
+            if (p.id !== showDuplicatesPlaylist.id) return p;
+            return { ...p, tracks: cleanedTracks };
+          }));
+          setShowDuplicatesPlaylist(prev => prev ? { ...prev, tracks: cleanedTracks } : null);
+          showToast(`Removed ${removedCount} duplicate track${removedCount > 1 ? 's' : ''}`);
+        };
+
         return (
           <div
-            style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(var(--v-bg0-rgb),0.9)' }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px 16px 100px 16px',
+              background: 'rgba(0,0,0,0.75)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)'
+            }}
             onClick={() => setShowDuplicatesPlaylist(null)}
           >
             <div
-              style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '14px', width: '100%', maxWidth: '500px', maxHeight: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }}
+              style={{
+                background: 'var(--v-bg2)',
+                border: '1px solid var(--v-bdr2)',
+                borderRadius: '18px',
+                width: '100%',
+                maxWidth: '520px',
+                maxHeight: 'calc(100vh - 130px)',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 32px 80px rgba(0,0,0,0.85)'
+              }}
+              onClick={e => e.stopPropagation()}
             >
-              <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--v-bdr2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--v-bdr2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div>
-                  <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#e2ddd9', margin: 0 }}>Duplicate Finder</h3>
-                  <p style={{ fontSize: '11px', color: '#5c5755', marginTop: '3px' }}>{showDuplicatesPlaylist.name}</p>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.01em' }}>Duplicate Finder</h3>
+                  <p style={{ fontSize: '11.5px', color: 'var(--v-fg3)', margin: '3px 0 0' }}>Playlist: <span style={{ color: 'var(--v-fg2)', fontWeight: 600 }}>{showDuplicatesPlaylist.name}</span></p>
                 </div>
                 <button
                   onClick={() => setShowDuplicatesPlaylist(null)}
-                  style={{ padding: '5px', background: 'none', border: 'none', cursor: 'pointer', color: '#5c5755', display: 'flex', borderRadius: '6px' }}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                    background: 'var(--v-bg3)',
+                    border: '1px solid var(--v-bdr)',
+                    cursor: 'pointer',
+                    color: 'var(--v-fg3)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.color = 'var(--v-fg)';
+                    e.currentTarget.style.borderColor = 'var(--v-bdr2)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.color = 'var(--v-fg3)';
+                    e.currentTarget.style.borderColor = 'var(--v-bdr)';
+                  }}
                 >
-                  <X size={14} />
+                  <X size={13} />
                 </button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }} className="custom-scrollbar">
-                {dupes.length === 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#5c5755' }}>
-                    <CheckCircle size={28} style={{ color: '#5c5755', marginBottom: '8px' }} />
-                    <p style={{ fontSize: '13px', color: '#9e9894' }}>No duplicates found.</p>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px' }} className="custom-scrollbar">
+                {duplicatesWithIndex.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '36px 0', gap: '8px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--v-bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                      <CheckCircle size={24} style={{ color: 'var(--v-accent)' }} />
+                    </div>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--v-fg)', margin: 0 }}>No duplicates found</p>
+                    <p style={{ fontSize: '12px', color: 'var(--v-fg3)', margin: 0 }}>All tracks in this playlist are unique.</p>
+                    <button
+                      onClick={() => setShowDuplicatesPlaylist(null)}
+                      style={{
+                        marginTop: '12px',
+                        padding: '7px 20px',
+                        borderRadius: '9999px',
+                        background: 'var(--v-bg3)',
+                        border: '1px solid var(--v-bdr2)',
+                        color: 'var(--v-fg)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Done
+                    </button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <p style={{ fontSize: '12px', color: '#9e9894', marginBottom: '10px' }}>{dupes.length} duplicate{dupes.length > 1 ? 's' : ''} found</p>
-                    {dupes.map((t, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', borderRadius: '8px', background: 'var(--v-bdr2)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--v-fg3)', fontWeight: 600 }}>
+                        {duplicatesWithIndex.length} duplicate track{duplicatesWithIndex.length > 1 ? 's' : ''} found
+                      </span>
+                      {duplicatesWithIndex.length > 1 && (
+                        <button
+                          onClick={handleRemoveAll}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            color: 'var(--v-accent)',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '2px 6px',
+                            borderRadius: '6px',
+                            transition: 'opacity 0.15s ease'
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
+                          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                        >
+                          <Trash2 size={12} /> Remove All ({duplicatesWithIndex.length})
+                        </button>
+                      )}
+                    </div>
+
+                    {duplicatesWithIndex.map(({ track: t, originalIndex }) => (
+                      <div
+                        key={originalIndex}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '10px 12px',
+                          borderRadius: '12px',
+                          background: 'var(--v-bg3)',
+                          border: '1px solid var(--v-bdr)',
+                          transition: 'border-color 0.15s ease'
+                        }}
+                      >
                         <div
                           style={{
-                            width: '38px', height: '38px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.05)',
-                            position: 'relative', background: getTrackGradient(t.title, t.artist), display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            width: '42px',
+                            height: '42px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            border: '1px solid var(--v-bdr2)',
+                            position: 'relative',
+                            background: getTrackGradient(t.title, t.artist),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}
                         >
-                          <Music size={13} style={{ position: 'absolute', color: 'rgba(255,255,255,0.25)' }} />
-                          {getTrackCover(t) && <img src={getTrackCover(t)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} alt="" />}
+                          <Music size={14} style={{ position: 'absolute', color: 'rgba(255,255,255,0.25)' }} />
+                          {getTrackCover(t) && (
+                            <img
+                              src={getTrackCover(t)}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={e => { e.currentTarget.style.display = 'none'; }}
+                              alt=""
+                            />
+                          )}
                         </div>
+
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2ddd9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                          {t.artist && <div style={{ fontSize: '11px', color: '#5c5755', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.artist}</div>}
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--v-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.title}
+                          </div>
+                          {t.artist && (
+                            <div style={{ fontSize: '11.5px', color: 'var(--v-fg3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                              {t.artist}
+                            </div>
+                          )}
                         </div>
+
                         <button
-                          onClick={() => {
-                            setPlaylists(prev => prev.map(p => p.id === showDuplicatesPlaylist.id
-                              ? { ...p, tracks: (() => { let removed = false; return p.tracks.filter(x => { if (!removed && x.url === t.url) { removed = true; return false; } return true; }); })() }
-                              : p));
-                            setShowDuplicatesPlaylist(prev => prev ? { ...prev, tracks: (() => { let removed = false; return prev.tracks.filter(x => { if (!removed && x.url === t.url) { removed = true; return false; } return true; }); })() } : null);
-                            showToast('Duplicate removed');
+                          onClick={() => handleRemoveSingle(originalIndex)}
+                          style={{
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            padding: '6px 14px',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            color: '#ef4444',
+                            border: '1px solid rgba(239, 68, 68, 0.22)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            transition: 'all 0.15s ease'
                           }}
-                          style={{ fontSize: '11px', padding: '4px 10px', background: 'rgba(160,40,40,0.08)', color: '#a05050', border: '1px solid rgba(160,40,40,0.2)', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.45)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.22)';
+                          }}
                         >
                           Remove
                         </button>
@@ -1703,30 +1960,38 @@ export function App() {
 
       {/* Bulk Tag Editor Modal */}
       {bulkEditPlaylist && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'rgba(15,14,13,0.97)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '20px', width: '100%', maxWidth: '680px', maxHeight: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}>
-            <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+          <div style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '20px', width: '100%', maxWidth: '680px', maxHeight: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}>
+            <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--v-bdr2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Bulk Tag Editor</h3>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', margin: '3px 0 0' }}>{bulkEditPlaylist.tracks.length} tracks in <span style={{ color: 'rgba(255,255,255,0.55)' }}>{bulkEditPlaylist.name}</span></p>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.01em' }}>Bulk Tag Editor</h3>
+                <p style={{ fontSize: '11px', color: 'var(--v-fg3)', margin: '3px 0 0' }}>{bulkEditPlaylist.tracks.length} tracks in <span style={{ color: 'var(--v-fg2)', fontWeight: 600 }}>{bulkEditPlaylist.name}</span></p>
               </div>
               <button
                 onClick={() => setBulkEditPlaylist(null)}
-                style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer', color: 'rgba(255,255,255,0.4)' }}
+                style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr)', cursor: 'pointer', color: 'var(--v-fg3)', transition: 'all 0.15s ease' }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.color = 'var(--v-fg)';
+                  e.currentTarget.style.borderColor = 'var(--v-bdr2)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color = 'var(--v-fg3)';
+                  e.currentTarget.style.borderColor = 'var(--v-bdr)';
+                }}
               >
                 <X size={12} />
               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }} className="custom-scrollbar">
               <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', padding: '6px 8px', marginBottom: '2px' }}>
-                <span style={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.2)', letterSpacing: '.12em', textTransform: 'uppercase' }}>#</span>
-                <span style={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.2)', letterSpacing: '.12em', textTransform: 'uppercase' }}>Title</span>
-                <span style={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.2)', letterSpacing: '.12em', textTransform: 'uppercase' }}>Artist</span>
+                <span style={{ fontSize: '9.5px', fontWeight: 800, color: 'var(--v-fg3)', letterSpacing: '.12em', textTransform: 'uppercase' }}>#</span>
+                <span style={{ fontSize: '9.5px', fontWeight: 800, color: 'var(--v-fg3)', letterSpacing: '.12em', textTransform: 'uppercase' }}>Title</span>
+                <span style={{ fontSize: '9.5px', fontWeight: 800, color: 'var(--v-fg3)', letterSpacing: '.12em', textTransform: 'uppercase' }}>Artist</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                 {bulkEditPlaylist.tracks.map((t, i) => (
-                  <div key={t.url} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', alignItems: 'center', padding: '4px 8px', borderRadius: '10px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontVariantNumeric: 'tabular-nums', paddingLeft: '4px' }}>{i + 1}</span>
+                  <div key={t.url} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', alignItems: 'center', padding: '4px 8px', borderRadius: '10px', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--v-fg3)', fontVariantNumeric: 'tabular-nums', paddingLeft: '4px' }}>{i + 1}</span>
                     <input
                       defaultValue={t.title}
                       onBlur={e => {
@@ -1738,7 +2003,15 @@ export function App() {
                           setBulkEditPlaylist(prev => prev ? { ...prev, tracks: prev.tracks.map(x => x.url === t.url ? { ...x, title: newTitle } : x) } : null);
                         }
                       }}
-                      style={{ width: '100%', background: 'transparent', color: 'rgba(255,255,255,0.85)', fontSize: '12.5px', fontWeight: 500, padding: '5px 8px', borderRadius: '7px', border: '1px solid transparent', outline: 'none' }}
+                      style={{ width: '100%', background: 'transparent', color: 'var(--v-fg)', fontSize: '12.5px', fontWeight: 500, padding: '5px 8px', borderRadius: '7px', border: '1px solid transparent', outline: 'none' }}
+                      onFocus={e => {
+                        e.currentTarget.style.borderColor = 'var(--v-accent)';
+                        e.currentTarget.style.background = 'var(--v-bg2)';
+                      }}
+                      onBlurCapture={e => {
+                        e.currentTarget.style.borderColor = 'transparent';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
                     />
                     <input
                       defaultValue={t.artist}
@@ -1751,16 +2024,26 @@ export function App() {
                           setBulkEditPlaylist(prev => prev ? { ...prev, tracks: prev.tracks.map(x => x.url === t.url ? { ...x, artist: newArtist } : x) } : null);
                         }
                       }}
-                      style={{ width: '100%', background: 'transparent', color: 'rgba(255,255,255,0.45)', fontSize: '12px', padding: '5px 8px', borderRadius: '7px', border: '1px solid transparent', outline: 'none' }}
+                      style={{ width: '100%', background: 'transparent', color: 'var(--v-fg2)', fontSize: '12px', padding: '5px 8px', borderRadius: '7px', border: '1px solid transparent', outline: 'none' }}
+                      onFocus={e => {
+                        e.currentTarget.style.borderColor = 'var(--v-accent)';
+                        e.currentTarget.style.background = 'var(--v-bg2)';
+                      }}
+                      onBlurCapture={e => {
+                        e.currentTarget.style.borderColor = 'transparent';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
                     />
                   </div>
                 ))}
               </div>
             </div>
-            <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--v-bdr2)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
               <button
                 onClick={() => { showToast('Tags saved'); setBulkEditPlaylist(null); }}
-                style={{ padding: '9px 22px', background: 'var(--v-accent)', color: 'var(--v-bg0)', fontWeight: 700, borderRadius: '9999px', border: 'none', cursor: 'pointer', fontSize: '12.5px' }}
+                style={{ padding: '9px 22px', background: 'var(--v-accent)', color: '#000000', fontWeight: 700, borderRadius: '9999px', border: 'none', cursor: 'pointer', fontSize: '12.5px', transition: 'all 0.15s ease' }}
+                onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                onMouseLeave={e => (e.currentTarget.style.transform = 'translateY(0)')}
               >
                 Save &amp; Close
               </button>

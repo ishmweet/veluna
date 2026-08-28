@@ -1709,6 +1709,10 @@ async fn open_in_file_manager(path: String) -> Result<(), String> {
         let dir = if p.is_file() {
             p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or(path)
         } else { path };
+        let dir_path = std::path::Path::new(&dir);
+        if !dir_path.exists() {
+            let _ = std::fs::create_dir_all(dir_path);
+        }
         #[cfg(target_os = "macos")]
         { Command::new("open").arg(&dir).no_window().spawn().map_err(|e| format!("open failed: {}", e))?; }
         #[cfg(target_os = "windows")]

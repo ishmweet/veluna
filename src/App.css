@@ -522,6 +522,45 @@ kbd {
   50% { transform: scale(1.1); opacity: 0.5; }
 }
 
+@keyframes flyoutIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dlPulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); }
+  65% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+.animate-dl-pulse {
+  animation: dlPulse 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.v-downloads-scroll {
+  overscroll-behavior: contain;
+}
+.v-downloads-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.v-downloads-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.v-downloads-scroll::-webkit-scrollbar-thumb {
+  background: var(--v-bdr2);
+  border-radius: 4px;
+}
+.v-downloads-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--v-fg3);
+}
+
 @keyframes velunaLoadStream {
   0% { left: -40%; width: 30%; opacity: 0; }
   20% { opacity: 1; }
@@ -1120,15 +1159,15 @@ kbd {
 .v-ctx,
 .v-glass-popover,
 .v-popover-glass {
-  background: rgba(18, 16, 17, 0.88) !important;
+  background: var(--v-bg2) !important;
   backdrop-filter: blur(24px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 20px !important;
+  border: 1px solid var(--v-bdr2) !important;
+  border-radius: 16px !important;
   overflow-x: hidden;
   overflow-y: auto;
   max-height: calc(100vh - 24px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--v-bdr) !important;
   padding: 6px !important;
   will-change: transform, opacity;
   transform: translateZ(0);
