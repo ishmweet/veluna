@@ -67,6 +67,7 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 
 ### ⬇️ Downloads
 - Download any YouTube track with one click from search results, right-click menu, or the download icon
+- **Downloads Flyout Drawer**, top-bar progress badge and slide-out download manager with live speed, progress bars, and cancel controls
 - Choose your **audio format**: MP3, Opus, M4A, or FLAC
 - Choose your **quality**: High (320kbps+), Medium (~128kbps), or Low
 - **Embed Thumbnail**, cover art written directly into file metadata tags, alongside title, artist, and album
@@ -76,6 +77,8 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - Create, name, and describe playlists; edit or delete at any time; upload custom cover images
 - **Enhanced View Selector**, toggle between grid and list views with smooth interactive transitions
 - **Collapsible Sidebar Playlists** with clean active indicators, track counts, and outward-expanding action menus
+- **Smart Duplicate Finder**, detects and highlights duplicate tracks in playlists with one-click batch removal (`Remove All`)
+- **Bulk Tag Editor**, mass update Artist, Album, Genre, and Year metadata across entire playlists at once
 - **Search within a playlist**, filter tracks by title or artist in real time
 - **Liked Songs**, built-in smart playlist. Heart any track anywhere in the app to save it
 - **Import from Spotify**, export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed
@@ -305,6 +308,7 @@ veluna/
 │   ├── components/
 │   │   ├── layout/
 │   │   │   ├── ContextMenu.tsx       # Right-click contextual actions for tracks and playlists
+│   │   │   ├── DownloadsFlyout.tsx   # Top-bar download progress flyout drawer with live speeds
 │   │   │   ├── PlayerBar.tsx         # Bottom playback bar, seekbar, volume & audio controls
 │   │   │   ├── QueuePanel.tsx        # Slide-out play queue drawer with drag-and-drop reorder
 │   │   │   ├── Sidebar.tsx           # Primary navigation, collapsible playlists & import menu
