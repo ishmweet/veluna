@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -e
 
 YTDLP_PATH="/usr/bin/yt-dlp"
