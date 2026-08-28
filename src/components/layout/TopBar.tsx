@@ -20,6 +20,7 @@ interface TopBarProps {
   isDownloadsFlyoutOpen?: boolean;
   setIsDownloadsFlyoutOpen?: (v: boolean) => void;
   downloadPulseKey?: number;
+  onOpenShortcuts?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -40,6 +41,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   isDownloadsFlyoutOpen = false,
   setIsDownloadsFlyoutOpen,
   downloadPulseKey = 0,
+  onOpenShortcuts,
 }) => {
   const _navigateTo = _setActiveNav || customNavigateTo || (() => {});
   const navigateBack = customNavigateBack || (() => {
@@ -51,7 +53,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [logoHovered, setLogoHovered] = useState(false);
 
   const isSearchActive = activeNav === 'home' && (hasSearched || tracks.length > 0 || ytMusicTracks.length > 0 || videoTracks.length > 0 || isSearching);
-  const isPlaylistOpen = activeNav === 'library' && Boolean(openPlaylistId);
+  const isPlaylistOpen = (activeNav === 'playlists' || activeNav === 'library') && Boolean(openPlaylistId);
   const isBackEnabled = isSearchActive || isPlaylistOpen || navHistory.length > 0;
 
   const handleBackClick = () => {
@@ -90,7 +92,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <span>Back</span>
           </button>
           <span className="v-topbar__crumb">
-            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : activeNav === 'library' ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
+            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : (activeNav === 'playlists' || activeNav === 'library') ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
           </span>
         </div>
 
@@ -176,8 +178,8 @@ export const TopBar: React.FC<TopBarProps> = ({
         }}
           onMouseEnter={() => setLogoHovered(true)}
           onMouseLeave={() => setLogoHovered(false)}
-          onClick={() => _navigateTo('home')}
-          title="Home (Veluna)"
+          onClick={() => onOpenShortcuts ? onOpenShortcuts() : _navigateTo('home')}
+          title="Keyboard Shortcuts (?)"
         >
           <svg width="34" height="34" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
             <rect width="28" height="28" rx="7" fill="var(--v-accent)"/>

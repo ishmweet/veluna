@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Track } from '../types';
 import { loadLS, saveLS, cleanArtist } from '../utils';
 
-export function useSearch(showToast?: (msg: string) => void) {
+export function useSearch(showToast?: (msg: string) => void, cacheEnabled: boolean = true) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<string[]>(() => loadLS('vg_searchHistory', []));
   const [showHistory, setShowHistory] = useState(false);
@@ -16,6 +16,12 @@ export function useSearch(showToast?: (msg: string) => void) {
   const [quickPicks, setQuickPicks] = useState<Track[]>(() => loadLS('vg_quickPicks', []));
 
   const searchCacheRef = useRef<Map<string, { music: Track[]; video: Track[] }>>(new Map());
+
+  useEffect(() => {
+    if (!cacheEnabled) {
+      searchCacheRef.current.clear();
+    }
+  }, [cacheEnabled]);
 
   useEffect(() => {
     saveLS('vg_searchHistory', searchHistory);
@@ -42,7 +48,7 @@ export function useSearch(showToast?: (msg: string) => void) {
     setShowHistory(false);
     setSearchHistory(prev => [q, ...prev.filter(h => h !== q)].slice(0, 8));
 
-    const cached = searchCacheRef.current.get(cacheKey);
+    const cached = cacheEnabled ? searchCacheRef.current.get(cacheKey) : undefined;
     let hasInstantHit = false;
 
     if (cached) {
@@ -99,11 +105,13 @@ export function useSearch(showToast?: (msg: string) => void) {
         parsedMusic = parseLines(resFallback, 'music');
       }
 
-      if (searchCacheRef.current.size > 100) {
-        const firstKey = searchCacheRef.current.keys().next().value;
-        if (firstKey) searchCacheRef.current.delete(firstKey);
+      if (cacheEnabled) {
+        if (searchCacheRef.current.size > 100) {
+          const firstKey = searchCacheRef.current.keys().next().value;
+          if (firstKey) searchCacheRef.current.delete(firstKey);
+        }
+        searchCacheRef.current.set(cacheKey, { music: parsedMusic, video: parsedVideo });
       }
-      searchCacheRef.current.set(cacheKey, { music: parsedMusic, video: parsedVideo });
 
       [...parsedMusic.slice(0, 8), ...parsedVideo.slice(0, 4)].forEach(t => {
         if (t.cover) {
@@ -130,9 +138,11 @@ export function useSearch(showToast?: (msg: string) => void) {
         }
       });
 
-      [...parsedMusic.slice(0, 3), ...parsedVideo.slice(0, 2)].forEach(track => {
-        if (track.url) invoke('prefetch_track', { url: track.url }).catch(() => {});
-      });
+      if (cacheEnabled) {
+        [...parsedMusic.slice(0, 3), ...parsedVideo.slice(0, 2)].forEach(track => {
+          if (track.url) invoke('prefetch_track', { url: track.url }).catch(() => {});
+        });
+      }
     } catch (err: any) {
       if (!hasInstantHit) {
         startTransition(() => {

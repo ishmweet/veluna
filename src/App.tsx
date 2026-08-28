@@ -142,11 +142,12 @@ export function App() {
     clearSearchHistory,
     removeSearchHistoryItem,
     resetSearch,
-  } = useSearch(showToast);
+  } = useSearch(showToast, loadLS('vg_cacheEnabled', true));
 
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Settings & Storage State
+  const [cacheEnabled, setCacheEnabledState] = useState<boolean>(() => loadLS('vg_cacheEnabled', true));
   const [volume, setVolume] = useState<number>(() => loadLS('vg_volume', 100));
   const [previousVolume, setPreviousVolume] = useState(100);
   const [playbackSpeed, setPlaybackSpeedState] = useState<number>(() => loadLS('vg_speed', 1));
@@ -166,6 +167,16 @@ export function App() {
   const [autoplayEnabled, setAutoplayEnabled] = useState<boolean>(() => loadLS('vg_autoplay', true));
   const [appVersion, setAppVersion] = useState<string>('0.1.3');
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+
+  const setCacheEnabled = useCallback((enabled: boolean) => {
+    setCacheEnabledState(enabled);
+    saveLS('vg_cacheEnabled', enabled);
+    invoke('set_cache_enabled', { enabled }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    invoke('set_cache_enabled', { enabled: cacheEnabled }).catch(() => {});
+  }, [cacheEnabled]);
 
   const [eq, setEqState] = useState<{ bass: number; mid: number; treble: number }>(() =>
     loadLS('vg_eq', { bass: 0, mid: 0, treble: 0 })
@@ -497,6 +508,7 @@ export function App() {
 
   // Background Cache Auto-Pruning
   useEffect(() => {
+    if (!cacheEnabled) return;
     const limit = loadLS<string>('vg_cacheLimit', '1gb');
     const limitMap: Record<string, number> = {
       '500mb': 500 * 1024 * 1024,
@@ -507,7 +519,7 @@ export function App() {
     };
     const maxBytes = limitMap[limit] ?? 1024 * 1024 * 1024;
     invoke('prune_cache_if_needed', { maxBytes }).catch(() => {});
-  }, [currentTrack?.url]);
+  }, [currentTrack?.url, cacheEnabled]);
 
   // MPRIS metadata sync
   useEffect(() => {
@@ -586,20 +598,74 @@ export function App() {
       const tag = (e.target as HTMLElement).tagName;
       const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
-      if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyF' || e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (activeNav !== 'home') {
-          setActiveNav('home');
-          setTimeout(() => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.code === 'KeyF' || e.key === 'f' || e.key === 'F') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (activeNav !== 'home') {
+            setActiveNav('home');
+            setTimeout(() => {
+              searchRef.current?.focus();
+              searchRef.current?.select();
+            }, 100);
+          } else {
             searchRef.current?.focus();
             searchRef.current?.select();
-          }, 100);
-        } else {
-          searchRef.current?.focus();
-          searchRef.current?.select();
+          }
+          return;
         }
-        return;
+
+        if (e.code === 'Digit1' || e.key === '1') {
+          e.preventDefault();
+          setActiveNav('home');
+          return;
+        }
+
+        if (e.code === 'Digit2' || e.key === '2') {
+          e.preventDefault();
+          setActiveNav('downloads');
+          return;
+        }
+
+        if (e.code === 'Digit3' || e.key === '3') {
+          e.preventDefault();
+          setActiveNav('stats');
+          return;
+        }
+
+        if (e.code === 'Digit4' || e.key === '4') {
+          e.preventDefault();
+          setActiveNav('settings');
+          return;
+        }
+
+        if (e.code === 'Digit5' || e.key === '5') {
+          e.preventDefault();
+          setIsQueueOpen(prev => !prev);
+          return;
+        }
+
+        if (e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
+          e.preventDefault();
+          setOpenPlaylistId(null);
+          setActiveNav('playlists');
+          return;
+        }
+      }
+
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isInput) {
+        const digitMatch = e.code.match(/^Digit([1-9])$/);
+        if (digitMatch) {
+          const num = parseInt(digitMatch[1], 10);
+          const targetIdx = num - 1;
+          if (playlists[targetIdx]) {
+            e.preventDefault();
+            setActiveNav('playlists');
+            setOpenPlaylistId(playlists[targetIdx].id);
+            showToast(`Opened "${playlists[targetIdx].name}"`);
+            return;
+          }
+        }
       }
 
       if (e.code === 'Space' && !isInput) { e.preventDefault(); togglePlayPause(); }
@@ -611,7 +677,7 @@ export function App() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav]);
+  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast]);
 
   // Global click dismiss
   useEffect(() => {
@@ -965,6 +1031,7 @@ export function App() {
           isDownloadsFlyoutOpen={isDownloadsFlyoutOpen}
           setIsDownloadsFlyoutOpen={setIsDownloadsFlyoutOpen}
           downloadPulseKey={downloadPulseKey}
+          onOpenShortcuts={() => setShowShortcuts(s => !s)}
         />
 
         <DownloadsFlyout
@@ -1194,6 +1261,8 @@ export function App() {
             setEq={setEqState}
             startupNav={startupNav}
             setStartupNav={setStartupNav}
+            cacheEnabled={cacheEnabled}
+            setCacheEnabled={setCacheEnabled}
             showToast={showToast}
           />
         )}
@@ -1353,7 +1422,7 @@ export function App() {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '16px 16px 100px 16px',
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(var(--v-bg0-rgb), 0.75)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
           }}
@@ -1361,8 +1430,8 @@ export function App() {
         >
           <div
             style={{
-              background: 'rgba(15,14,13,0.97)',
-              border: '1px solid rgba(255,255,255,0.07)',
+              background: 'var(--v-bg2)',
+              border: '1px solid var(--v-bdr2)',
               borderRadius: '20px',
               padding: '22px 20px 18px',
               width: '340px',
@@ -1371,7 +1440,7 @@ export function App() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Create Playlist</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.01em' }}>Create Playlist</h3>
               <button
                 onClick={() => setIsPlaylistModalOpen(false)}
                 style={{
@@ -1381,53 +1450,105 @@ export function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.07)',
+                  background: 'var(--v-bg3)',
+                  border: '1px solid var(--v-bdr2)',
                   cursor: 'pointer',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: 'var(--v-fg2)',
                   transition: 'all .15s',
                 }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.borderColor = 'var(--v-bdr3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-fg2)'; e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
               >
                 <X size={11} />
               </button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
               <div>
-                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: '6px' }}>Name</label>
+                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--v-fg3)', display: 'block', marginBottom: '6px' }}>Name</label>
                 <input
                   autoFocus
                   type="text"
                   value={newPlaylistName}
                   onChange={e => setNewPlaylistName(e.target.value)}
                   placeholder="e.g. Cyberpunk Mix"
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: '10px', padding: '9px 14px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--v-bg3)',
+                    border: '1px solid var(--v-bdr2)',
+                    color: 'var(--v-fg)',
+                    borderRadius: '10px',
+                    padding: '9px 14px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
                   onKeyDown={e => e.key === 'Enter' && confirmCreatePlaylist()}
                 />
               </div>
               <div>
-                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
-                  <AlignLeft size={9} /> Description <span style={{ textTransform: 'none', fontWeight: 400, color: 'rgba(255,255,255,0.2)' }}>optional</span>
+                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--v-fg3)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px' }}>
+                  <AlignLeft size={9} /> Description <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--v-fg4)' }}>optional</span>
                 </label>
                 <textarea
                   value={newPlaylistDesc}
                   onChange={e => setNewPlaylistDesc(e.target.value)}
                   placeholder="What's this playlist about?"
                   rows={2}
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)', borderRadius: '10px', padding: '9px 14px', fontSize: '13px', outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--v-bg3)',
+                    border: '1px solid var(--v-bdr2)',
+                    color: 'var(--v-fg)',
+                    borderRadius: '10px',
+                    padding: '9px 14px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
                 />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 onClick={() => setIsPlaylistModalOpen(false)}
-                style={{ padding: '8px 16px', borderRadius: '9999px', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.04)', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--v-bdr2)',
+                  color: 'var(--v-fg2)',
+                  background: 'var(--v-bg3)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  transition: 'all .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.borderColor = 'var(--v-bdr3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-fg2)'; e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmCreatePlaylist}
                 disabled={!newPlaylistName.trim()}
-                style={{ padding: '8px 20px', borderRadius: '9999px', border: 'none', background: 'var(--v-accent)', color: 'var(--v-bg0)', fontWeight: 700, cursor: 'pointer', fontSize: '12px', opacity: newPlaylistName.trim() ? 1 : 0.35 }}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '9999px',
+                  border: 'none',
+                  background: 'var(--v-accent)',
+                  color: 'var(--v-bg0)',
+                  fontWeight: 700,
+                  cursor: newPlaylistName.trim() ? 'pointer' : 'not-allowed',
+                  fontSize: '12px',
+                  opacity: newPlaylistName.trim() ? 1 : 0.4,
+                  transition: 'opacity .15s',
+                }}
               >
                 Create
               </button>
@@ -1447,7 +1568,7 @@ export function App() {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '16px 16px 100px 16px',
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(var(--v-bg0-rgb), 0.75)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
           }}
@@ -1455,8 +1576,8 @@ export function App() {
         >
           <div
             style={{
-              background: 'rgba(15,14,13,0.97)',
-              border: '1px solid rgba(255,255,255,0.07)',
+              background: 'var(--v-bg2)',
+              border: '1px solid var(--v-bdr2)',
               borderRadius: '20px',
               padding: '22px 20px 18px',
               width: '340px',
@@ -1465,7 +1586,7 @@ export function App() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Edit Playlist</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.01em' }}>Edit Playlist</h3>
               <button
                 onClick={() => setRenamingPlaylist(null)}
                 style={{
@@ -1475,25 +1596,40 @@ export function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.07)',
+                  background: 'var(--v-bg3)',
+                  border: '1px solid var(--v-bdr2)',
                   cursor: 'pointer',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: 'var(--v-fg2)',
                   transition: 'all .15s',
                 }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.borderColor = 'var(--v-bdr3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-fg2)'; e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
               >
                 <X size={11} />
               </button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
               <div>
-                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: '6px' }}>Name</label>
+                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--v-fg3)', display: 'block', marginBottom: '6px' }}>Name</label>
                 <input
                   autoFocus
                   type="text"
                   value={renameVal}
                   onChange={e => setRenameVal(e.target.value)}
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', borderRadius: '10px', padding: '9px 14px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--v-bg3)',
+                    border: '1px solid var(--v-bdr2)',
+                    color: 'var(--v-fg)',
+                    borderRadius: '10px',
+                    padding: '9px 14px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
                   onKeyDown={e => {
                     if (e.key === 'Enter') confirmRenamePlaylist();
                     if (e.key === 'Escape') setRenamingPlaylist(null);
@@ -1501,28 +1637,63 @@ export function App() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: '6px' }}>
-                  Description <span style={{ textTransform: 'none', fontWeight: 400, color: 'rgba(255,255,255,0.2)' }}>optional</span>
+                <label style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--v-fg3)', display: 'block', marginBottom: '6px' }}>
+                  Description <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--v-fg4)' }}>optional</span>
                 </label>
                 <textarea
                   value={renameDescVal}
                   onChange={e => setRenameDescVal(e.target.value)}
                   rows={2}
                   placeholder="e.g. Chill vibes, road trip..."
-                  style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)', borderRadius: '10px', padding: '9px 14px', fontSize: '13px', outline: 'none', resize: 'none', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    background: 'var(--v-bg3)',
+                    border: '1px solid var(--v-bdr2)',
+                    color: 'var(--v-fg)',
+                    borderRadius: '10px',
+                    padding: '9px 14px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'var(--v-accent)'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
                 />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 onClick={() => setRenamingPlaylist(null)}
-                style={{ padding: '8px 16px', borderRadius: '9999px', border: '1px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.04)', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--v-bdr2)',
+                  color: 'var(--v-fg2)',
+                  background: 'var(--v-bg3)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  transition: 'all .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.borderColor = 'var(--v-bdr3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-fg2)'; e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRenamePlaylist}
-                style={{ padding: '8px 20px', borderRadius: '9999px', border: 'none', background: 'var(--v-accent)', color: 'var(--v-bg0)', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '9999px',
+                  border: 'none',
+                  background: 'var(--v-accent)',
+                  color: 'var(--v-bg0)',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                }}
               >
                 Save
               </button>
@@ -1543,8 +1714,8 @@ export function App() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--v-bdr2)' }}>
-              <h2 style={{ fontSize: '14px', fontWeight: 700, color: '#e2ddd9', margin: 0 }}>Keyboard Shortcuts</h2>
-              <button onClick={() => setShowShortcuts(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5c5755', display: 'flex', padding: '3px', borderRadius: '5px' }}>
+              <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--v-fg)', margin: 0 }}>Keyboard Shortcuts</h2>
+              <button onClick={() => setShowShortcuts(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--v-fg3)', display: 'flex', padding: '3px', borderRadius: '5px' }}>
                 <X size={15} />
               </button>
             </div>
@@ -1556,18 +1727,25 @@ export function App() {
                 ['→', 'Seek forward 10s'],
                 ['M', 'Mute / Unmute'],
                 ['Navigation', null],
-                ['Ctrl+F', 'Focus search'],
+                ['Ctrl+1', 'Home View'],
+                ['Ctrl+2', 'Offline Library'],
+                ['Ctrl+3', 'Listening Stats'],
+                ['Ctrl+4', 'Settings Panel'],
+                ['Ctrl+5', 'Toggle Play Queue'],
+                ['Ctrl+P', 'Playlists Menu'],
+                ['Shift+1..9', 'Open Playlist 1..9'],
+                ['Ctrl+F', 'Focus Search'],
                 ['?', 'Show this overlay'],
                 ['Esc', 'Close any overlay'],
               ] as [string, string | null][]).map(([key, action], i) =>
                 action === null ? (
-                  <div key={i} style={{ gridColumn: '1/-1', marginTop: '10px', marginBottom: '4px', fontSize: '9.5px', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#363230' }}>
+                  <div key={i} style={{ gridColumn: '1/-1', marginTop: '10px', marginBottom: '4px', fontSize: '9.5px', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--v-fg3)' }}>
                     {key}
                   </div>
                 ) : (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--v-bdr2)' }}>
-                    <span style={{ fontSize: '12px', color: '#9e9894' }}>{action}</span>
-                    <kbd style={{ padding: '2px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, background: 'var(--v-bdr2)', border: '1px solid var(--v-bdr2)', color: '#5c5755', marginLeft: '12px', flexShrink: 0, fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--v-fg2)' }}>{action}</span>
+                    <kbd style={{ padding: '2px 7px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, background: 'var(--v-bg3)', border: '1px solid var(--v-bdr2)', color: 'var(--v-fg)', marginLeft: '12px', flexShrink: 0, fontFamily: 'monospace' }}>
                       {key}
                     </kbd>
                   </div>
@@ -1575,8 +1753,8 @@ export function App() {
               )}
             </div>
             <div style={{ padding: '10px 18px', borderTop: '1px solid var(--v-bdr2)', textAlign: 'center' }}>
-              <p style={{ fontSize: '11px', color: '#363230' }}>
-                Press <kbd style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '9.5px', background: 'var(--v-bdr2)', border: '1px solid var(--v-bdr2)', color: '#5c5755', fontFamily: 'monospace' }}>?</kbd> or <kbd style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '9.5px', background: 'var(--v-bdr2)', border: '1px solid var(--v-bdr2)', color: '#5c5755', fontFamily: 'monospace' }}>Esc</kbd> to close
+              <p style={{ fontSize: '11px', color: 'var(--v-fg3)' }}>
+                Press <kbd style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '9.5px', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr2)', color: 'var(--v-fg)', fontFamily: 'monospace' }}>?</kbd> or <kbd style={{ padding: '2px 6px', borderRadius: '4px', fontSize: '9.5px', background: 'var(--v-bg3)', border: '1px solid var(--v-bdr2)', color: 'var(--v-fg)', fontFamily: 'monospace' }}>Esc</kbd> to close
               </p>
             </div>
           </div>
@@ -1594,21 +1772,21 @@ export function App() {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--v-bdr2)' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#e2ddd9', margin: 0 }}>Confirm</h3>
+              <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--v-fg)', margin: 0 }}>Confirm</h3>
             </div>
             <div style={{ padding: '14px 18px' }}>
-              <p style={{ fontSize: '13px', color: '#9e9894', lineHeight: 1.5, margin: 0 }}>{confirmModal.message}</p>
+              <p style={{ fontSize: '13px', color: 'var(--v-fg2)', lineHeight: 1.5, margin: 0 }}>{confirmModal.message}</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 18px', borderTop: '1px solid var(--v-bdr2)' }}>
               <button
                 onClick={() => setConfirmModal(null)}
-                style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid var(--v-bdr2)', color: '#5c5755', background: 'transparent', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+                style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid var(--v-bdr2)', color: 'var(--v-fg2)', background: 'var(--v-bg3)', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
               >
                 Cancel
               </button>
               <button
                 onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
-                style={{ padding: '7px 14px', borderRadius: '8px', background: 'rgba(180,40,40,0.1)', border: '1px solid rgba(180,40,40,0.25)', color: '#a05050', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
+                style={{ padding: '7px 14px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
               >
                 Confirm
               </button>

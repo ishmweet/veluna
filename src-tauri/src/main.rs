@@ -583,15 +583,35 @@ fn parse_csv_row(line: &str) -> Vec<String> {
     fields
 }
 
+static CACHE_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[tauri::command]
+async fn set_cache_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    CACHE_ENABLED.store(enabled, std::sync::atomic::Ordering::SeqCst);
+    if !enabled {
+        PREFETCH_CACHE.write().unwrap().clear();
+        let _ = cache::clear_app_cache(app).await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_cache_enabled() -> bool {
+    CACHE_ENABLED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 #[tauri::command]
 async fn prefetch_track(url: String) -> Result<(), String> {
+    if !CACHE_ENABLED.load(std::sync::atomic::Ordering::SeqCst) { return Ok(()); }
     if url.starts_with("local://") { return Ok(()); }
     if PREFETCH_CACHE.read().unwrap().contains_key(&url) { return Ok(()); }
     let cache = Arc::clone(&PREFETCH_CACHE);
     tokio::spawn(async move {
         let permit = prefetch_semaphore().acquire().await.ok();
+        if !CACHE_ENABLED.load(std::sync::atomic::Ordering::SeqCst) { return; }
         if cache.read().unwrap().contains_key(&url) { return; }
         if let Some(stream_url) = extract_stream_url_async(url.clone(), None).await {
+            if !CACHE_ENABLED.load(std::sync::atomic::Ordering::SeqCst) { return; }
             let mut c = cache.write().unwrap();
             let now = std::time::Instant::now();
             c.retain(|_, v| now.duration_since(v.ts) < std::time::Duration::from_secs(4 * 3600));
@@ -1021,7 +1041,8 @@ async fn play_audio(url: String) -> Result<(), String> {
     let my_id = PLAY_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
     log_debug(&format!("Assigned my_id: {} for {}", my_id, safe_url));
 
-    let cached = {
+    let is_cache_on = CACHE_ENABLED.load(std::sync::atomic::Ordering::SeqCst);
+    let cached = if is_cache_on {
         let cache = PREFETCH_CACHE.read().unwrap();
         cache.get(&safe_url).and_then(|entry| {
             let age = std::time::Instant::now().duration_since(entry.ts);
@@ -1032,6 +1053,8 @@ async fn play_audio(url: String) -> Result<(), String> {
                 && !entry.url.contains("manifest.googlevideo.com")
             { Some(entry.url.clone()) } else { None }
         })
+    } else {
+        None
     };
 
     if cached.is_some() {
@@ -1051,7 +1074,7 @@ async fn play_audio(url: String) -> Result<(), String> {
             return Err("Superseded by newer play request".to_string());
         }
 
-        {
+        if is_cache_on {
             let mut cache = PREFETCH_CACHE.write().unwrap();
             let now = std::time::Instant::now();
             cache.insert(safe_url.clone(), CacheEntry { url: extracted.clone(), ts: now });
@@ -2943,6 +2966,8 @@ fn main() {
             cache::get_cache_info,
             cache::clear_app_cache,
             cache::prune_cache_if_needed,
+            set_cache_enabled,
+            get_cache_enabled,
             update_discord_rpc,
             clear_discord_rpc,
         ])

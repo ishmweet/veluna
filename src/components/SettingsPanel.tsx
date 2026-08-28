@@ -88,6 +88,7 @@ export type SettingsPanelProps = {
   isCheckingUpdate: boolean; handleCheckUpdate: () => void;
   performanceMode: boolean; setPerformanceMode: (v: boolean) => void;
   startupNav?: string; setStartupNav?: (v: string) => void;
+  cacheEnabled?: boolean; setCacheEnabled?: (v: boolean) => void;
 };
 
 export function SettingsPanel({
@@ -123,6 +124,7 @@ export function SettingsPanel({
   isCheckingUpdate, handleCheckUpdate,
   performanceMode, setPerformanceMode,
   startupNav: propStartupNav, setStartupNav: propSetStartupNav,
+  cacheEnabled: propCacheEnabled, setCacheEnabled: propSetCacheEnabled,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'playback');
   const [lbTesting, setLbTesting] = useState(false);
@@ -155,6 +157,8 @@ export function SettingsPanel({
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [cacheLimit, setCacheLimit] = useState<string>(() => loadLS('vg_cacheLimit', '1gb'));
+  const [internalCacheEnabled, setInternalCacheEnabled] = useState(() => loadLS('vg_cacheEnabled', true));
+  const cacheEnabled = propCacheEnabled !== undefined ? propCacheEnabled : internalCacheEnabled;
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [internalStartupNav, setInternalStartupNav] = useState(() => loadLS('vg_startupNav', 'home'));
   const startupNav = propStartupNav || internalStartupNav;
@@ -162,6 +166,24 @@ export function SettingsPanel({
 
   const refreshCacheInfo = () => {
     invoke<CacheInfo>('get_cache_info').then(setCacheInfo).catch(() => {});
+  };
+
+  const handleToggleCache = async (enabled: boolean) => {
+    setInternalCacheEnabled(enabled);
+    propSetCacheEnabled?.(enabled);
+    saveLS('vg_cacheEnabled', enabled);
+    try {
+      await invoke('set_cache_enabled', { enabled });
+      if (!enabled) {
+        const freed = await invoke<number>('clear_app_cache');
+        showToast(`Caching disabled — ${formatBytes(freed)} cache purged`);
+      } else {
+        showToast('Caching & stream prefetching enabled');
+      }
+      refreshCacheInfo();
+    } catch (e) {
+      showToast(`Cache update failed: ${e}`);
+    }
   };
 
   const handleStartupNavChange = (v: string) => {
@@ -1589,102 +1611,120 @@ export function SettingsPanel({
                   <HardDrive size={15} style={{color:"var(--v-accent)"}} />
                   <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Cache Storage & Auto-Cleaner</h3>
                 </div>
-                <button
-                  disabled={isClearingCache || (cacheInfo?.total_bytes === 0)}
-                  onClick={handleClearCache}
-                  style={{
-                    fontSize:"11.5px",
-                    color: isClearingCache || (cacheInfo?.total_bytes === 0) ? "#5c5755" : "#e2ddd9",
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid var(--v-bdr2)",
-                    borderRadius: "6px",
-                    padding: "4px 10px",
-                    cursor: isClearingCache || (cacheInfo?.total_bytes === 0) ? "not-allowed" : "pointer",
-                    display:"flex",
-                    alignItems:"center",
-                    gap:"5px",
-                    transition: "all 0.15s"
-                  }}
-                  onMouseEnter={e => { if (!isClearingCache && cacheInfo?.total_bytes !== 0) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
-                >
-                  <RefreshCw size={11} className={isClearingCache ? "animate-spin" : ""} />
-                  <span>{isClearingCache ? 'Clearing...' : 'Clear Cache'}</span>
-                </button>
-              </div>
-
-              <div
-                className="v-settings-row"
-                style={{
-                  padding: "14px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderBottom: "1px solid var(--v-bdr)",
-                  cursor: cacheInfo?.cache_dir ? "pointer" : "default",
-                  transition: "background 0.15s ease-out",
-                }}
-                onClick={() => {
-                  if (cacheInfo?.cache_dir) {
-                    invoke('open_in_file_manager', { path: cacheInfo.cache_dir }).catch(() => {});
-                  }
-                }}
-                title={cacheInfo?.cache_dir ? "Click to open cache folder" : undefined}
-              >
-                <div>
-                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Current Cache Size</p>
-                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                    {cacheInfo ? `${cacheInfo.formatted_size} (${cacheInfo.file_count} cached media & thumbnail files)` : 'Calculating cache usage...'}
-                  </p>
-                </div>
-                {cacheInfo?.cache_dir && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div className="v-settings-path-capsule" style={{ maxWidth: "260px" }}>
-                      <FolderOpen size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cacheInfo.cache_dir}</span>
-                    </div>
-                    <button
-                      title="Open Cache Folder"
-                      style={{
-                        padding: "6px",
-                        marginLeft: "4px",
-                        color: "#5c5755",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                        borderRadius: "7px",
-                        display: "flex",
-                        transition: "color .12s",
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#e2ddd9")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "#5c5755")}
-                    >
-                      <FolderOpen size={16} />
-                    </button>
-                  </div>
+                {cacheEnabled && (
+                  <button
+                    disabled={isClearingCache || (cacheInfo?.total_bytes === 0)}
+                    onClick={handleClearCache}
+                    style={{
+                      fontSize:"11.5px",
+                      color: isClearingCache || (cacheInfo?.total_bytes === 0) ? "#5c5755" : "#e2ddd9",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid var(--v-bdr2)",
+                      borderRadius: "6px",
+                      padding: "4px 10px",
+                      cursor: isClearingCache || (cacheInfo?.total_bytes === 0) ? "not-allowed" : "pointer",
+                      display:"flex",
+                      alignItems:"center",
+                      gap:"5px",
+                      transition: "all 0.15s"
+                    }}
+                    onMouseEnter={e => { if (!isClearingCache && cacheInfo?.total_bytes !== 0) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
+                  >
+                    <RefreshCw size={11} className={isClearingCache ? "animate-spin" : ""} />
+                    <span>{isClearingCache ? 'Clearing...' : 'Clear Cache'}</span>
+                  </button>
                 )}
               </div>
 
-              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:cacheEnabled?"1px solid var(--v-bdr)":"none"}}>
                 <div>
-                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Cache Size Limit</p>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable Caching & Stream Prefetch</p>
                   <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                    Automatically purges oldest cached streams and temporary artwork when limit is reached
+                    {cacheEnabled
+                      ? 'Active — pre-resolves queued songs in background, buffers 30s audio, and caches search queries'
+                      : 'Disabled — no cache or prefetch files will be saved, existing cache is purged'}
                   </p>
                 </div>
-                <ThemedSelect
-                  value={cacheLimit}
-                  onChange={handleCacheLimitChange}
-                  options={[
-                    { value: '500mb', label: '500 MB' },
-                    { value: '1gb', label: '1 GB' },
-                    { value: '2gb', label: '2 GB' },
-                    { value: '5gb', label: '5 GB' },
-                    { value: 'unlimited', label: 'Unlimited' },
-                  ]}
-                />
+                <SettingsSwitch checked={cacheEnabled} onChange={() => handleToggleCache(!cacheEnabled)} />
               </div>
+
+              {cacheEnabled && (
+                <>
+                  <div
+                    className="v-settings-row"
+                    style={{
+                      padding: "14px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderBottom: "1px solid var(--v-bdr)",
+                      cursor: cacheInfo?.cache_dir ? "pointer" : "default",
+                      transition: "background 0.15s ease-out",
+                    }}
+                    onClick={() => {
+                      if (cacheInfo?.cache_dir) {
+                        invoke('open_in_file_manager', { path: cacheInfo.cache_dir }).catch(() => {});
+                      }
+                    }}
+                    title={cacheInfo?.cache_dir ? "Click to open cache folder" : undefined}
+                  >
+                    <div>
+                      <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Current Cache Size</p>
+                      <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                        {cacheInfo ? `${cacheInfo.formatted_size} (${cacheInfo.file_count} cached media & thumbnail files)` : 'Calculating cache usage...'}
+                      </p>
+                    </div>
+                    {cacheInfo?.cache_dir && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="v-settings-path-capsule" style={{ maxWidth: "260px" }}>
+                          <FolderOpen size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cacheInfo.cache_dir}</span>
+                        </div>
+                        <button
+                          title="Open Cache Folder"
+                          style={{
+                            padding: "6px",
+                            marginLeft: "4px",
+                            color: "#5c5755",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                            borderRadius: "7px",
+                            display: "flex",
+                            transition: "color .12s",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = "#e2ddd9")}
+                          onMouseLeave={e => (e.currentTarget.style.color = "#5c5755")}
+                        >
+                          <FolderOpen size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Cache Size Limit</p>
+                      <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                        Automatically purges oldest cached streams and temporary artwork when limit is reached
+                      </p>
+                    </div>
+                    <ThemedSelect
+                      value={cacheLimit}
+                      onChange={handleCacheLimitChange}
+                      options={[
+                        { value: '500mb', label: '500 MB' },
+                        { value: '1gb', label: '1 GB' },
+                        { value: '2gb', label: '2 GB' },
+                        { value: '5gb', label: '5 GB' },
+                        { value: 'unlimited', label: 'Unlimited' },
+                      ]}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>

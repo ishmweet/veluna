@@ -136,6 +136,13 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 | Seek forward 10s | `→` |
 | Seek backward 10s | `←` |
 | Mute / Unmute | `M` |
+| Home View | `Ctrl+1` / `Cmd+1` |
+| Offline Library | `Ctrl+2` / `Cmd+2` |
+| Listening Stats | `Ctrl+3` / `Cmd+3` |
+| Settings Panel | `Ctrl+4` / `Cmd+4` |
+| Toggle Play Queue | `Ctrl+5` / `Cmd+5` |
+| Playlists Menu | `Ctrl+P` / `Cmd+P` |
+| Open Playlist 1–9 | `Shift+1` – `Shift+9` |
 | Focus Search Bar (Global) | `Ctrl+F` / `Cmd+F` |
 | Show Keyboard Shortcuts | `?` |
 | Dismiss Modal / Menu | `Esc` |
