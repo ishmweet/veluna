@@ -1566,3 +1566,26 @@ kbd {
   border-color: var(--v-accent);
   color: var(--v-accent);
 }
+
+/* 📁 Settings Path Capsule Glowing Hover */
+.v-settings-path-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #9e9894;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--v-bdr);
+  border-radius: 20px;
+  padding: 4px 10px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: monospace;
+  max-width: 90%;
+}
+
+.v-settings-row:hover .v-settings-path-capsule,
+.v-settings-path-capsule:hover {
+  border-color: var(--v-accent) !important;
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}

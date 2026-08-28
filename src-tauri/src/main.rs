@@ -1,4 +1,5 @@
 mod tray;
+mod cache;
 
 use std::io::{Write, BufRead, BufReader};
 use std::process::Command;
@@ -2934,6 +2935,10 @@ fn main() {
             fetch_lyrics,
             search_yt_music,
             tray::tray_set,
+            tray::tray_update_title,
+            cache::get_cache_info,
+            cache::clear_app_cache,
+            cache::prune_cache_if_needed,
             update_discord_rpc,
             clear_discord_rpc,
         ])

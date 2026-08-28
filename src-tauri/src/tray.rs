@@ -33,13 +33,11 @@ fn decode_png_to_rgba() -> Result<tauri::image::Image<'static>, String> {
     let expected_rgba = (w * h * 4) as usize;
 
     if raw.len() == expected_rgba {
-        
         return Ok(tauri::image::Image::new_owned(raw, w, h));
     }
 
     let expected_rgb = (w * h * 3) as usize;
     if raw.len() == expected_rgb {
-        
         let mut rgba = Vec::with_capacity(expected_rgba);
         for chunk in raw.chunks_exact(3) {
             rgba.extend_from_slice(chunk);
@@ -57,16 +55,18 @@ fn decode_png_to_rgba() -> Result<tauri::image::Image<'static>, String> {
 fn build_tray(app: &AppHandle) -> Result<(), String> {
     let play_pause_i = MenuItem::with_id(app, "play_pause", "Play / Pause", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let next_i = MenuItem::with_id(app, "next", "Next", true, None::<&str>)
+    let next_i = MenuItem::with_id(app, "next", "Next Track", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let prev_i = MenuItem::with_id(app, "prev", "Previous", true, None::<&str>)
+    let prev_i = MenuItem::with_id(app, "prev", "Previous Track", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let sep = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-    let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)
+    let sep1 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
+    let show_i = MenuItem::with_id(app, "show", "Show / Hide Veluna", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
+    let sep2 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
+    let quit_i = MenuItem::with_id(app, "quit", "Quit Veluna", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(app, &[&play_pause_i, &next_i, &prev_i, &sep, &show_i, &quit_i])
+
+    let menu = Menu::with_items(app, &[&play_pause_i, &next_i, &prev_i, &sep1, &show_i, &sep2, &quit_i])
         .map_err(|e| e.to_string())?;
 
     let icon = load_icon()?;
@@ -74,7 +74,7 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         TrayIconBuilder::with_id(TRAY_ID)
             .icon(icon)
-            .icon_as_template(false) 
+            .icon_as_template(false)
             .tooltip("Veluna")
             .menu(&menu)
             .show_menu_on_left_click(false)
@@ -82,7 +82,7 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
                 "play_pause" => { let _ = app.emit("tray_play_pause", ()); }
                 "next"       => { let _ = app.emit("tray_next", ()); }
                 "prev"       => { let _ = app.emit("tray_prev", ()); }
-                "show"       => show_window(app),
+                "show"       => toggle_window(app),
                 "quit"       => app.exit(0),
                 _            => {}
             })
@@ -108,14 +108,6 @@ fn build_tray(app: &AppHandle) -> Result<(), String> {
     }
 }
 
-fn show_window(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
-    }
-}
-
 fn toggle_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let visible   = w.is_visible().unwrap_or(false);
@@ -126,6 +118,7 @@ fn toggle_window(app: &AppHandle) {
             let _ = w.show();
             let _ = w.unminimize();
             let _ = w.set_focus();
+            let _ = w.emit("window_focus", ());
         }
     }
 }
@@ -147,7 +140,6 @@ pub fn tray_set(
             let _ = tray.set_visible(true);
         }
     } else {
-        
         if let Some(tray) = app.tray_by_id(TRAY_ID) {
             let _ = tray.set_visible(false);
         }
@@ -155,6 +147,30 @@ pub fn tray_set(
     
     if let Ok(mut guard) = flag.lock() { *guard = enabled; }
     Ok(enabled)
+}
+
+#[tauri::command]
+pub fn tray_update_title(
+    app: AppHandle,
+    title: Option<String>,
+    artist: Option<String>,
+    is_playing: bool,
+) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let tooltip = match (title, artist) {
+            (Some(t), Some(a)) if !t.is_empty() && !a.is_empty() => {
+                let status = if is_playing { "▶" } else { "⏸" };
+                format!("Veluna: {status} {a} - {t}")
+            }
+            (Some(t), _) if !t.is_empty() => {
+                let status = if is_playing { "▶" } else { "⏸" };
+                format!("Veluna: {status} {t}")
+            }
+            _ => "Veluna Music Player".to_string(),
+        };
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+    Ok(())
 }
 
 pub fn handle_close_requested(app: &AppHandle, flag: &TrayFlag) -> bool {

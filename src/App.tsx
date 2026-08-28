@@ -352,8 +352,31 @@ export function App() {
   const getPlaylistCover = useCallback((p: Playlist) => p.id === 'p1' ? null : (p.customCover || (p.tracks.find(t => t.cover)?.cover || null)), []);
 
   // Navigation state
-  const [activeNav, setActiveNavState] = useState<NavView>(() => loadLS('vg_lastNav', 'home'));
-  const [navHistory, setNavHistory] = useState<NavView[]>(['home']);
+  const [startupNav, setStartupNavState] = useState<string>(() => loadLS('vg_startupNav', 'home'));
+  const setStartupNav = useCallback((nav: string) => {
+    setStartupNavState(nav);
+    saveLS('vg_startupNav', nav);
+  }, []);
+
+  const [activeNav, setActiveNavState] = useState<NavView>(() => {
+    const startup = loadLS<string>('vg_startupNav', 'home');
+    if (startup === 'last') return loadLS<NavView>('vg_lastNav', 'home');
+    if (startup === 'library' || startup === 'playlists') return 'playlists';
+    if (['home', 'downloads', 'stats', 'settings'].includes(startup)) return startup as NavView;
+    return 'home';
+  });
+
+  const [navHistory, setNavHistory] = useState<NavView[]>(() => {
+    const startup = loadLS<string>('vg_startupNav', 'home');
+    const initial: NavView = (startup === 'last')
+      ? loadLS<NavView>('vg_lastNav', 'home')
+      : (startup === 'library' || startup === 'playlists')
+        ? 'playlists'
+        : ['home', 'downloads', 'stats', 'settings'].includes(startup)
+          ? (startup as NavView)
+          : 'home';
+    return [initial];
+  });
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('playback');
 
   const setActiveNav = useCallback((nav: NavView) => {
@@ -421,8 +444,37 @@ export function App() {
     listen('tray_play_pause', () => mprisToggleRef.current()).then(fn => unlisteners.push(fn));
     listen('tray_next', () => mprisNextRef.current()).then(fn => unlisteners.push(fn));
     listen('tray_prev', () => mprisPrevRef.current()).then(fn => unlisteners.push(fn));
+
+    if (trayEnabled) {
+      invoke('tray_set', { enabled: true }).catch(() => {});
+    }
+
     return () => unlisteners.forEach(fn => fn());
   }, []);
+
+  useEffect(() => {
+    if (trayEnabled) {
+      invoke('tray_update_title', {
+        title: currentTrack?.title || null,
+        artist: currentTrack?.artist || null,
+        isPlaying,
+      }).catch(() => {});
+    }
+  }, [currentTrack?.title, currentTrack?.artist, isPlaying, trayEnabled]);
+
+  // Background Cache Auto-Pruning
+  useEffect(() => {
+    const limit = loadLS<string>('vg_cacheLimit', '1gb');
+    const limitMap: Record<string, number> = {
+      '500mb': 500 * 1024 * 1024,
+      '1gb': 1024 * 1024 * 1024,
+      '2gb': 2 * 1024 * 1024 * 1024,
+      '5gb': 5 * 1024 * 1024 * 1024,
+      'unlimited': 0,
+    };
+    const maxBytes = limitMap[limit] ?? 1024 * 1024 * 1024;
+    invoke('prune_cache_if_needed', { maxBytes }).catch(() => {});
+  }, [currentTrack?.url]);
 
   // MPRIS metadata sync
   useEffect(() => {
@@ -1066,6 +1118,8 @@ export function App() {
             setAutoplayEnabled={setAutoplayEnabled}
             eq={eq}
             setEq={setEqState}
+            startupNav={startupNav}
+            setStartupNav={setStartupNav}
             showToast={showToast}
           />
         )}
@@ -1787,7 +1841,26 @@ export function App() {
 
       {/* Toast Notification */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 300, background: 'var(--v-bdr2)', border: '1px solid var(--v-bdr3)', color: '#e2ddd9', fontSize: '12.5px', fontWeight: 600, padding: '8px 14px', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.8)', pointerEvents: 'none', animation: 'toastIn 0.2s cubic-bezier(0.25,0,0,1) both', whiteSpace: 'nowrap' }}>
+        <div style={{
+          position: 'fixed',
+          bottom: '96px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          background: '#181615',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
+          color: '#ffffff',
+          fontSize: '13px',
+          fontWeight: 600,
+          padding: '9px 18px',
+          borderRadius: '9999px',
+          boxShadow: '0 12px 32px rgba(0,0,0,0.85), 0 2px 8px rgba(0,0,0,0.6)',
+          pointerEvents: 'none',
+          animation: 'toastIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both',
+          whiteSpace: 'nowrap',
+          textAlign: 'center',
+          letterSpacing: '-0.01em',
+        }}>
           {toast}
         </div>
       )}

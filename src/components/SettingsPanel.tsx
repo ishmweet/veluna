@@ -4,9 +4,9 @@ import {
   FolderDown, FolderOpen, Image, Zap, BarChart2, Globe,
   Moon, Database, Upload, ArchiveRestore, Trash2,
   Download, GitBranch, Radio, CheckCircle2,
-  AlertCircle
+  AlertCircle, HardDrive
 } from 'lucide-react';
-import { SettingsTab, DiskInfo } from '../types';
+import { SettingsTab, DiskInfo, CacheInfo } from '../types';
 import { loadLS, saveLS, lightenColor, validateSettingsChange, formatBytes } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -87,6 +87,7 @@ export type SettingsPanelProps = {
   autoCheckUpdates: boolean; setAutoCheckUpdates: (v: boolean) => void;
   isCheckingUpdate: boolean; handleCheckUpdate: () => void;
   performanceMode: boolean; setPerformanceMode: (v: boolean) => void;
+  startupNav?: string; setStartupNav?: (v: string) => void;
 };
 
 export function SettingsPanel({
@@ -121,6 +122,7 @@ export function SettingsPanel({
   autoCheckUpdates, setAutoCheckUpdates,
   isCheckingUpdate, handleCheckUpdate,
   performanceMode, setPerformanceMode,
+  startupNav: propStartupNav, setStartupNav: propSetStartupNav,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'playback');
   const [lbTesting, setLbTesting] = useState(false);
@@ -151,16 +153,65 @@ export function SettingsPanel({
   };
 
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
-  const [startupNav, setStartupNav] = useState(() => loadLS('vg_startupNav', 'home'));
+  const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
+  const [cacheLimit, setCacheLimit] = useState<string>(() => loadLS('vg_cacheLimit', '1gb'));
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [internalStartupNav, setInternalStartupNav] = useState(() => loadLS('vg_startupNav', 'home'));
+  const startupNav = propStartupNav || internalStartupNav;
   const [hoveredSlider, setHoveredSlider] = useState<string | null>(null);
+
+  const refreshCacheInfo = () => {
+    invoke<CacheInfo>('get_cache_info').then(setCacheInfo).catch(() => {});
+  };
+
   const handleStartupNavChange = (v: string) => {
-    setStartupNav(v);
+    setInternalStartupNav(v);
+    propSetStartupNav?.(v);
     saveLS('vg_startupNav', v);
+    const label = v === 'home' ? 'Home' : v === 'downloads' ? 'Offline' : v === 'stats' ? 'Stats' : (v === 'library' || v === 'playlists') ? 'Playlists' : v === 'last' ? 'Last Opened' : 'Settings';
+    showToast(`Default startup view set to ${label}`);
+  };
+
+  const handleCacheLimitChange = async (limit: string) => {
+    setCacheLimit(limit);
+    saveLS('vg_cacheLimit', limit);
+    const label = limit === '500mb' ? '500 MB' : limit === '1gb' ? '1 GB' : limit === '2gb' ? '2 GB' : limit === '5gb' ? '5 GB' : 'Unlimited';
+    showToast(`Cache limit set to ${label}`);
+
+    const limitMap: Record<string, number> = {
+      '500mb': 500 * 1024 * 1024,
+      '1gb': 1024 * 1024 * 1024,
+      '2gb': 2 * 1024 * 1024 * 1024,
+      '5gb': 5 * 1024 * 1024 * 1024,
+      'unlimited': 0,
+    };
+    const maxBytes = limitMap[limit] ?? 1024 * 1024 * 1024;
+    try {
+      const pruned = await invoke<number>('prune_cache_if_needed', { maxBytes });
+      if (pruned > 0) {
+        showToast(`Auto-cleaned ${formatBytes(pruned)} of cache`);
+      }
+      refreshCacheInfo();
+    } catch {}
+  };
+
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+      const freed = await invoke<number>('clear_app_cache');
+      showToast(`Cache cleared (${formatBytes(freed)} freed)`);
+      refreshCacheInfo();
+    } catch (e) {
+      showToast(`Failed to clear cache: ${e}`);
+    } finally {
+      setIsClearingCache(false);
+    }
   };
 
   useEffect(() => {
     invoke<DiskInfo>('get_disk_usage', { path: downloadPath }).then(setDiskInfo).catch(() => {});
-  }, [downloadPath]);
+    refreshCacheInfo();
+  }, [downloadPath, activeTab]);
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { id: 'playback',     label: 'Playback',     icon: <Zap size={15} /> },
@@ -205,6 +256,7 @@ export function SettingsPanel({
   );
 
   const matchesStorage = showTab('storage') && (
+    matchCard(["Storage", "Cache Storage & Auto-Cleaner", "Cache", "Cache Size Limit", "Auto-Cleaner", "Clear Cache", "Disk Usage", "Temp Storage", cacheLimit, cacheInfo?.formatted_size || ""]) ||
     matchCard(["Storage", "Backup Location", "Download Directory", "veluna_backup.json", backupPath, downloadPath, "Save path", "Folder"]) ||
     matchCard(["Storage", "Backup & Restore Actions", "Create Backup", "Restore Backup", "JSON", "Export data", "Import data", "Save playlists", "Restore playlists", "Settings backup"]) ||
     matchCard(["Storage", "Reset Veluna App", "Reset", "Clear data", "Factory reset", "Wipe database", "Delete all", "Danger zone", "Irreversible"])
@@ -1483,17 +1535,18 @@ export function SettingsPanel({
               <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
                   <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Default Startup View</p>
-                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : startupNav === 'library' ? 'Playlists' : 'Settings'}</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : (startupNav === 'library' || startupNav === 'playlists') ? 'Playlists' : startupNav === 'last' ? 'Last Opened View' : 'Settings'}</p>
                 </div>
                 <ThemedSelect
-                  value={startupNav}
+                  value={startupNav === 'library' ? 'playlists' : startupNav}
                   onChange={handleStartupNavChange}
                   options={[
                     { value: 'home', label: 'Home', desc: 'Main discovery dashboard' },
                     { value: 'downloads', label: 'Offline', desc: 'Your downloaded local tracks' },
-                    { value: 'library', label: 'Playlists', desc: 'Your playlists and Liked Songs' },
+                    { value: 'playlists', label: 'Playlists', desc: 'Your playlists and Liked Songs' },
                     { value: 'stats', label: 'Stats', desc: 'Your personal listening insights' },
                     { value: 'settings', label: 'Settings', desc: 'Preferences and configurations' },
+                    { value: 'last', label: 'Last Opened', desc: 'Resume where you left off' },
                   ]}
                 />
               </div>
@@ -1528,6 +1581,72 @@ export function SettingsPanel({
             <div>
               <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage</h2>
               <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Backup, restore data, and manage application maintenance.</p>
+            </div>
+
+            <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <HardDrive size={15} style={{color:"var(--v-accent)"}} />
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Cache Storage & Auto-Cleaner</h3>
+                </div>
+                <button
+                  disabled={isClearingCache || (cacheInfo?.total_bytes === 0)}
+                  onClick={handleClearCache}
+                  style={{
+                    fontSize:"11.5px",
+                    color: isClearingCache || (cacheInfo?.total_bytes === 0) ? "#5c5755" : "#e2ddd9",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--v-bdr2)",
+                    borderRadius: "6px",
+                    padding: "4px 10px",
+                    cursor: isClearingCache || (cacheInfo?.total_bytes === 0) ? "not-allowed" : "pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    gap:"5px",
+                    transition: "all 0.15s"
+                  }}
+                  onMouseEnter={e => { if (!isClearingCache && cacheInfo?.total_bytes !== 0) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
+                >
+                  <RefreshCw size={11} className={isClearingCache ? "animate-spin" : ""} />
+                  <span>{isClearingCache ? 'Clearing...' : 'Clear Cache'}</span>
+                </button>
+              </div>
+
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
+                <div>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Current Cache Size</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                    {cacheInfo ? `${cacheInfo.formatted_size} (${cacheInfo.file_count} cached media & thumbnail files)` : 'Calculating cache usage...'}
+                  </p>
+                </div>
+                {cacheInfo?.cache_dir && (
+                  <div className="v-settings-path-capsule" style={{ maxWidth: "260px" }} title={cacheInfo.cache_dir}>
+                    <HardDrive size={12} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cacheInfo.cache_dir}</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Cache Size Limit</p>
+                  <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                    Automatically purges oldest cached streams and temporary artwork when limit is reached
+                  </p>
+                </div>
+                <ThemedSelect
+                  value={cacheLimit}
+                  onChange={handleCacheLimitChange}
+                  options={[
+                    { value: '500mb', label: '500 MB', desc: 'Lightweight — recommended for SSDs' },
+                    { value: '1gb', label: '1 GB', desc: 'Balanced — standard for daily listeners' },
+                    { value: '2gb', label: '2 GB', desc: 'Generous — faster track reloads' },
+                    { value: '5gb', label: '5 GB', desc: 'Large — extensive offline buffering' },
+                    { value: 'unlimited', label: 'Unlimited', desc: 'Never auto-prune cached files' },
+                  ]}
+                />
+              </div>
             </div>
 
             <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>

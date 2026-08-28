@@ -47,6 +47,8 @@ export function formatTime(s: number): string {
 }
 
 export function formatBytes(b: number): string {
+  if (!b || b <= 0) return '0 B';
+  if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
   if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
