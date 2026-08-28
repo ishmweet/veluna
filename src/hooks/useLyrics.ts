@@ -22,18 +22,23 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
 
   const lyricsScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const lastScrolledLyricIdxRef = useRef<number>(-1);
+  const lastFetchedKeyRef = useRef<string>('');
 
   const setLyricsSource = useCallback((s: string) => {
     setLyricsSourceState(s);
     saveLS('vg_lyricsSource', s);
   }, []);
 
-  const fetchLyrics = useCallback(() => {
+  const fetchLyrics = useCallback((force = false) => {
     if (!currentTrack) return;
     const title = currentTrack.title;
     const artist = currentTrack.artist;
     if (!title || !artist) return;
 
+    const key = `${currentTrack.url}_${lyricsSource}`;
+    if (!force && lastFetchedKeyRef.current === key) return;
+
+    lastFetchedKeyRef.current = key;
     setLyricsLoading(true);
     setLyricsData(null);
 
@@ -58,7 +63,10 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
 
   useEffect(() => {
     if (showLyrics && currentTrack) {
-      fetchLyrics();
+      const key = `${currentTrack.url}_${lyricsSource}`;
+      if (lastFetchedKeyRef.current !== key) {
+        fetchLyrics(true);
+      }
     }
   }, [showLyrics, currentTrack?.url, lyricsSource, fetchLyrics]);
 

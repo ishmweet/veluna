@@ -157,7 +157,7 @@ export function useSearch(showToast?: (msg: string) => void, cacheEnabled: boole
         setIsSearching(false);
       }
     }
-  }, [searchQuery, isSearching, showToast]);
+  }, [searchQuery, isSearching, showToast, cacheEnabled]);
 
   const tracks = searchTab === 'music' ? ytMusicTracks : videoTracks;
 

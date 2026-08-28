@@ -69,7 +69,6 @@ export type SettingsPanelProps = {
   showToast: (m: string) => void;
   updateAvailable: string | null;
   appVersion: string;
-  onNavigateToUpdates?: () => void;
   lyricsSource: string; setLyricsSource: (v: string) => void;
   trayEnabled: boolean; setTrayEnabled: (v: boolean) => void;
   discordRpcEnabled: boolean; setDiscordRpcEnabled: (v: boolean) => void;

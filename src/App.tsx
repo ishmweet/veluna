@@ -98,6 +98,7 @@ export function App() {
     setStatsTimeRange,
     artistThumbs,
     recordTrackPlayed,
+    recordListeningStep,
   } = useListeningStats();
 
   // 4. Queue hook
@@ -121,6 +122,10 @@ export function App() {
     addToQueue,
   } = useQueue(showToast);
 
+  // Settings & Storage State
+  const [cacheEnabled, setCacheEnabledState] = useState<boolean>(() => loadLS('vg_cacheEnabled', true));
+  const [uiScale, setUiScaleState] = useState<number>(() => loadLS('vg_uiScale', 0));
+
   // 5. Search hook
   const {
     searchQuery,
@@ -142,13 +147,10 @@ export function App() {
     clearSearchHistory,
     removeSearchHistoryItem,
     resetSearch,
-  } = useSearch(showToast, loadLS('vg_cacheEnabled', true));
+  } = useSearch(showToast, cacheEnabled);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Settings & Storage State
-  const [cacheEnabled, setCacheEnabledState] = useState<boolean>(() => loadLS('vg_cacheEnabled', true));
-  const [uiScale, setUiScaleState] = useState<number>(() => loadLS('vg_uiScale', 0));
   const [volume, setVolume] = useState<number>(() => loadLS('vg_volume', 100));
   const [previousVolume, setPreviousVolume] = useState(100);
   const [playbackSpeed, setPlaybackSpeedState] = useState<number>(() => loadLS('vg_speed', 1));
@@ -286,6 +288,7 @@ export function App() {
     setPlayHistory,
     setQuickPicks,
     onTrackPlayed: recordTrackPlayed,
+    onListeningStep: recordListeningStep,
     showToast,
   });
 
@@ -1016,6 +1019,8 @@ export function App() {
           queueLength={queue.length}
           queuePulseKey={queuePulseKey}
           setIsPlaylistModalOpen={setIsPlaylistModalOpen}
+          setNewPlaylistName={setNewPlaylistName}
+          setNewPlaylistDesc={setNewPlaylistDesc}
           setShowCsvImportModal={setShowCsvImportModal}
           setShowYtImportModal={setShowYtImportModal}
           handleImportPlaylistM3u={handleImportPlaylistM3u}
@@ -1101,6 +1106,8 @@ export function App() {
             showToast={showToast}
             updateAvailable={updateAvailable}
             setSettingsTab={setSettingsTab}
+            getTrackCover={getTrackCover}
+            localTracks={localTracks}
           />
         )}
 

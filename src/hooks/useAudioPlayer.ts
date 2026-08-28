@@ -21,6 +21,7 @@ interface UseAudioPlayerProps {
   setPlayHistory: React.Dispatch<React.SetStateAction<Track[]>>;
   setQuickPicks: React.Dispatch<React.SetStateAction<Track[]>>;
   onTrackPlayed?: (track: Track) => void;
+  onListeningStep?: (url: string, secs: number) => void;
   showToast: (msg: string) => void;
   setLyricsData?: (data: any) => void;
 }
@@ -41,6 +42,7 @@ export function useAudioPlayer({
   setPlayHistory,
   setQuickPicks,
   onTrackPlayed,
+  onListeningStep,
   showToast,
   setLyricsData,
 }: UseAudioPlayerProps) {
@@ -471,9 +473,15 @@ export function useAudioPlayer({
       return;
     }
 
+    if (track?.url && bookmarksRef.current[track.url]) {
+      delete bookmarksRef.current[track.url];
+      saveLS('vg_bookmarks', bookmarksRef.current);
+    }
+
     if (autoplayEnabled && track && !isLocal) {
       setIsLoadingTrack(true);
       fetchAutoplayTracks(track).then(async (recs) => {
+        if (currentTrackRef.current?.url !== track.url) return;
         if (recs.length > 0) {
           const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
           const toAdd = (filteredRecs.length > 0 ? filteredRecs : recs).slice(0, 8);
@@ -489,8 +497,10 @@ export function useAudioPlayer({
         setIsPlayingSync(false);
         setIsLoadingTrack(false);
       }).catch(() => {
-        setIsPlayingSync(false);
-        setIsLoadingTrack(false);
+        if (currentTrackRef.current?.url === track.url) {
+          setIsPlayingSync(false);
+          setIsLoadingTrack(false);
+        }
       });
       return;
     }
@@ -554,6 +564,7 @@ export function useAudioPlayer({
     if (autoplayEnabled && track) {
       setIsLoadingTrack(true);
       fetchAutoplayTracks(track).then(async (recs) => {
+        if (currentTrackRef.current?.url !== track.url) return;
         if (recs.length > 0) {
           const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
           const toAdd = (filteredRecs.length > 0 ? filteredRecs : recs).slice(0, 8);
@@ -567,7 +578,11 @@ export function useAudioPlayer({
           }
         }
         setIsLoadingTrack(false);
-      }).catch(() => setIsLoadingTrack(false));
+      }).catch(() => {
+        if (currentTrackRef.current?.url === track.url) {
+          setIsLoadingTrack(false);
+        }
+      });
     }
   }, [handlePlayTrack, handlePlayLocalTrack, shuffle, setQueue, autoplayEnabled, fetchAutoplayTracks, playHistory, showToast]);
 
@@ -743,6 +758,28 @@ export function useAudioPlayer({
       unlistenError?.();
     };
   }, [handleTrackEnd, setIsPlayingSync, setIsLoadingTrackSync, setLoadingTrackUrlSync, crossfadeSeconds, volume, showToast]);
+
+  const onListeningStepRef = useRef(onListeningStep);
+  useEffect(() => {
+    onListeningStepRef.current = onListeningStep;
+  }, [onListeningStep]);
+
+  useEffect(() => {
+    if (!isPlaying || !currentTrack) return;
+    const interval = setInterval(() => {
+      if (isPlayingRef.current && currentTrackRef.current?.url) {
+        onListeningStepRef.current?.(currentTrackRef.current.url, 1);
+
+        const cur = progressSecondsRef.current;
+        const dur = trackDurationRef.current;
+        if (cur > 5 && dur > 30 && cur < dur - 8) {
+          bookmarksRef.current[currentTrackRef.current.url] = cur;
+          saveLS('vg_bookmarks', bookmarksRef.current);
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isPlaying, currentTrack?.url]);
 
   const updateProgressFromEvent = useCallback((clientX: number) => {
     if (!progressRef.current || !currentTrackRef.current) return undefined;

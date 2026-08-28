@@ -264,7 +264,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               const isToday = di === days.length - 1;
               const barH = count === 0 ? 6 : Math.max(8, Math.round((count / maxDay) * 110));
               return (
-                <div key={label}
+                <div key={`${label}-${di}`}
                   style={{
                     flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:"4px",height:"100%",
                     position: 'relative',
