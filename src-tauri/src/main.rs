@@ -942,6 +942,9 @@ fn ensure_mpv_running() -> bool {
         "--audio-stream-silence=yes".into(),
         format!("--input-ipc-server={}", socket_path()),
     ];
+    if let Some(proxy_str) = get_proxy_url() {
+        args.push(format!("--http-proxy={}", proxy_str));
+    }
     if let Some(af) = mpv_af_flag() { args.push(af); }
 
     match Command::new(bin_mpv()).args(&args).no_window().spawn() {
@@ -3136,13 +3139,16 @@ fn set_network_config(proxy_url: Option<String>, custom_instance: Option<String>
     let clean_inst = custom_instance.map(|s| s.trim().trim_end_matches('/').to_string()).filter(|s| !s.is_empty());
     {
         let mut cfg = network_config().lock().unwrap();
-        cfg.proxy_url = clean_proxy;
+        cfg.proxy_url = clean_proxy.clone();
         cfg.custom_instance = clean_inst;
     }
     if let Some(cache_lock) = CURRENT_HTTP_CLIENT.get() {
         let mut guard = cache_lock.lock().unwrap();
         *guard = None;
     }
+    let proxy_target = clean_proxy.as_deref().unwrap_or("");
+    let cmd = serde_json::json!({ "command": ["set_property", "http-proxy", proxy_target] }).to_string();
+    let _ = send_ipc_command_with_retry(&cmd, 1);
     Ok(())
 }
 

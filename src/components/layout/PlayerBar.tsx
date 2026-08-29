@@ -167,7 +167,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
       )}
       {isPlaying&&!isLoadingTrack&&<div style={{position:"absolute",top:0,left:0,right:0,height:"1px",background:"rgba(226,221,217,0.06)"}}/>}
 
-      <div style={{display:"flex",alignItems:"center",gap:"12px",width:"240px",flexShrink:0,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",width:"240px",maxWidth:"30%",minWidth:"140px",flexShrink:1}}>
         {currentTrack ? (
           <>
             <div style={{
@@ -258,7 +258,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         )}
       </div>
 
-      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",padding:"0 24px",minWidth:0}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",padding:"0 16px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",position:"relative"}}>
           <div style={{flex:1,display:"flex",justifyContent:"flex-end",alignItems:"center",paddingRight:"16px",minWidth:0}}>
             <SpeedSelector speed={playbackSpeed} onChange={setPlaybackSpeed}/>
@@ -355,7 +355,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         </div>
       </div>
 
-      <div style={{width:"240px",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:"12px",flexShrink:0}}>
+      <div style={{width:"240px",maxWidth:"30%",minWidth:"140px",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:"12px",flexShrink:1}}>
         {crossfadeSeconds>0&&(
           <span style={{fontSize:"9.5px",color:"#5c5755",fontWeight:700,fontVariantNumeric:"tabular-nums",flexShrink:0}} title={`Crossfade: ${crossfadeSeconds}s`}>
             ×{crossfadeSeconds}s
@@ -374,7 +374,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <Moon size={16} style={sleepTimer > 0 ? {animation:'velunaPulse 2s ease-in-out infinite'} : {}}/>
           </button>
           {showSleepPopover && (
-            <div style={{position:"absolute",bottom:"calc(100% + 12px)",right:"-40px",zIndex:9999}}>
+            <div style={{position:"absolute",bottom:"calc(100% + 12px)",right:"0px",zIndex:9999}}>
               <SleepTimerPopover
                 sleepTimer={sleepTimer}
                 onSet={setSleepTimerMinutes}

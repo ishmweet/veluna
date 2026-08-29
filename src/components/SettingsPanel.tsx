@@ -982,8 +982,8 @@ export function SettingsPanel({
             )}
 
             {(!searchQuery.trim() || matchCard(["Appearance", "Startup Behavior", "Default Startup View", "Startup View", "Home", "Downloads", "Offline", "Library", "Playlists", "Stats", "Settings", "Launch", startupNav])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",borderTopLeftRadius:"11px",borderTopRightRadius:"11px"}}>
                   <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Startup Behavior</h3>
                 </div>
                 <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -1141,8 +1141,8 @@ export function SettingsPanel({
             )}
 
             {(!searchQuery.trim() || matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality, "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",borderTopLeftRadius:"11px",borderTopRightRadius:"11px"}}>
                   <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Audio Specifications</h3>
                 </div>
                 
@@ -1255,8 +1255,8 @@ export function SettingsPanel({
             )}
 
             {(!searchQuery.trim() || matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing", "Time display", "Album art", "Thumbnail", "Buttons"])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",borderTopLeftRadius:"11px",borderTopRightRadius:"11px"}}>
                   <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Discord Integration</h3>
                 </div>
                 <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:discordRpcEnabled?"1px solid var(--v-bdr)":"none"}}>
@@ -1367,8 +1367,8 @@ export function SettingsPanel({
             )}
 
             {(!searchQuery.trim() || matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",borderTopLeftRadius:"11px",borderTopRightRadius:"11px"}}>
                   <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Lyrics Provider</h3>
                 </div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
@@ -1740,8 +1740,8 @@ export function SettingsPanel({
             )}
 
             {(!searchQuery.trim() || matchCard(["Storage", "Cache Storage & Auto-Cleaner", "Cache", "Enable Caching & Stream Prefetch", "Cache Size Limit", "Auto-Cleaner", "Clear Cache", "Disk Usage", "Temp Storage", cacheLimit, cacheInfo?.formatted_size || ""])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",borderTopLeftRadius:"11px",borderTopRightRadius:"11px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                     <HardDrive size={15} style={{color:"var(--v-accent)"}} />
                     <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Cache Storage & Auto-Cleaner</h3>

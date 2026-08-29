@@ -60,7 +60,6 @@ export function DownloadsPanel({
   tracks,
   setTracks,
   playlists = [],
-  setPlaylists,
   addToQueue,
   showToast,
 }: {
@@ -74,7 +73,6 @@ export function DownloadsPanel({
   tracks: LocalTrack[];
   setTracks: React.Dispatch<React.SetStateAction<LocalTrack[]>>;
   playlists?: Playlist[];
-  setPlaylists?: React.Dispatch<React.SetStateAction<Playlist[]>>;
   addToQueue?: (tracks: Track | Track[]) => void;
   showToast?: (msg: string) => void;
 }) {
@@ -588,19 +586,7 @@ export function DownloadsPanel({
                   }
                   clearSelection();
                 }}
-                onAddToPlaylist={(targetPlaylistId) => {
-                  const selected = filtered.map(toTrack).filter(t => selectedUrls.has(t.url));
-                  if (selected.length > 0 && setPlaylists) {
-                    setPlaylists(prev => prev.map(p => {
-                      if (p.id !== targetPlaylistId) return p;
-                      const existingUrls = new Set(p.tracks.map(t => t.url));
-                      const newTracks = selected.filter(t => !existingUrls.has(t.url));
-                      return { ...p, tracks: [...p.tracks, ...newTracks] };
-                    }));
-                    showToast?.(`Added ${selected.length} tracks to playlist`);
-                  }
-                  clearSelection();
-                }}
+                onAddToPlaylist={() => {}}
                 onDeleteSelected={() => {
                   const selected = filtered.filter(t => selectedUrls.has(`local://${t.path}`));
                   selected.forEach(t => onDeleteLocalTrack(t));

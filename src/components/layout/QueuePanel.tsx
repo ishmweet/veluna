@@ -60,15 +60,20 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
 
   const handleSaveQueueAsPlaylist = () => {
     if (queue.length === 0) return;
+    const onlineTracks = queue.filter(t => !t.url.startsWith('local://'));
+    if (onlineTracks.length === 0) {
+      showToast('Cannot save playlist: offline tracks cannot be added to playlists');
+      return;
+    }
     const name = `Queue ${new Date().toLocaleDateString()}`;
     const newPl: Playlist = {
       id: `pl_${Date.now()}`,
       name,
       description: 'Saved from queue',
-      tracks: [...queue],
+      tracks: onlineTracks,
     };
     setPlaylists(prev => [...prev, newPl]);
-    showToast(`Saved queue as "${name}"`);
+    showToast(`Saved queue as "${name}" (${onlineTracks.length} tracks)`);
   };
 
   return (

@@ -71,21 +71,25 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     <div
       style={{
         position: 'fixed',
-        bottom: '88px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        bottom: '84px',
+        right: '24px',
+        left: 'auto',
+        transform: 'none',
         zIndex: 900,
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
         background: 'rgba(20, 18, 17, 0.94)',
         backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
         border: '1px solid var(--v-bdr2)',
         borderRadius: '16px',
         padding: '6px 10px 6px 14px',
         boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255,255,255,0.06)',
         animation: 'fadeUpSm 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
         userSelect: 'none',
+        maxWidth: 'calc(100vw - 48px)',
+        boxSizing: 'border-box',
       }}
     >
       {/* Selected badge */}
@@ -149,37 +153,38 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       </button>
 
       {/* Add to Playlist Dropdown */}
-      <div style={{ position: 'relative' }} ref={menuRef}>
-        <button
-          onClick={() => setShowPlaylistMenu(prev => !prev)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 11px',
-            background: showPlaylistMenu ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)',
-            color: 'var(--v-fg)',
-            border: '1px solid var(--v-bdr2)',
-            borderRadius: '10px',
-            fontSize: '12.5px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={e => { if (!showPlaylistMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
-          onMouseLeave={e => { if (!showPlaylistMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-          title="Add selected to Playlist"
-        >
-          <FolderPlus size={14} />
-          Playlist
-        </button>
+      {!isOfflineView && !selectedTracks.some(t => t.url.startsWith('local://')) && (
+        <div style={{ position: 'relative' }} ref={menuRef}>
+          <button
+            onClick={() => setShowPlaylistMenu(prev => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 11px',
+              background: showPlaylistMenu ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)',
+              color: 'var(--v-fg)',
+              border: '1px solid var(--v-bdr2)',
+              borderRadius: '10px',
+              fontSize: '12.5px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => { if (!showPlaylistMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
+            onMouseLeave={e => { if (!showPlaylistMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+            title="Add selected to Playlist"
+          >
+            <FolderPlus size={14} />
+            Playlist
+          </button>
 
-        {showPlaylistMenu && (
+          {showPlaylistMenu && (
           <div
             style={{
               position: 'absolute',
               bottom: '100%',
-              left: 0,
+              right: 0,
               marginBottom: '8px',
               minWidth: '210px',
               background: 'var(--v-bg2)',
@@ -317,6 +322,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Download All (Online tracks) */}
       {!isOfflineView && onDownloadSelected && (

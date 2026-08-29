@@ -96,97 +96,92 @@ export const TopBar: React.FC<TopBarProps> = ({
           </span>
         </div>
 
-        {/* Active Downloads Icon Button */}
-        {(() => {
-          const activeCount = activeDownloads.filter(d => d.status === 'downloading').length;
-          return (
-            <button
-              key={downloadPulseKey}
-              data-downloads-trigger="true"
-              onClick={() => setIsDownloadsFlyoutOpen?.(prev => !prev)}
-              className={downloadPulseKey ? 'animate-dl-pulse' : ''}
-              style={{
-                position: "fixed",
-                top: "14px",
-                right: "64px",
-                zIndex: 100,
-                width: "34px",
-                height: "34px",
-                borderRadius: "8px",
-                background: isDownloadsFlyoutOpen || activeCount > 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
-                border: isDownloadsFlyoutOpen || activeCount > 0 ? "1px solid var(--v-accent)" : "1px solid rgba(255, 255, 255, 0.08)",
-                color: isDownloadsFlyoutOpen || activeCount > 0 ? "var(--v-accent)" : "#c4beba",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
-                padding: 0,
-              }}
-              onMouseEnter={e => {
-                if (!isDownloadsFlyoutOpen && activeCount === 0) {
-                  e.currentTarget.style.color = '#fff';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isDownloadsFlyoutOpen && activeCount === 0) {
-                  e.currentTarget.style.color = '#c4beba';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                }
-              }}
-              title="Active Downloads"
-            >
-              <Download size={16} />
-              {activeCount > 0 && (
-                <span style={{
-                  position: "absolute",
-                  top: "-4px",
-                  right: "-4px",
-                  minWidth: "15px",
-                  height: "15px",
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Active Downloads Icon Button */}
+          {(() => {
+            const activeCount = activeDownloads.filter(d => d.status === 'downloading').length;
+            return (
+              <button
+                key={downloadPulseKey}
+                data-downloads-trigger="true"
+                onClick={() => setIsDownloadsFlyoutOpen?.(prev => !prev)}
+                className={downloadPulseKey ? 'animate-dl-pulse' : ''}
+                style={{
+                  position: "relative",
+                  width: "34px",
+                  height: "34px",
                   borderRadius: "8px",
-                  background: "var(--v-accent, #ff7a00)",
-                  color: "#0e0d0d",
-                  fontSize: "9.5px",
-                  fontWeight: 800,
+                  background: isDownloadsFlyoutOpen || activeCount > 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.03)",
+                  border: isDownloadsFlyoutOpen || activeCount > 0 ? "1px solid var(--v-accent)" : "1px solid rgba(255, 255, 255, 0.08)",
+                  color: isDownloadsFlyoutOpen || activeCount > 0 ? "var(--v-accent)" : "#c4beba",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "0 3px",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.6)",
-                }}>
-                  {activeCount}
-                </span>
-              )}
-            </button>
-          );
-        })()}
+                  cursor: "pointer",
+                  transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                  padding: 0,
+                }}
+                onMouseEnter={e => {
+                  if (!isDownloadsFlyoutOpen && activeCount === 0) {
+                    e.currentTarget.style.color = '#fff';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isDownloadsFlyoutOpen && activeCount === 0) {
+                    e.currentTarget.style.color = '#c4beba';
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                  }
+                }}
+                title="Active Downloads"
+              >
+                <Download size={16} />
+                {activeCount > 0 && (
+                  <span style={{
+                    position: "absolute",
+                    top: "-4px",
+                    right: "-4px",
+                    minWidth: "15px",
+                    height: "15px",
+                    borderRadius: "8px",
+                    background: "var(--v-accent, #ff7a00)",
+                    color: "#0e0d0d",
+                    fontSize: "9.5px",
+                    fontWeight: 800,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0 3px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.6)",
+                  }}>
+                    {activeCount}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
 
-        {/* Veluna Logo at the Far Top Right of the Window */}
-        <div style={{
-          position: "fixed",
-          top: "14px",
-          right: "20px",
-          zIndex: 100,
-          display: "flex",
-          alignItems: "center",
-          cursor: "pointer",
-          transition: "transform 0.2s ease",
-          transform: logoHovered ? "scale(1.06)" : "none"
-        }}
-          onMouseEnter={() => setLogoHovered(true)}
-          onMouseLeave={() => setLogoHovered(false)}
-          onClick={() => onOpenShortcuts ? onOpenShortcuts() : _navigateTo('home')}
-          title="Keyboard Shortcuts (?)"
-        >
-          <svg width="34" height="34" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
-            <rect width="28" height="28" rx="7" fill="var(--v-accent)"/>
-            <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
-            <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
-          </svg>
+          {/* Veluna Logo */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            cursor: "pointer",
+            transition: "transform 0.2s ease",
+            transform: logoHovered ? "scale(1.06)" : "none"
+          }}
+            onMouseEnter={() => setLogoHovered(true)}
+            onMouseLeave={() => setLogoHovered(false)}
+            onClick={() => onOpenShortcuts ? onOpenShortcuts() : _navigateTo('home')}
+            title="Keyboard Shortcuts (?)"
+          >
+            <svg width="34" height="34" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
+              <rect width="28" height="28" rx="7" fill="var(--v-accent)"/>
+              <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
+              <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
+            </svg>
+          </div>
         </div>
       </div>
     </>

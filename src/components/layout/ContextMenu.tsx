@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   AlignLeft,
@@ -30,7 +30,7 @@ import {
   ImagePlus,
 } from 'lucide-react';
 import { Track, LocalTrack, Playlist, CtxMenu, AudioInfo } from '../../types';
-import { getTrackGradient, cleanArtist, getZoomFactor } from '../../utils';
+import { getTrackGradient, cleanArtist } from '../../utils';
 import { CopyButton } from '../Modals';
 
 interface ContextMenuProps {
@@ -164,6 +164,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   };
 
   const addTrackToPlaylist = (pid: string, track: Track) => {
+    if (track.url?.startsWith('local://')) {
+      showToast('Offline tracks cannot be added to playlists');
+      return;
+    }
     setPlaylists(prev => prev.map(p => {
       if (p.id === pid) {
         if (p.tracks.some(t => t.url === track.url)) return p;
@@ -175,12 +179,20 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setAddToPlaylistTrack(null);
   };
 
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const handleResize = () => setCtxMenu(null);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [ctxMenu, setCtxMenu]);
+
   return (
     <>
       {ctxMenu && (() => {
         const { track, playlist, localTracksList, localTrackIndex } = ctxMenu;
         
-        const zoom = getZoomFactor();
+        const vw = document.documentElement.clientWidth || window.innerWidth;
+        const vh = document.documentElement.clientHeight || window.innerHeight;
 
         // 1. Local Track Context Menu
         if (ctxMenu.type === 'local' && track) {
@@ -194,8 +206,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             duration: track.duration,
             cover: track.cover,
           };
-          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
-          const maxTop = (window.innerHeight / zoom) - 320;
+          const maxLeft = vw - menuWidth - 12;
+          const maxTop = vh - 320;
           const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
           const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
 
@@ -222,14 +234,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           );
         }
 
-        // 2. Online Track Context Menu
+        // 2. Track Context Menu (Online & Local in Queue/PlayerBar/Library)
         if ((ctxMenu.type === 'track' || ctxMenu.type === 'quickpick' || ctxMenu.type === 'queue-track') && track) {
+          const isLocal = track.url.startsWith('local://');
           const menuWidth = 220;
-          const menuHeight = track.url.startsWith('local://') ? 340 : 420;
-          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
-          const maxTop = (window.innerHeight / zoom) - menuHeight - 12;
+          const menuHeight = isLocal ? 280 : 420;
+          const maxLeft = vw - menuWidth - 12;
+          const maxTop = vh - menuHeight - 12;
           const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
           const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
+          const localFilePath = isLocal ? track.url.replace('local://', '') : '';
+          const localTrack: LocalTrack = {
+            title: track.title,
+            path: localFilePath,
+            size_bytes: 0,
+            extension: track.artist || 'AUDIO',
+            artist: track.artist,
+            duration: track.duration,
+            cover: track.cover,
+          };
+
           return (
             <div className="v-ctx custom-scrollbar" style={{ position: 'fixed', zIndex: 9999, width: `${menuWidth}px`, top: `${top}px`, left: `${left}px` }} onClick={e => e.stopPropagation()}>
               <div className="v-ctx__header">
@@ -248,19 +272,46 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   {cleanArtist(track.artist) && <div style={{ fontSize: '11px', color: 'var(--v-fg2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>{cleanArtist(track.artist)}</div>}
                 </div>
               </div>
-              <button onClick={() => { handlePlayTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Play size={14} /> Play Now</button>
+
+              {/* Core Playback Actions */}
+              {isLocal ? (
+                <button onClick={() => { handlePlayLocalTrack(localTrack); setCtxMenu(null); }} className="v-ctx__item"><Play size={14} /> Play Now</button>
+              ) : (
+                <button onClick={() => { handlePlayTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Play size={14} /> Play Now</button>
+              )}
               <button onClick={() => { if (playNext) playNext(track); else { setQueue(p => [track, ...p.filter(t => t.url !== track.url)]); showToast('Playing next'); } setCtxMenu(null); }} className="v-ctx__item"><PlaySquare size={14} /> Play Next</button>
               <button onClick={() => { if (addToQueue) addToQueue(track); else { setQueue(p => [...p.filter(t => t.url !== track.url), track]); showToast('Added to queue'); } setCtxMenu(null); }} className="v-ctx__item"><ListPlus size={14} /> Add to Queue</button>
-              <button onClick={() => { toggleLikeTrack(track); setCtxMenu(null); }} className="v-ctx__item">
-                <Heart size={14} style={isTrackLiked(track.url) ? { color: 'var(--v-accent)', fill: 'currentColor' } : {}} />
-                {isTrackLiked(track.url) ? 'Remove from Liked' : 'Like'}
-              </button>
-              <button onClick={e => { e.stopPropagation(); setAddToPlaylistTrack(track); setCtxMenu(null); }} className="v-ctx__item"><PlusCircle size={14} /> Add to Playlist</button>
+
+              {/* Online Only: Like & Add to Playlist */}
+              {!isLocal && (
+                <>
+                  <button onClick={() => { toggleLikeTrack(track); setCtxMenu(null); }} className="v-ctx__item">
+                    <Heart size={14} style={isTrackLiked(track.url) ? { color: 'var(--v-accent)', fill: 'currentColor' } : {}} />
+                    {isTrackLiked(track.url) ? 'Remove from Liked' : 'Like'}
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); setAddToPlaylistTrack(track); setCtxMenu(null); }} className="v-ctx__item"><PlusCircle size={14} /> Add to Playlist</button>
+                </>
+              )}
+
+              {/* Local Only: Edit Metadata & Show in Folder */}
+              {isLocal && (
+                <>
+                  <button onClick={() => { setMetadataEditingTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Pencil size={13} /> Edit Metadata</button>
+                  <button onClick={() => { handleOpenInFileManager(localFilePath); setCtxMenu(null); }} className="v-ctx__item"><FolderOpen size={13} /> Show in Folder</button>
+                </>
+              )}
+
+              {/* Queue specific action */}
               {ctxMenu.type === 'queue-track' && (
                 <button onClick={() => { setQueue(prev => prev.filter(t => t.url !== track.url)); setCtxMenu(null); }} className="v-ctx__item v-ctx__item--danger"><X size={14} /> Remove from Queue</button>
               )}
+
               <div className="v-ctx__sep" />
-              {!track.url.startsWith('local://') && (
+
+              {/* Bottom Actions */}
+              {isLocal ? (
+                <button onClick={() => { handleDeleteLocalTrack(localTrack); setCtxMenu(null); }} className="v-ctx__item v-ctx__item--danger"><Trash2 size={13} /> Delete File</button>
+              ) : (
                 <>
                   <button onClick={() => { setInfoModalTrack(track); setCtxMenu(null); }} className="v-ctx__item"><Info size={14} /> Track Info</button>
                   <button onClick={() => { copyToClipboard(getTrackShareUrl(track)); setCtxMenu(null); }} className="v-ctx__item"><Share2 size={14} /> Copy Link</button>
@@ -282,8 +333,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         if ((ctxMenu.type === 'playlist' || ctxMenu.type === 'sidebar-playlist') && playlist) {
           const menuWidth = 200;
           const menuHeight = playlist.id === 'p1' ? 340 : 430;
-          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
-          const maxTop = (window.innerHeight / zoom) - menuHeight - 12;
+          const maxLeft = vw - menuWidth - 12;
+          const maxTop = vh - menuHeight - 12;
           const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
           const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
           return (
@@ -360,7 +411,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       })()}
 
       {/* Add to Playlist dialog */}
-      {addToPlaylistTrack && (
+      {addToPlaylistTrack && !addToPlaylistTrack.url.startsWith('local://') && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }} onClick={() => setAddToPlaylistTrack(null)}>
           <div className="v-ctx" style={{ width: '280px', background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '16px', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid var(--v-bdr2)' }}>

@@ -691,16 +691,19 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                         clearTrackSelection();
                       }}
                       onAddToPlaylist={(targetPlaylistId) => {
-                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url));
-                        if (selected.length > 0) {
-                          setPlaylists(prev => prev.map(p => {
-                            if (p.id !== targetPlaylistId) return p;
-                            const existingUrls = new Set(p.tracks.map(t => t.url));
-                            const newTracks = selected.filter(t => !existingUrls.has(t.url));
-                            return { ...p, tracks: [...p.tracks, ...newTracks] };
-                          }));
-                          showToast(`Added ${selected.length} tracks to playlist`);
+                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url) && !t.url.startsWith('local://'));
+                        if (selected.length === 0) {
+                          showToast('Offline tracks cannot be added to playlists');
+                          clearTrackSelection();
+                          return;
                         }
+                        setPlaylists(prev => prev.map(p => {
+                          if (p.id !== targetPlaylistId) return p;
+                          const existingUrls = new Set(p.tracks.map(t => t.url));
+                          const newTracks = selected.filter(t => !existingUrls.has(t.url));
+                          return { ...p, tracks: [...p.tracks, ...newTracks] };
+                        }));
+                        showToast(`Added ${selected.length} tracks to playlist`);
                         clearTrackSelection();
                       }}
                       onDeleteSelected={() => {

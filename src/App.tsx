@@ -711,6 +711,42 @@ export function App() {
           setActiveNav('playlists');
           return;
         }
+
+        if (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
+          e.preventDefault();
+          setUiScaleState(prev => {
+            const next = Math.max(-5, Math.min(5, prev - 1));
+            saveLS('vg_uiScale', next);
+            (document.documentElement.style as any).zoom = `${100 + next * 5}%`;
+            showToast(`UI Scale: ${next > 0 ? `+${next}` : next} (${100 + next * 5}%)`);
+            return next;
+          });
+          return;
+        }
+
+        if (e.key === '+' || e.key === '=' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+          e.preventDefault();
+          setUiScaleState(prev => {
+            const next = Math.max(-5, Math.min(5, prev + 1));
+            saveLS('vg_uiScale', next);
+            (document.documentElement.style as any).zoom = `${100 + next * 5}%`;
+            showToast(`UI Scale: ${next > 0 ? `+${next}` : next} (${100 + next * 5}%)`);
+            return next;
+          });
+          return;
+        }
+
+        if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') {
+          e.preventDefault();
+          setUiScaleState(prev => {
+            if (prev === 0) return 0;
+            saveLS('vg_uiScale', 0);
+            (document.documentElement.style as any).zoom = '100%';
+            showToast('UI Scale: Default (100%)');
+            return 0;
+          });
+          return;
+        }
       }
 
       if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isInput) {
@@ -1456,7 +1492,6 @@ export function App() {
             tracks={localTracks}
             setTracks={setLocalTracks}
             playlists={playlists}
-            setPlaylists={setPlaylists}
             addToQueue={addToQueue}
             showToast={showToast}
           />
@@ -2051,11 +2086,11 @@ export function App() {
       {/* Keyboard Shortcuts Modal */}
       {showShortcuts && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(var(--v-bg0-rgb),0.88)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(var(--v-bg0-rgb),0.88)' }}
           onClick={() => setShowShortcuts(false)}
         >
           <div
-            style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '14px', width: '500px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }}
+            style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '14px', width: '500px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }}
             className="custom-scrollbar"
             onClick={e => e.stopPropagation()}
           >
@@ -2081,6 +2116,11 @@ export function App() {
                 ['Ctrl+P', 'Playlists Menu'],
                 ['Shift+1..9', 'Open Playlist 1..9'],
                 ['Ctrl+F', 'Focus Search'],
+                ['Interface & Zoom', null],
+                ['Ctrl + +', 'Increase UI Scale (+5%)'],
+                ['Ctrl + -', 'Decrease UI Scale (-5%)'],
+                ['Ctrl + 0', 'Reset UI Scale (100%)'],
+                ['General', null],
                 ['?', 'Show this overlay'],
                 ['Esc', 'Close any overlay'],
               ] as [string, string | null][]).map(([key, action], i) =>
@@ -2110,11 +2150,11 @@ export function App() {
       {/* Confirmation Modal */}
       {confirmModal && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(var(--v-bg0-rgb),0.88)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(var(--v-bg0-rgb),0.88)' }}
           onClick={() => setConfirmModal(null)}
         >
           <div
-            style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '12px', width: '320px', boxShadow: '0 24px 60px rgba(0,0,0,0.85)', overflow: 'hidden' }}
+            style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '12px', width: '320px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.85)' }}
             onClick={e => e.stopPropagation()}
           >
             <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--v-bdr2)' }}>
@@ -2484,8 +2524,8 @@ export function App() {
 
       {/* Bulk Tag Editor Modal */}
       {bulkEditPlaylist && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 16px 100px 16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
-          <div style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '20px', width: '100%', maxWidth: '680px', maxHeight: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+          <div style={{ background: 'var(--v-bg2)', border: '1px solid var(--v-bdr2)', borderRadius: '20px', width: '100%', maxWidth: 'min(680px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}>
             <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--v-bdr2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
                 <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.01em' }}>Bulk Tag Editor</h3>

@@ -84,14 +84,11 @@ export function getZoomFactor(): number {
 }
 
 export function clampMenu(x: number, y: number, w = 260, h = 320) {
-  const zoom = getZoomFactor();
-  const scaledX = x / zoom;
-  const scaledY = y / zoom;
-  const vw = window.innerWidth / zoom;
-  const vh = window.innerHeight / zoom;
+  const vw = typeof document !== 'undefined' ? (document.documentElement.clientWidth || window.innerWidth) : 1920;
+  const vh = typeof document !== 'undefined' ? (document.documentElement.clientHeight || window.innerHeight) : 1080;
   
-  const cx = scaledX + w > vw - 8 ? Math.max(8, scaledX - w) : scaledX;
-  const cy = scaledY + h > vh - 8 ? Math.max(8, scaledY - h) : scaledY;
+  const cx = x + w > vw - 12 ? Math.max(12, x - w) : Math.max(12, x);
+  const cy = y + h > vh - 12 ? Math.max(12, y - h) : Math.max(12, y);
   return { x: cx, y: cy };
 }
 

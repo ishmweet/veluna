@@ -93,7 +93,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
       <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"rgba(0,0,0,0.18)"}}/>
 
       {/* Left panel — centered & responsive */}
-      <div style={{position:"relative",zIndex:10,width:"clamp(280px, 30vw, 360px)",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 28px",gap:"16px",maxHeight:"100vh",overflow:"visible",boxSizing:"border-box"}}>
+      <div className="custom-scrollbar" style={{position:"relative",zIndex:10,width:"clamp(260px, 30vw, 360px)",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:"12px",maxHeight:"100vh",overflowY:"auto",boxSizing:"border-box"}}>
 
         {/* Close button */}
         <button onClick={()=>setShowLyrics(false)}

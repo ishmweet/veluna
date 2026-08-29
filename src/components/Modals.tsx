@@ -14,8 +14,8 @@ export function ImportResultModal({
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
   return (
-    <div style={{position:"fixed",inset:0,zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(var(--v-bg0-rgb),0.9)"}}>
-      <div style={{width:"380px",borderRadius:"14px",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.95)",background:"var(--v-bg2)",border:"1px solid var(--v-bdr2)"}}>
+    <div style={{position:"fixed",inset:0,zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(var(--v-bg0-rgb),0.9)"}}>
+      <div style={{width:"380px",maxWidth:"calc(100vw - 32px)",maxHeight:"calc(100vh - 120px)",borderRadius:"14px",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.95)",background:"var(--v-bg2)",border:"1px solid var(--v-bdr2)",display:"flex",flexDirection:"column"}}>
         <div style={{padding:"14px 18px",borderBottom:"1px solid var(--v-bdr2)"}}>
           <h2 style={{fontSize:"14px",fontWeight:700,color:"#e2ddd9",margin:0}}>Save Playlist</h2>
           <p style={{fontSize:"11px",color:"#5c5755",marginTop:"3px"}}>
@@ -362,8 +362,8 @@ export function CsvImportModal({
 
   return (
     <>
-    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",padding:"16px 16px 100px 16px",background:"rgba(0,0,0,0.85)"}} onClick={phase==='matching'?undefined:onClose}>
-      <div className="yt-import-modal-container" style={{width:"640px",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}}
+    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.85)"}} onClick={phase==='matching'?undefined:onClose}>
+      <div className="yt-import-modal-container" style={{width:"640px",maxWidth:"calc(100vw - 32px)",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}}
         onClick={e => e.stopPropagation()}>
 
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
@@ -717,8 +717,8 @@ export function YtImportModal({
 
   return (
     <>
-    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)"}} onClick={phase==='loading'?undefined:onClose}>
-      <div className="yt-import-modal-container" style={{width:"580px",maxHeight:"86vh",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}}
+    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.85)"}} onClick={phase==='loading'?undefined:onClose}>
+      <div className="yt-import-modal-container" style={{width:"580px",maxWidth:"calc(100vw - 32px)",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}}
         onClick={e => e.stopPropagation()}>
 
         <div style={{
@@ -1019,8 +1019,8 @@ export function MetadataEditModal({
   };
 
   return (
-    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)"}} onClick={onClose}>
-      <div className="yt-import-modal-container" style={{width:"420px",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}} onClick={e => e.stopPropagation()}>
+    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.85)"}} onClick={onClose}>
+      <div className="yt-import-modal-container" style={{width:"420px",maxWidth:"calc(100vw - 32px)",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}} onClick={e => e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"20px 24px",borderBottom:"1px solid rgba(255,255,255,0.06)",background:"rgba(255,255,255,0.01)"}}>
           <div style={{flex:1}}>
             <h2 style={{fontSize:"15px",fontWeight:800,color:"#e2ddd9",margin:0,letterSpacing:"-0.01em"}}>Edit Metadata</h2>

@@ -94,14 +94,22 @@ export function usePlaylists(showToast?: (msg: string) => void) {
   }, [renameVal, renameDescVal, renamingPlaylist, setPlaylists, showToast]);
 
   const toggleLikeTrack = useCallback((t: Track) => {
+    if (t.url?.startsWith('local://')) {
+      if (showToast) showToast('Offline tracks cannot be added to Liked Songs');
+      return;
+    }
     setPlaylists(p => p.map(x => {
       if (x.id !== 'p1') return x;
       const liked = x.tracks.some(y => y.url === t.url);
       return { ...x, tracks: liked ? x.tracks.filter(y => y.url !== t.url) : [...x.tracks, t] };
     }));
-  }, [setPlaylists]);
+  }, [setPlaylists, showToast]);
 
   const addTrackToPlaylist = useCallback((pid: string, t: Track) => {
+    if (t.url?.startsWith('local://')) {
+      if (showToast) showToast('Offline tracks cannot be added to playlists');
+      return;
+    }
     setPlaylists(p => p.map(x => {
       if (x.id !== pid) return x;
       if (x.tracks.some(y => y.url === t.url)) {

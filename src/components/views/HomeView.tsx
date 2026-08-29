@@ -1374,8 +1374,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           clearSelection();
                         }}
                         onAddToPlaylist={(playlistId) => {
-                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
-                          if (selected.length > 0 && _setPlaylists) {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url) && !t.url.startsWith('local://'));
+                          if (selected.length === 0) {
+                            _showToast?.('Offline tracks cannot be added to playlists');
+                            clearSelection();
+                            return;
+                          }
+                          if (_setPlaylists) {
                             _setPlaylists(prev => prev.map(p => {
                               if (p.id !== playlistId) return p;
                               const existingUrls = new Set(p.tracks.map(t => t.url));
@@ -1387,7 +1392,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           clearSelection();
                         }}
                         onCreatePlaylistWithSelected={(name) => {
-                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url) && !t.url.startsWith('local://'));
+                          if (selected.length === 0) {
+                            _showToast?.('Offline tracks cannot be added to playlists');
+                            clearSelection();
+                            return;
+                          }
                           if (_setPlaylists) {
                             const newPl: Playlist = {
                               id: `pl-${Date.now()}`,

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useLayoutEffect } from 'react';
 
+import { getZoomFactor } from '../utils';
+
 interface VirtualTrackListProps<T> {
   items: T[];
   itemHeight?: number;
@@ -49,10 +51,11 @@ export function VirtualTrackList<T>({
     const updateScroll = () => {
       if (!containerRef.current) return;
       
-      const parentScrollTop = scrollParent ? scrollParent.scrollTop : window.scrollY;
+      const zoom = getZoomFactor();
+      const parentScrollTop = scrollParent ? scrollParent.scrollTop : (window.scrollY / zoom);
       const initialContainerTop = getOffsetRelativeToScrollParent(containerRef.current, scrollParent);
       const relativeTop = parentScrollTop - initialContainerTop;
-      const viewportH = scrollParent ? scrollParent.clientHeight : window.innerHeight;
+      const viewportH = scrollParent ? scrollParent.clientHeight : (window.innerHeight / zoom);
 
       setScrollState({
         scrollTop: Math.max(0, relativeTop),

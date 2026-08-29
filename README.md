@@ -152,8 +152,11 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 | Settings Panel | `Ctrl+4` / `Cmd+4` |
 | Toggle Play Queue | `Ctrl+5` / `Cmd+5` |
 | Playlists Menu | `Ctrl+P` / `Cmd+P` |
-| Open Playlist 1–9 | `Shift+1` – `Shift+9` |
+| Open Playlist 1 to 9 | `Shift+1` - `Shift+9` |
 | Focus Search Bar (Global) | `Ctrl+F` / `Cmd+F` |
+| Increase UI Scale (+5%) | `Ctrl + +` / `Cmd + +` |
+| Decrease UI Scale (-5%) | `Ctrl + -` / `Cmd + -` |
+| Reset UI Scale (100%) | `Ctrl + 0` / `Cmd + 0` |
 | Show Keyboard Shortcuts | `?` |
 | Dismiss Modal / Menu | `Esc` |
 | Play / Pause (media key) | Hardware key |
