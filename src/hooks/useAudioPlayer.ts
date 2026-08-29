@@ -95,7 +95,6 @@ export function useAudioPlayer({
   const isCrossfadingRef = useRef(false);
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const codecPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const bookmarksRef = useRef<Record<string, number>>(loadLS('vg_bookmarks', {}));
 
   const setIsPlayingSync = useCallback((val: boolean) => {
     isPlayingRef.current = val;
@@ -240,11 +239,6 @@ export function useAudioPlayer({
           codecPollRef.current = null;
         }
       }, 300);
-
-      const bm = bookmarksRef.current[track.url];
-      if (bm && bm > 2) {
-        setTimeout(() => invoke('seek_audio', { time: bm }).catch(() => {}), 500);
-      }
     } catch (err: any) {
       if (currentTrackRef.current?.url !== track.url) return;
       setIsPlayingSync(false);
@@ -471,11 +465,6 @@ export function useAudioPlayer({
     if (repeat === 'all' && track) {
       setTimeout(() => handlePlayTrack(track, true), 0);
       return;
-    }
-
-    if (track?.url && bookmarksRef.current[track.url]) {
-      delete bookmarksRef.current[track.url];
-      saveLS('vg_bookmarks', bookmarksRef.current);
     }
 
     if (autoplayEnabled && track && !isLocal) {
@@ -769,13 +758,6 @@ export function useAudioPlayer({
     const interval = setInterval(() => {
       if (isPlayingRef.current && currentTrackRef.current?.url) {
         onListeningStepRef.current?.(currentTrackRef.current.url, 1);
-
-        const cur = progressSecondsRef.current;
-        const dur = trackDurationRef.current;
-        if (cur > 5 && dur > 30 && cur < dur - 8) {
-          bookmarksRef.current[currentTrackRef.current.url] = cur;
-          saveLS('vg_bookmarks', bookmarksRef.current);
-        }
       }
     }, 1000);
     return () => clearInterval(interval);
