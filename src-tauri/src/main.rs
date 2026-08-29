@@ -1994,20 +1994,69 @@ async fn rename_local_file(old_path: String, new_title: String) -> Result<String
 #[tauri::command]
 async fn open_in_file_manager(path: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
-        let p   = std::path::Path::new(&path);
-        let dir = if p.is_file() {
-            p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or(path)
-        } else { path };
-        let dir_path = std::path::Path::new(&dir);
-        if !dir_path.exists() {
-            let _ = std::fs::create_dir_all(dir_path);
-        }
-        #[cfg(target_os = "macos")]
-        { Command::new("open").arg(&dir).no_window().spawn().map_err(|e| format!("open failed: {}", e))?; }
+        let clean_path = expand_tilde(path.trim_start_matches("local://").trim());
+        let p = std::path::Path::new(&clean_path);
+
         #[cfg(target_os = "windows")]
-        { Command::new("explorer.exe").arg(&dir).no_window().spawn().map_err(|e| format!("explorer failed: {}", e))?; }
+        {
+            let win_path = clean_path.replace('/', "\\");
+            if p.is_file() {
+                Command::new("explorer.exe")
+                    .arg(format!("/select,{}", win_path))
+                    .no_window()
+                    .spawn()
+                    .map_err(|e| format!("explorer failed: {}", e))?;
+            } else {
+                let win_dir_path = std::path::Path::new(&win_path);
+                if !win_dir_path.exists() {
+                    let _ = std::fs::create_dir_all(win_dir_path);
+                }
+                Command::new("explorer.exe")
+                    .arg(&win_path)
+                    .no_window()
+                    .spawn()
+                    .map_err(|e| format!("explorer failed: {}", e))?;
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            if p.is_file() {
+                Command::new("open")
+                    .args(["-R", &clean_path])
+                    .no_window()
+                    .spawn()
+                    .map_err(|e| format!("open failed: {}", e))?;
+            } else {
+                if !p.exists() {
+                    let _ = std::fs::create_dir_all(p);
+                }
+                Command::new("open")
+                    .arg(&clean_path)
+                    .no_window()
+                    .spawn()
+                    .map_err(|e| format!("open failed: {}", e))?;
+            }
+        }
+
         #[cfg(target_os = "linux")]
-        { Command::new("xdg-open").arg(&dir).no_window().spawn().map_err(|e| format!("xdg-open failed: {}", e))?; }
+        {
+            let dir = if p.is_file() {
+                p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_else(|| clean_path.clone())
+            } else {
+                clean_path.clone()
+            };
+            let dir_path = std::path::Path::new(&dir);
+            if !dir_path.exists() {
+                let _ = std::fs::create_dir_all(dir_path);
+            }
+            Command::new("xdg-open")
+                .arg(&dir)
+                .no_window()
+                .spawn()
+                .map_err(|e| format!("xdg-open failed: {}", e))?;
+        }
+
         Ok(())
     })
     .await
