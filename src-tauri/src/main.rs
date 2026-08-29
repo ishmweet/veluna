@@ -2064,38 +2064,59 @@ async fn get_audio_metadata(path: String) -> Result<AudioMetadata, String> {
 #[tauri::command]
 async fn get_audio_cover(path: String) -> Result<Option<String>, String> {
     tokio::task::spawn_blocking(move || {
-        let p = std::path::PathBuf::from(expand_tilde(&path));
+        let resolved = expand_tilde(&path);
+        let p = std::path::PathBuf::from(&resolved);
         if let Some(uri) = metadata::extract_cover_art_data_uri(&p) {
             return Ok(Some(uri));
         }
 
+        // Fallback 1: Extract attached picture stream via ffmpeg on resolved path
         let output = Command::new(bin_ffmpeg())
-            .args(["-i", &path, "-an", "-vcodec", "copy", "-f", "image2pipe", "-"])
+            .args(["-i", &resolved, "-map", "0:v:0", "-frames:v", "1", "-f", "image2pipe", "-"])
             .no_window()
             .output();
 
-        match output {
-            Ok(out) => {
-                if out.status.success() && !out.stdout.is_empty() {
-                    let bytes = out.stdout;
-                    let mime = if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
-                        "image/jpeg"
-                    } else if bytes.starts_with(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) {
+        if let Ok(out) = output {
+            if out.status.success() && !out.stdout.is_empty() {
+                let bytes = out.stdout;
+                let mime = if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+                    "image/jpeg"
+                } else if bytes.starts_with(&[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) {
+                    "image/png"
+                } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+                    "image/webp"
+                } else if bytes.starts_with(b"GIF8") {
+                    "image/gif"
+                } else if bytes.starts_with(b"BM") {
+                    "image/bmp"
+                } else {
+                    "image/jpeg"
+                };
+
+                let b64 = base64_encode(&bytes);
+                return Ok(Some(format!("data:{};base64,{}", mime, b64)));
+            }
+        }
+
+        // Fallback 2: Check for any cover / folder image in directory
+        if let Some(cover_path) = metadata::find_directory_cover(&p) {
+            if let Ok(bytes) = std::fs::read(&cover_path) {
+                if !bytes.is_empty() {
+                    let ext = cover_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    let mime = if ext == "png" {
                         "image/png"
-                    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+                    } else if ext == "webp" {
                         "image/webp"
                     } else {
-                        "image/jpeg" 
+                        "image/jpeg"
                     };
-
                     let b64 = base64_encode(&bytes);
-                    Ok(Some(format!("data:{};base64,{}", mime, b64)))
-                } else {
-                    Ok(None)
+                    return Ok(Some(format!("data:{};base64,{}", mime, b64)));
                 }
             }
-            Err(e) => Err(e.to_string()),
         }
+
+        Ok(None)
     })
     .await
     .map_err(|e| e.to_string())?

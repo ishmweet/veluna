@@ -285,7 +285,7 @@ export function useAudioPlayer({
     setAudioInfo(null);
 
     let cover = local.cover || '';
-    if (!cover && local.has_cover) {
+    if (!cover) {
       try {
         const coverB64 = await invoke<string | null>('get_audio_cover', { path: local.path });
         if (coverB64) cover = coverB64;

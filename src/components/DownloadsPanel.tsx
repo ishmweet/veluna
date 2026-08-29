@@ -13,22 +13,17 @@ import { ThemedSelect } from './ThemedSelect';
 import { BatchActionBar } from './BatchActionBar';
 import { useMultiSelect } from '../hooks/useMultiSelect';
 
-export const LocalTrackCover = React.memo(({ path, hasCover, cover, isActive }: { path: string; hasCover?: boolean; cover?: string; isActive: boolean }) => {
+export const LocalTrackCover = React.memo(({ path, cover, isActive }: { path: string; hasCover?: boolean; cover?: string; isActive: boolean }) => {
   const [coverUrl, setCoverUrl] = useState<string | null>(cover || null);
 
   useEffect(() => {
-    if (cover) {
-      setCoverUrl(cover);
-      return;
-    }
-    if (!hasCover) {
-      setCoverUrl(null);
-      return;
-    }
+    setCoverUrl(cover || null);
+    if (cover) return;
+
     let active = true;
     invoke<string | null>('get_audio_cover', { path })
       .then(url => {
-        if (active) setCoverUrl(url);
+        if (active) setCoverUrl(url || null);
       })
       .catch(() => {
         if (active) setCoverUrl(null);
@@ -36,9 +31,9 @@ export const LocalTrackCover = React.memo(({ path, hasCover, cover, isActive }: 
     return () => {
       active = false;
     };
-  }, [path, hasCover, cover]);
+  }, [path, cover]);
 
-  if (hasCover && coverUrl) {
+  if (coverUrl) {
     return (
       <img
         src={coverUrl}
@@ -48,6 +43,7 @@ export const LocalTrackCover = React.memo(({ path, hasCover, cover, isActive }: 
           height: "100%",
           objectFit: "cover",
         }}
+        onError={() => setCoverUrl(null)}
       />
     );
   }
@@ -184,13 +180,11 @@ export function DownloadsPanel({
         try {
           const m: { title: string; artist: string; duration: string; has_cover: boolean } = await invoke('get_audio_metadata', { path: t.path });
           let cover: string | undefined = undefined;
-          if (m.has_cover) {
-            try {
-              const coverB64 = await invoke<string | null>('get_audio_cover', { path: t.path });
-              if (coverB64) cover = coverB64;
-            } catch {}
-          }
-          const enriched = { ...t, title: m.title || t.title, artist: cleanArtist(m.artist) || t.artist || undefined, duration: m.duration !== '0:00' ? m.duration : undefined, has_cover: m.has_cover, cover };
+          try {
+            const coverB64 = await invoke<string | null>('get_audio_cover', { path: t.path });
+            if (coverB64) cover = coverB64;
+          } catch {}
+          const enriched = { ...t, title: m.title || t.title, artist: cleanArtist(m.artist) || t.artist || undefined, duration: m.duration !== '0:00' ? m.duration : undefined, has_cover: Boolean(m.has_cover || cover), cover };
           workingTracks = workingTracks.map(p => p.path === t.path ? enriched : p);
           hasUpdates = true;
           count++;
@@ -556,7 +550,7 @@ export function DownloadsPanel({
                       )}
                     </div>
                     <div style={{width:"38px",height:"38px",borderRadius:"7px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:isActive?"rgba(226,221,217,0.06)":"var(--v-bdr2)",border:`1px solid ${isActive?"rgba(226,221,217,0.1)":"rgba(255,255,255,0.05)"}`,overflow:"hidden"}}>
-                      <LocalTrackCover path={track.path} hasCover={track.has_cover} cover={track.cover} isActive={isActive} />
+                      <LocalTrackCover key={track.path} path={track.path} hasCover={track.has_cover} cover={track.cover} isActive={isActive} />
                     </div>
                     <div className="v-track__info">
                       <div className="v-track__title">{track.title}</div>
