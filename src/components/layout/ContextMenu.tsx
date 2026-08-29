@@ -30,7 +30,7 @@ import {
   ImagePlus,
 } from 'lucide-react';
 import { Track, LocalTrack, Playlist, CtxMenu, AudioInfo } from '../../types';
-import { getTrackGradient, cleanArtist } from '../../utils';
+import { getTrackGradient, cleanArtist, getZoomFactor } from '../../utils';
 import { CopyButton } from '../Modals';
 
 interface ContextMenuProps {
@@ -180,6 +180,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {ctxMenu && (() => {
         const { track, playlist, localTracksList, localTrackIndex } = ctxMenu;
         
+        const zoom = getZoomFactor();
+
         // 1. Local Track Context Menu
         if (ctxMenu.type === 'local' && track) {
           const menuWidth = 220;
@@ -192,8 +194,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             duration: track.duration,
             cover: track.cover,
           };
-          const left = Math.max(12, Math.min(ctxMenu.x, window.innerWidth - menuWidth - 12));
-          const top = Math.max(12, Math.min(ctxMenu.y, window.innerHeight - 320));
+          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
+          const maxTop = (window.innerHeight / zoom) - 320;
+          const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
+          const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
 
           return (
             <div className="v-ctx custom-scrollbar" style={{ position: 'fixed', zIndex: 9999, width: `${menuWidth}px`, top: `${top}px`, left: `${left}px` }} onClick={e => e.stopPropagation()}>
@@ -222,8 +226,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         if ((ctxMenu.type === 'track' || ctxMenu.type === 'quickpick' || ctxMenu.type === 'queue-track') && track) {
           const menuWidth = 220;
           const menuHeight = track.url.startsWith('local://') ? 340 : 420;
-          const left = Math.max(12, Math.min(ctxMenu.x, window.innerWidth - menuWidth - 12));
-          const top = Math.max(12, Math.min(ctxMenu.y, window.innerHeight - menuHeight - 12));
+          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
+          const maxTop = (window.innerHeight / zoom) - menuHeight - 12;
+          const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
+          const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
           return (
             <div className="v-ctx custom-scrollbar" style={{ position: 'fixed', zIndex: 9999, width: `${menuWidth}px`, top: `${top}px`, left: `${left}px` }} onClick={e => e.stopPropagation()}>
               <div className="v-ctx__header">
@@ -276,8 +282,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         if ((ctxMenu.type === 'playlist' || ctxMenu.type === 'sidebar-playlist') && playlist) {
           const menuWidth = 200;
           const menuHeight = playlist.id === 'p1' ? 340 : 430;
-          const left = Math.max(12, Math.min(ctxMenu.x, window.innerWidth - menuWidth - 12));
-          const top = Math.max(12, Math.min(ctxMenu.y, window.innerHeight - menuHeight - 12));
+          const maxLeft = (window.innerWidth / zoom) - menuWidth - 12;
+          const maxTop = (window.innerHeight / zoom) - menuHeight - 12;
+          const left = Math.max(12, Math.min(ctxMenu.x, maxLeft));
+          const top = Math.max(12, Math.min(ctxMenu.y, maxTop));
           return (
             <div className="v-ctx custom-scrollbar" style={{ position: 'fixed', zIndex: 9999, width: `${menuWidth}px`, top: `${top}px`, left: `${left}px` }} onClick={e => e.stopPropagation()}>
               <div className="v-ctx__header">

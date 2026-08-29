@@ -71,13 +71,27 @@ export function saveLS(key: string, v: unknown) {
   try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
 }
 
+export function getZoomFactor(): number {
+  if (typeof document === 'undefined') return 1;
+  const zoomStr = (document.documentElement.style as any).zoom || (document.body.style as any).zoom || '';
+  if (zoomStr) {
+    const parsed = parseFloat(zoomStr);
+    if (!isNaN(parsed) && parsed > 0) {
+      return zoomStr.includes('%') ? parsed / 100 : parsed;
+    }
+  }
+  return 1;
+}
+
 export function clampMenu(x: number, y: number, w = 260, h = 320) {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const zoom = getZoomFactor();
+  const scaledX = x / zoom;
+  const scaledY = y / zoom;
+  const vw = window.innerWidth / zoom;
+  const vh = window.innerHeight / zoom;
   
-  const cx = x + w > vw - 8 ? Math.max(8, x - w) : x;
-  
-  const cy = y + h > vh - 8 ? Math.max(8, y - h) : y;
+  const cx = scaledX + w > vw - 8 ? Math.max(8, scaledX - w) : scaledX;
+  const cy = scaledY + h > vh - 8 ? Math.max(8, scaledY - h) : scaledY;
   return { x: cx, y: cy };
 }
 

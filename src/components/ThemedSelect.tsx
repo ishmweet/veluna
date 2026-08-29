@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
+import { getZoomFactor } from '../utils';
 
 type ThemedSelectProps = {
   value: string;
@@ -29,47 +30,37 @@ export const ThemedSelect = ({ value, options, onChange, icon, minWidth, buttonS
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const updatePosition = useCallback(() => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const zoom = getZoomFactor();
+    const dropW = r.width / zoom;
+    const left = r.left / zoom;
+    const dropH = dropRef.current ? dropRef.current.offsetHeight : (options.length * 36 + 10);
+    const spaceBelow = (window.innerHeight - r.bottom) / zoom - 8;
+    const spaceAbove = (r.top) / zoom - 8;
+    let top = (r.bottom + 4) / zoom;
+    if (spaceBelow < dropH && spaceAbove > spaceBelow) {
+      top = (r.top - 4) / zoom - dropH;
+    }
+    setDropPos({ top, left, width: dropW });
+  }, [options.length]);
+
   useEffect(() => {
     if (!open) return;
-    const update = () => {
-      if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      const dropW = r.width;
-      const left = r.left;
-      const dropH = dropRef.current ? dropRef.current.offsetHeight : (options.length * 36 + 10);
-      const spaceBelow = window.innerHeight - r.bottom - 8;
-      const spaceAbove = r.top - 8;
-      let top = r.bottom + 4;
-      if (spaceBelow < dropH && spaceAbove > spaceBelow) {
-        top = r.top - dropH - 4;
-      }
-      setDropPos({ top, left, width: dropW });
-    };
-    update();
-    const timer = setTimeout(update, 0);
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
+    updatePosition();
+    const timer = setTimeout(updatePosition, 0);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
     };
-  }, [open, options.length]);
+  }, [open, updatePosition]);
 
   const handleOpen = () => {
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      const dropW = r.width;
-      const left = r.left;
-      const dropH = options.length * 36 + 10;
-      const spaceBelow = window.innerHeight - r.bottom - 8;
-      const spaceAbove = r.top - 8;
-      let top = r.bottom + 4;
-      if (spaceBelow < dropH && spaceAbove > spaceBelow) {
-        top = r.top - dropH - 4;
-      }
-      setDropPos({ top, left, width: dropW });
-    }
+    updatePosition();
     setOpen(o => !o);
   };
 
