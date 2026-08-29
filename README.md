@@ -61,7 +61,7 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - **Local Track Cover Art Support**, dynamically reads embedded metadata covers or cached artwork for local files
 - **Waveform Visualisation**, automatic waveform thumbnail generation for local audio tracks
 - **Metadata Editor**, edit title, artist, and album tags directly on local files with changes written to disk
-- **Batch Multi-Select & Action Bar**, select multiple tracks using `Shift+Click` and `Ctrl+Click` to batch play, batch add to playlist, or batch delete
+- **Batch Multi-Select & Action Bar**, select multiple tracks using `Shift+Click` and `Ctrl+Click` to batch play, batch queue, or batch delete offline files
 - Filter your library in real time, zero latency, pure in-memory search
 - Drag-to-reorder tracks, rename or delete files from the UI, open any track in your system file manager
 - Export and import playlists in standard **M3U format**
@@ -193,8 +193,8 @@ Available on every track and playlist: Play, Add to Queue, Add to Playlist, Down
 - **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
 - **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer, crossfade duration
 - **Integrations**: Discord Rich Presence, primary lyrics source (lrclib / Musixmatch / NetEase), Last.fm scrobbling
-- **Network & Proxy**: proxy configuration (HTTP/HTTPS/SOCKS5), custom Invidious/Piped mirrors with connection test
-- **Appearance & Performance**: curated themes, custom accent and background color, default startup view, system tray toggle, **UI Scale** (-5 to +5), and Low-Spec / Performance Mode
+- **Network & Proxy**: proxy configuration (HTTP/HTTPS/SOCKS5) with dynamic MPV IPC streaming support, custom Invidious/Piped mirrors with connection test
+- **Appearance & Performance**: curated themes, custom accent and background color, default startup view, system tray toggle, **UI Scale** (-5 to +5 / 75% to 125% with keyboard shortcuts `Ctrl++`, `Ctrl+-`, `Ctrl+0`), and Low-Spec / Performance Mode
 - **Storage & Cache**: toggle stream prefetching & audio caching, set auto-cleaner disk limits (500MB to Unlimited), one-click cache purge, backup location, create/restore backup, reset app data
 - **Updates**: automatic update check against GitHub Releases
 
@@ -340,7 +340,7 @@ veluna/
 │   │   │   ├── PlaylistsView.tsx     # Playlist grid/list view, track management & multi-select
 │   │   │   ├── StatsView.tsx         # Listening analytics, activity graphs & top artists/tracks
 │   │   │   └── LyricsView.tsx        # Full-screen synchronized lyrics view with ambient backdrop
-│   │   ├── BatchActionBar.tsx        # Multi-select floating toolbar for batch playlist & library operations
+│   │   ├── BatchActionBar.tsx        # Corner-anchored multi-select toolbar for batch queue, delete, and playlist operations
 │   │   ├── DownloadsPanel.tsx        # Offline library scanner, folder picker & metadata tagger
 │   │   ├── Modals.tsx                # Spotify CSV, YouTube URL & M3U playlist import dialogs
 │   │   ├── SettingsPanel.tsx         # Audio filters, EQ, themes, low-spec mode & backups
