@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Track, ListeningEvent } from '../types';
 import { loadLS, saveLS } from '../utils';
+import { dbRecordPlayEvent, dbClearListeningStats } from '../services/db';
 
 export function useListeningStats() {
   const [playCounts, setPlayCounts] = useState<Record<string, number>>(() => loadLS('vg_playCounts', {}));
@@ -9,7 +10,11 @@ export function useListeningStats() {
   const [dailyPlays, setDailyPlays] = useState<Record<string, number>>(() => loadLS('vg_dailyPlays', {}));
   const [listeningHistory, setListeningHistory] = useState<ListeningEvent[]>(() => loadLS('vg_listeningHistory', []));
   const [playHistory, setPlayHistory] = useState<Track[]>(() => loadLS('vg_playHistory', []));
-  const [statsTimeRange, setStatsTimeRange] = useState<'7days' | 'all'>('all');
+  const [statsTimeRange, setStatsTimeRange] = useState<'7days' | 'all'>(() => loadLS('vg_statsTimeRange', 'all'));
+
+  useEffect(() => {
+    saveLS('vg_statsTimeRange', statsTimeRange);
+  }, [statsTimeRange]);
 
   const listenSecsRef = useRef(listenSecs);
   useEffect(() => {
@@ -48,6 +53,7 @@ export function useListeningStats() {
     });
 
     setListeningHistory(prev => [{ url: track.url, playedAt: new Date().toISOString(), secs: 0 }, ...prev].slice(0, 300));
+    dbRecordPlayEvent(track, 0);
 
     if (!fromQueue) {
       setPlayHistory(prev => [track, ...prev.filter(t => t.url !== track.url)].slice(0, 50));
@@ -66,6 +72,7 @@ export function useListeningStats() {
       next[0] = { ...next[0], secs: next[0].secs + step };
       return next;
     });
+    dbRecordPlayEvent({ id: 0, url, title: '', artist: '', duration: '', cover: '' }, step);
   }, []);
 
   const resetAllStats = useCallback(() => {
@@ -79,6 +86,7 @@ export function useListeningStats() {
     saveLS('vg_firstSeen', {});
     setListeningHistory([]);
     saveLS('vg_listeningHistory', []);
+    dbClearListeningStats();
   }, []);
 
   const [artistThumbs, setArtistThumbs] = useState<Record<string, string>>(() => loadLS('vg_artistThumbs', {}));

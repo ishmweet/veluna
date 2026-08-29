@@ -10,9 +10,9 @@ export interface ScrobbleResult {
   error?: string;
 }
 
-export function sanitizeTrackInfo(track: Track): { artist: string; title: string } {
+export function sanitizeTrackInfo(track: Track): { artist: string; title: string; album?: string } {
   let rawTitle = (track.title || '').trim();
-  let rawArtist = cleanArtist(track.artist || '');
+  let rawArtist = cleanArtist(track.artist || '').trim();
 
   if (!rawArtist && rawTitle.includes(' - ')) {
     const parts = rawTitle.split(' - ');
@@ -30,137 +30,8 @@ export function sanitizeTrackInfo(track: Track): { artist: string; title: string
   return {
     artist: rawArtist || 'Unknown Artist',
     title: cleanedTitle || rawTitle || 'Unknown Track',
+    album: (track.album || '').trim() || undefined,
   };
-}
-
-export async function validateListenBrainzToken(token: string): Promise<{ valid: boolean; username?: string; error?: string }> {
-  const trimmed = token.trim();
-  if (!trimmed) return { valid: false, error: 'User Token cannot be empty' };
-
-  try {
-    const res = await fetch('https://api.listenbrainz.org/1/validate-token', {
-      headers: {
-        'Authorization': `Token ${trimmed}`,
-      },
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      return { valid: false, error: data.error || data.message || `HTTP ${res.status}: Unauthorized` };
-    }
-
-    if (data.valid) {
-      return { valid: true, username: data.user_name };
-    }
-    return { valid: false, error: data.message || 'Invalid ListenBrainz Token' };
-  } catch (err: any) {
-    return { valid: false, error: err.message || 'Network error connecting to ListenBrainz' };
-  }
-}
-
-export async function submitListenBrainzNowPlaying(
-  token: string,
-  track: Track,
-  durationSec: number
-): Promise<ScrobbleResult> {
-  const trimmed = token.trim();
-  if (!trimmed) return { success: false, error: 'ListenBrainz User Token is missing' };
-
-  const { artist, title } = sanitizeTrackInfo(track);
-  if (!artist || !title || artist === 'Unknown Artist') {
-    return { success: false, error: 'Missing valid artist or track title' };
-  }
-
-  const payload = {
-    listen_type: 'playing_now',
-    payload: [
-      {
-        track_metadata: {
-          artist_name: artist,
-          track_name: title,
-          additional_info: {
-            media_player: 'Veluna',
-            submission_client: 'Veluna',
-            duration_ms: Math.round((durationSec || 0) * 1000),
-          },
-        },
-      },
-    ],
-  };
-
-  try {
-    const res = await fetch('https://api.listenbrainz.org/1/submit-listens', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${trimmed}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return { success: false, error: data.error || data.message || `HTTP ${res.status}` };
-    }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Network error' };
-  }
-}
-
-export async function submitListenBrainzScrobble(
-  token: string,
-  track: Track,
-  durationSec: number,
-  listenedAtUnixSec?: number
-): Promise<ScrobbleResult> {
-  const trimmed = token.trim();
-  if (!trimmed) return { success: false, error: 'ListenBrainz User Token is missing' };
-
-  const { artist, title } = sanitizeTrackInfo(track);
-  if (!artist || !title || artist === 'Unknown Artist') {
-    return { success: false, error: 'Missing valid artist or track title' };
-  }
-
-  const timestamp = listenedAtUnixSec || Math.floor(Date.now() / 1000);
-
-  const payload = {
-    listen_type: 'single',
-    payload: [
-      {
-        listened_at: timestamp,
-        track_metadata: {
-          artist_name: artist,
-          track_name: title,
-          additional_info: {
-            media_player: 'Veluna',
-            submission_client: 'Veluna',
-            duration_ms: Math.round((durationSec || 0) * 1000),
-          },
-        },
-      },
-    ],
-  };
-
-  try {
-    const res = await fetch('https://api.listenbrainz.org/1/submit-listens', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${trimmed}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return { success: false, error: data.error || data.message || `HTTP ${res.status}` };
-    }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Network error' };
-  }
 }
 
 function signLastFmParams(params: Record<string, string>, apiSecret: string): string {
@@ -172,6 +43,134 @@ function signLastFmParams(params: Record<string, string>, apiSecret: string): st
   }
   sigString += apiSecret;
   return md5(sigString);
+}
+
+export async function getLastFmAuthToken(
+  apiKey: string,
+  apiSecret: string
+): Promise<{ success: boolean; token?: string; error?: string }> {
+  const key = apiKey.trim();
+  const secret = apiSecret.trim();
+
+  if (!key) return { success: false, error: 'API Key is required' };
+  if (!secret) return { success: false, error: 'API Secret is required' };
+
+  const params: Record<string, string> = {
+    method: 'auth.getToken',
+    api_key: key,
+  };
+  params.api_sig = signLastFmParams(params, secret);
+  params.format = 'json';
+
+  try {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetch(`https://ws.audioscrobbler.com/2.0/?${query}`);
+    const data = await res.json();
+    if (data.token) {
+      return { success: true, token: data.token };
+    }
+    return { success: false, error: data.message || `Last.fm error ${data.error}` };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error connecting to Last.fm' };
+  }
+}
+
+export async function createLastFmSession(
+  token: string,
+  apiKey: string,
+  apiSecret: string
+): Promise<{ success: boolean; sessionKey?: string; username?: string; error?: string }> {
+  const key = apiKey.trim();
+  const secret = apiSecret.trim();
+
+  if (!key || !secret) return { success: false, error: 'API Key and Secret are required' };
+
+  const params: Record<string, string> = {
+    method: 'auth.getSession',
+    api_key: key,
+    token: token.trim(),
+  };
+  params.api_sig = signLastFmParams(params, secret);
+  params.format = 'json';
+
+  try {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetch(`https://ws.audioscrobbler.com/2.0/?${query}`);
+    const data = await res.json().catch(() => ({}));
+    if (data.session?.key && data.session?.name) {
+      return {
+        success: true,
+        sessionKey: data.session.key,
+        username: data.session.name,
+      };
+    }
+    if (data.error === 14 || data.error === 4) {
+      return {
+        success: false,
+        error: 'Please click "Yes, allow access" in your browser window first.',
+      };
+    }
+    return {
+      success: false,
+      error: data.message || 'Authorization not completed yet.',
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error connecting to Last.fm' };
+  }
+}
+
+export async function validateLastFmCredentials(
+  apiKey: string,
+  apiSecret: string,
+  username?: string
+): Promise<{ valid: boolean; username?: string; token?: string; error?: string }> {
+  const key = apiKey.trim();
+  const secret = apiSecret.trim();
+  const user = (username || '').trim();
+
+  if (!key) return { valid: false, error: 'API Key cannot be empty' };
+  if (!secret) return { valid: false, error: 'API Secret cannot be empty' };
+
+  const params: Record<string, string> = {
+    method: 'auth.getToken',
+    api_key: key,
+  };
+  params.api_sig = signLastFmParams(params, secret);
+  params.format = 'json';
+
+  try {
+    const query = new URLSearchParams(params).toString();
+    const res = await fetch(`https://ws.audioscrobbler.com/2.0/?${query}`);
+    const data = await res.json();
+
+    if (data.error) {
+      return { valid: false, error: data.message || `Last.fm error ${data.error}` };
+    }
+
+    if (user) {
+      try {
+        const uRes = await fetch(
+          `https://ws.audioscrobbler.com/2.0/?method=user.getInfo&user=${encodeURIComponent(user)}&api_key=${encodeURIComponent(key)}&format=json`
+        );
+        const uData = await uRes.json();
+        if (uData.user?.name) {
+          return { valid: true, username: uData.user.name, token: data.token };
+        } else if (uData.error) {
+          return { valid: false, error: `User error: ${uData.message || 'User not found'}` };
+        }
+      } catch {
+        return { valid: true, username: user, token: data.token };
+      }
+    }
+
+    if (data.token) {
+      return { valid: true, username: user || undefined, token: data.token };
+    }
+
+    return { valid: false, error: 'Failed to validate credentials' };
+  } catch (err: any) {
+    return { valid: false, error: err.message || 'Network error connecting to Last.fm' };
+  }
 }
 
 export async function validateLastFmSession(
@@ -219,11 +218,11 @@ export async function submitLastFmNowPlaying(
   apiKey: string = DEFAULT_LASTFM_API_KEY,
   apiSecret: string = DEFAULT_LASTFM_API_SECRET
 ): Promise<ScrobbleResult> {
-  const sk = sessionKey.trim();
+  const sk = (sessionKey || '').trim();
   const key = (apiKey || DEFAULT_LASTFM_API_KEY).trim();
   const secret = (apiSecret || DEFAULT_LASTFM_API_SECRET).trim();
 
-  if (!sk || !key || !secret) return { success: false, error: 'Missing Last.fm credentials' };
+  if (!key || !secret) return { success: false, error: 'Missing Last.fm credentials' };
 
   const { artist, title } = sanitizeTrackInfo(track);
   if (!artist || !title || artist === 'Unknown Artist') {
@@ -233,10 +232,13 @@ export async function submitLastFmNowPlaying(
   const params: Record<string, string> = {
     method: 'track.updateNowPlaying',
     api_key: key,
-    sk,
     artist,
     track: title,
   };
+
+  if (sk) {
+    params.sk = sk;
+  }
 
   if (durationSec > 0) {
     params.duration = Math.round(durationSec).toString();
@@ -272,11 +274,11 @@ export async function submitLastFmScrobble(
   apiKey: string = DEFAULT_LASTFM_API_KEY,
   apiSecret: string = DEFAULT_LASTFM_API_SECRET
 ): Promise<ScrobbleResult> {
-  const sk = sessionKey.trim();
+  const sk = (sessionKey || '').trim();
   const key = (apiKey || DEFAULT_LASTFM_API_KEY).trim();
   const secret = (apiSecret || DEFAULT_LASTFM_API_SECRET).trim();
 
-  if (!sk || !key || !secret) return { success: false, error: 'Missing Last.fm credentials' };
+  if (!key || !secret) return { success: false, error: 'Missing Last.fm credentials' };
 
   const { artist, title } = sanitizeTrackInfo(track);
   if (!artist || !title || artist === 'Unknown Artist') {
@@ -288,11 +290,14 @@ export async function submitLastFmScrobble(
   const params: Record<string, string> = {
     method: 'track.scrobble',
     api_key: key,
-    sk,
     artist,
     track: title,
     timestamp: timestamp.toString(),
   };
+
+  if (sk) {
+    params.sk = sk;
+  }
 
   if (durationSec > 0) {
     params.duration = Math.round(durationSec).toString();

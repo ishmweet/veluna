@@ -22,6 +22,8 @@ import { Track, Playlist, CtxMenu } from '../../types';
 import { getTrackGradient, saveLS, cleanArtist, parseDurationToSeconds } from '../../utils';
 import { TrackRow } from '../TrackRow';
 import { ThemedSelect } from '../ThemedSelect';
+import { BatchActionBar } from '../BatchActionBar';
+import { useMultiSelect } from '../../hooks/useMultiSelect';
 
 interface PlaylistsViewProps {
   openPlaylistId: string | null;
@@ -83,6 +85,7 @@ interface PlaylistsViewProps {
   setShowYtImportModal: (show: boolean) => void;
   handleImportPlaylistM3u: () => void;
   showToast: (msg: string) => void;
+  addToQueue?: (tracks: Track | Track[]) => void;
 }
 
 export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
@@ -145,12 +148,24 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
   setShowYtImportModal,
   handleImportPlaylistM3u,
   showToast,
+  addToQueue,
 }) => {
   const [internalHoveredTrackUrl, setInternalHoveredTrackUrl] = useState<string | null>(null);
   const [playlistSortBy, setPlaylistSortBy] = useState<'default' | 'title_asc' | 'title_desc' | 'artist_asc' | 'duration_asc' | 'duration_desc'>('default');
   const hoveredTrackUrl = customHoveredTrackUrl !== undefined ? customHoveredTrackUrl : internalHoveredTrackUrl;
   const setHoveredTrackUrl = customSetHoveredTrackUrl || setInternalHoveredTrackUrl;
   const prefetchOnHover = customPrefetchOnHover || (() => {});
+
+  const {
+    selectedUrls: selectedTrackUrls,
+    isMultiSelectActive: isTrackMultiSelectActive,
+    toggleSelect: toggleTrackSelect,
+    clearSelection: clearTrackSelection,
+  } = useMultiSelect();
+
+  React.useEffect(() => {
+    clearTrackSelection();
+  }, [openPlaylistId, clearTrackSelection]);
 
   const getPlaylistCover = customGetPlaylistCover || ((playlist: Playlist) => {
     if (playlist.id === 'p1') return null;
@@ -513,7 +528,8 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                 }
 
                 return (
-                  <div style={{display:"flex",flexDirection:"column",gap:"4px",position:"relative",zIndex:1}}>
+                  <>
+                    <div style={{display:"flex",flexDirection:"column",gap:"4px",position:"relative",zIndex:1}}>
                     <div style={{
                       display:"flex",
                       alignItems:"center",
@@ -640,16 +656,71 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                                   isActive={currentTrack?.url === enrichedTrack.url} isHovered={hoveredTrackUrl === enrichedTrack.url}
                                   isLoadingTrack={(loadingTrackUrl === enrichedTrack.url || (currentTrack?.url === enrichedTrack.url && isLoadingTrack)) && !isPlaying} isPlaying={isPlaying}
                                   isLiked={isTrackLiked(enrichedTrack.url)} isDownloading={(downloadingTracks[enrichedTrack.url] ?? 0)}
+                                  isSelected={selectedTrackUrls.has(enrichedTrack.url)}
+                                  isMultiSelectActive={isTrackMultiSelectActive}
                                   onPlay={() => handlePlayInContext(enrichedTrack, openPlaylist.tracks)}
                                   onHoverEnter={() => { setHoveredTrackUrl(enrichedTrack.url); prefetchOnHover(enrichedTrack.url); }} onHoverLeave={() => setHoveredTrackUrl(null)}
                                   onLike={() => toggleLikeTrack(enrichedTrack)} onDownload={() => handleDownload(enrichedTrack)}
-                                  onCtx={e => openCtx(e, { type: 'track', track: enrichedTrack })} />
+                                  onCtx={e => openCtx(e, { type: 'track', track: enrichedTrack })}
+                                  onSelectToggle={e => toggleTrackSelect(enrichedTrack, i, e, openPlaylist.tracks)} />
                               </div>
                             </div>
                           );
                         })
                     }
                   </div>
+                  {isTrackMultiSelectActive && (
+                    <BatchActionBar
+                      selectedTracks={openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url))}
+                      playlists={playlists}
+                      isPlaylistView={true}
+                      onClearSelection={clearTrackSelection}
+                      onPlaySelected={() => {
+                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url));
+                        if (selected.length > 0) {
+                          handlePlayInContext(selected[0], selected);
+                        }
+                        clearTrackSelection();
+                      }}
+                      onQueueSelected={() => {
+                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url));
+                        if (selected.length > 0 && addToQueue) {
+                          addToQueue(selected);
+                          showToast(`Added ${selected.length} track${selected.length > 1 ? 's' : ''} to queue`);
+                        }
+                        clearTrackSelection();
+                      }}
+                      onAddToPlaylist={(targetPlaylistId) => {
+                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url));
+                        if (selected.length > 0) {
+                          setPlaylists(prev => prev.map(p => {
+                            if (p.id !== targetPlaylistId) return p;
+                            const existingUrls = new Set(p.tracks.map(t => t.url));
+                            const newTracks = selected.filter(t => !existingUrls.has(t.url));
+                            return { ...p, tracks: [...p.tracks, ...newTracks] };
+                          }));
+                          showToast(`Added ${selected.length} tracks to playlist`);
+                        }
+                        clearTrackSelection();
+                      }}
+                      onDeleteSelected={() => {
+                        const selected = new Set(selectedTrackUrls);
+                        setPlaylists(prev => prev.map(p => {
+                          if (p.id !== openPlaylist.id) return p;
+                          return { ...p, tracks: p.tracks.filter(t => !selected.has(t.url)) };
+                        }));
+                        showToast(`Removed ${selected.size} track${selected.size > 1 ? 's' : ''} from playlist`);
+                        clearTrackSelection();
+                      }}
+                      onDownloadSelected={() => {
+                        const selected = openPlaylist.tracks.filter(t => selectedTrackUrls.has(t.url));
+                        selected.forEach(t => handleDownload(t));
+                        showToast(`Queued ${selected.length} downloads`);
+                        clearTrackSelection();
+                      }}
+                    />
+                  )}
+                  </>
                 );
               })()
           }

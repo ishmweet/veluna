@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   HardDrive, FolderOpen, FileOutput, RefreshCw, Search, X,
-  AlertCircle, FileMusic, Play, Pencil, Trash2, ArrowUpDown
+  AlertCircle, FileMusic, Play, Pencil, Trash2, ArrowUpDown, CheckSquare, Square
 } from 'lucide-react';
-import { LocalTrack, DiskInfo } from '../types';
+import { LocalTrack, DiskInfo, Track, Playlist } from '../types';
 import { cleanArtist, formatBytes, parseDurationToSeconds } from '../utils';
 import { VirtualTrackList } from './VirtualTrackList';
 import { ThemedSelect } from './ThemedSelect';
+import { BatchActionBar } from './BatchActionBar';
+import { useMultiSelect } from '../hooks/useMultiSelect';
 
 export const LocalTrackCover = React.memo(({ path, hasCover, cover, isActive }: { path: string; hasCover?: boolean; cover?: string; isActive: boolean }) => {
   const [coverUrl, setCoverUrl] = useState<string | null>(cover || null);
@@ -60,6 +63,10 @@ export function DownloadsPanel({
   onCtx,
   tracks,
   setTracks,
+  playlists = [],
+  setPlaylists,
+  addToQueue,
+  showToast,
 }: {
   downloadPath: string; onPlayLocalTrack: (t: LocalTrack, list?: LocalTrack[], idx?: number) => void;
   onDeleteLocalTrack: (t: LocalTrack) => void; currentTrackPath: string | null;
@@ -70,6 +77,10 @@ export function DownloadsPanel({
   onCtx?: (e: React.MouseEvent, t: LocalTrack) => void;
   tracks: LocalTrack[];
   setTracks: React.Dispatch<React.SetStateAction<LocalTrack[]>>;
+  playlists?: Playlist[];
+  setPlaylists?: React.Dispatch<React.SetStateAction<Playlist[]>>;
+  addToQueue?: (tracks: Track | Track[]) => void;
+  showToast?: (msg: string) => void;
 }) {
   const tracksRef = useRef(tracks);
   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
@@ -92,6 +103,21 @@ export function DownloadsPanel({
   const dragOverLocalIdxRef = useRef<number | null>(null);
   const [dragOverLocalIdx, setDragOverLocalIdx] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const { selectedUrls, isMultiSelectActive, toggleSelect, clearSelection } = useMultiSelect();
+
+  useEffect(() => {
+    clearSelection();
+  }, [downloadPath, searchQ, clearSelection]);
+
+  const toTrack = useCallback((t: LocalTrack): Track => ({
+    id: 0,
+    title: t.title,
+    artist: t.artist || '',
+    url: `local://${t.path}`,
+    cover: t.cover || '',
+    duration: t.duration || '0:00',
+  }), []);
 
   const filtered = (() => {
     let list = searchQ.trim()
@@ -151,7 +177,7 @@ export function DownloadsPanel({
       let count = 0;
       for (const t of rawWithCovers) {
         const existing = existingTracks.find(p => p.path === t.path);
-        if (existing && existing.duration !== undefined) {
+        if ((existing && existing.duration !== undefined) || (t.duration && t.duration !== '0:00')) {
           continue;
         }
 
@@ -183,6 +209,18 @@ export function DownloadsPanel({
   useEffect(() => {
     scan();
   }, [scan, refreshNonce]);
+
+  useEffect(() => {
+    if (downloadPath) {
+      invoke('watch_download_folder', { path: downloadPath }).catch(() => {});
+    }
+    const unlistenPromise = listen('local_folder_changed', () => {
+      scan();
+    });
+    return () => {
+      unlistenPromise.then(fn => fn()).catch(() => {});
+    };
+  }, [downloadPath, scan]);
 
   const confirmRename = async () => {
     if (!renaming || !renameVal.trim()) return;
@@ -448,20 +486,33 @@ export function DownloadsPanel({
               itemHeight={56}
               keyExtractor={(track) => track.path}
               renderItem={(track, i) => {
+                const trackObj = toTrack(track);
+                const isSelected = selectedUrls.has(trackObj.url);
                 const isActive = currentTrackPath === track.path;
                 const isHov = hovered === track.path;
                 const isDragOver = dragOverLocalIdx === i && dragLocalIdx.current !== null && dragLocalIdx.current !== i;
                 return (
                   <div
-                    className={`v-track${isActive?' v-track--active':''}`}
-                    style={{position:"relative",borderColor:isDragOver?"rgba(226,221,217,0.2)":"undefined"}}
+                    className={`v-track${isActive?' v-track--active':''}${isSelected ? ' v-track--selected' : ''}`}
+                    style={{
+                      position:"relative",
+                      borderColor:isDragOver?"rgba(226,221,217,0.2)":undefined,
+                      background: isSelected ? 'rgba(255, 255, 255, 0.08)' : undefined,
+                    }}
                     onMouseEnter={() => { setHovered(track.path); if(dragLocalIdx.current!==null){dragOverLocalIdxRef.current=i;setDragOverLocalIdx(i);} }}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => onPlayLocalTrack(track, searchQ ? filtered : tracks, i)}
+                    onClick={e => {
+                      if (e.shiftKey || e.ctrlKey || e.metaKey || isMultiSelectActive) {
+                        e.preventDefault();
+                        toggleSelect(trackObj, i, e, filtered.map(toTrack));
+                      } else {
+                        onPlayLocalTrack(track, searchQ ? filtered : tracks, i);
+                      }
+                    }}
                     onContextMenu={e => onCtx?.(e, track)}
                   >
                     {isDragOver && <div style={{position:"absolute",top:0,left:0,right:0,height:"1.5px",background:"rgba(226,221,217,0.5)",borderRadius:"1px",zIndex:10,pointerEvents:"none"}} />}
-                    {!searchQ && (
+                    {!searchQ && !isMultiSelectActive && (
                       <div style={{width:"14px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"grab",opacity:isHov?0.5:0,transition:"opacity .12s"}}
                         onMouseDown={e => {
                           e.preventDefault();
@@ -478,16 +529,31 @@ export function DownloadsPanel({
                         <svg width="8" height="14" viewBox="0 0 10 16" fill="#5c5755"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg>
                       </div>
                     )}
-                    <div className="v-track__num">
-                      {isActive&&isLoadingTrack&&!isPlaying
-                        ? <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
-                            <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
-                            <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
-                          </svg>
-                        : isActive&&isPlaying
-                          ? <div style={{display:"flex",gap:"2px",alignItems:"flex-end",height:"13px",justifyContent:"center"}}>{[100,65,80].map((h,j)=><div key={j} style={{width:"2.5px",background:"#9e9894",borderRadius:"1px",height:`${h}%`,animation:`barBounce ${0.7+j*0.12}s ease-in-out ${j*110}ms infinite`,transformOrigin:"bottom"}}/>)}</div>
-                          : isHov ? <Play size={12} style={{fill:"#e2ddd9",color:"#e2ddd9",margin:"0 auto"}}/>
-                          : i+1}
+                    <div
+                      className="v-track__num"
+                      onClick={e => {
+                        if (isMultiSelectActive || isSelected) {
+                          e.stopPropagation();
+                          toggleSelect(trackObj, i, e, filtered.map(toTrack));
+                        }
+                      }}
+                    >
+                      {isSelected ? (
+                        <CheckSquare size={13} style={{ color: 'var(--v-accent)', margin: '0 auto' }} />
+                      ) : isMultiSelectActive ? (
+                        <Square size={13} style={{ color: '#5c5755', margin: '0 auto' }} />
+                      ) : isActive&&isLoadingTrack&&!isPlaying ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
+                          <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
+                          <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
+                        </svg>
+                      ) : isActive&&isPlaying ? (
+                        <div style={{display:"flex",gap:"2px",alignItems:"flex-end",height:"13px",justifyContent:"center"}}>{[100,65,80].map((h,j)=><div key={j} style={{width:"2.5px",background:"#9e9894",borderRadius:"1px",height:`${h}%`,animation:`barBounce ${0.7+j*0.12}s ease-in-out ${j*110}ms infinite`,transformOrigin:"bottom"}}/>)}</div>
+                      ) : isHov ? (
+                        <Play size={12} style={{fill:"#e2ddd9",color:"#e2ddd9",margin:"0 auto"}}/>
+                      ) : (
+                        i+1
+                      )}
                     </div>
                     <div style={{width:"38px",height:"38px",borderRadius:"7px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:isActive?"rgba(226,221,217,0.06)":"var(--v-bdr2)",border:`1px solid ${isActive?"rgba(226,221,217,0.1)":"rgba(255,255,255,0.05)"}`,overflow:"hidden"}}>
                       <LocalTrackCover path={track.path} hasCover={track.has_cover} cover={track.cover} isActive={isActive} />
@@ -507,6 +573,49 @@ export function DownloadsPanel({
                 );
               }}
             />
+            {isMultiSelectActive && (
+              <BatchActionBar
+                selectedTracks={filtered.map(toTrack).filter(t => selectedUrls.has(t.url))}
+                playlists={playlists}
+                isOfflineView={true}
+                onClearSelection={clearSelection}
+                onPlaySelected={() => {
+                  const selected = filtered.filter(t => selectedUrls.has(`local://${t.path}`));
+                  if (selected.length > 0) {
+                    onPlayLocalTrack(selected[0], selected, 0);
+                  }
+                  clearSelection();
+                }}
+                onQueueSelected={() => {
+                  const selected = filtered.map(toTrack).filter(t => selectedUrls.has(t.url));
+                  if (selected.length > 0 && addToQueue) {
+                    addToQueue(selected);
+                    showToast?.(`Added ${selected.length} track${selected.length > 1 ? 's' : ''} to queue`);
+                  }
+                  clearSelection();
+                }}
+                onAddToPlaylist={(targetPlaylistId) => {
+                  const selected = filtered.map(toTrack).filter(t => selectedUrls.has(t.url));
+                  if (selected.length > 0 && setPlaylists) {
+                    setPlaylists(prev => prev.map(p => {
+                      if (p.id !== targetPlaylistId) return p;
+                      const existingUrls = new Set(p.tracks.map(t => t.url));
+                      const newTracks = selected.filter(t => !existingUrls.has(t.url));
+                      return { ...p, tracks: [...p.tracks, ...newTracks] };
+                    }));
+                    showToast?.(`Added ${selected.length} tracks to playlist`);
+                  }
+                  clearSelection();
+                }}
+                onDeleteSelected={() => {
+                  const selected = filtered.filter(t => selectedUrls.has(`local://${t.path}`));
+                  selected.forEach(t => onDeleteLocalTrack(t));
+                  scan();
+                  showToast?.(`Deleted ${selected.length} offline tracks`);
+                  clearSelection();
+                }}
+              />
+            )}
           </div>
         </>
       )}

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, X, ArrowUpCircle, ExternalLink, RefreshCw,
   FolderDown, FolderOpen, Image, Zap, BarChart2, Globe,
-  Moon, Database, Upload, ArchiveRestore, Trash2,
+  Upload, ArchiveRestore, Trash2,
   Download, GitBranch, Radio, CheckCircle2,
-  AlertCircle, HardDrive, Maximize2
+  HardDrive, Maximize2, Palette
 } from 'lucide-react';
 import { SettingsTab, DiskInfo, CacheInfo } from '../types';
 import { loadLS, saveLS, lightenColor, validateSettingsChange, formatBytes } from '../utils';
@@ -12,7 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ThemedSelect } from './ThemedSelect';
-import { validateListenBrainzToken, validateLastFmSession, DEFAULT_LASTFM_API_KEY, DEFAULT_LASTFM_API_SECRET } from '../services/scrobbler';
+import { getLastFmAuthToken, createLastFmSession, DEFAULT_LASTFM_API_KEY, DEFAULT_LASTFM_API_SECRET } from '../services/scrobbler';
 
 const SettingsSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => {
   const [hovered, setHovered] = useState(false);
@@ -72,9 +72,11 @@ export type SettingsPanelProps = {
   lyricsSource: string; setLyricsSource: (v: string) => void;
   trayEnabled: boolean; setTrayEnabled: (v: boolean) => void;
   discordRpcEnabled: boolean; setDiscordRpcEnabled: (v: boolean) => void;
-  listenbrainzEnabled?: boolean; setListenbrainzEnabled?: (v: boolean) => void;
-  listenbrainzToken?: string; setListenbrainzToken?: (t: string) => void;
-  listenbrainzUsername?: string; setListenbrainzUsername?: (u: string) => void;
+  discordShowCover?: boolean; setDiscordShowCover?: (v: boolean) => void;
+  discordTimeDisplay?: 'remaining' | 'elapsed'; setDiscordTimeDisplay?: (v: 'remaining' | 'elapsed') => void;
+  discordCustomBtn?: boolean; setDiscordCustomBtn?: (v: boolean) => void;
+  discordBtnLabel?: string; setDiscordBtnLabel?: (v: string) => void;
+  discordBtnUrl?: string; setDiscordBtnUrl?: (v: string) => void;
   lastfmEnabled?: boolean; setLastfmEnabled?: (v: boolean) => void;
   lastfmSessionKey?: string; setLastfmSessionKey?: (k: string) => void;
   lastfmApiKey?: string; setLastfmApiKey?: (k: string) => void;
@@ -109,11 +111,13 @@ export function SettingsPanel({
   lyricsSource, setLyricsSource,
   trayEnabled, setTrayEnabled,
   discordRpcEnabled, setDiscordRpcEnabled,
-  listenbrainzEnabled = false, setListenbrainzEnabled = () => {},
-  listenbrainzToken = '', setListenbrainzToken = () => {},
-  listenbrainzUsername = '', setListenbrainzUsername = () => {},
+  discordShowCover: propDiscordShowCover, setDiscordShowCover: propSetDiscordShowCover,
+  discordTimeDisplay: propDiscordTimeDisplay, setDiscordTimeDisplay: propSetDiscordTimeDisplay,
+  discordCustomBtn: propDiscordCustomBtn, setDiscordCustomBtn: propSetDiscordCustomBtn,
+  discordBtnLabel: propDiscordBtnLabel, setDiscordBtnLabel: propSetDiscordBtnLabel,
+  discordBtnUrl: propDiscordBtnUrl, setDiscordBtnUrl: propSetDiscordBtnUrl,
   lastfmEnabled = false, setLastfmEnabled = () => {},
-  lastfmSessionKey = '', setLastfmSessionKey = () => {},
+  lastfmSessionKey: _lastfmSessionKey = '', setLastfmSessionKey = () => {},
   lastfmApiKey = DEFAULT_LASTFM_API_KEY, setLastfmApiKey = () => {},
   lastfmApiSecret = DEFAULT_LASTFM_API_SECRET, setLastfmApiSecret = () => {},
   lastfmUsername = '', setLastfmUsername = () => {},
@@ -128,11 +132,8 @@ export function SettingsPanel({
   uiScale: propUiScale, setUiScale: propSetUiScale,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab || 'playback');
-  const [lbTesting, setLbTesting] = useState(false);
-  const [lbStatus, setLbStatus] = useState<{ ok?: boolean; msg?: string } | null>(null);
   const [lfmTesting, setLfmTesting] = useState(false);
-  const [lfmStatus, setLfmStatus] = useState<{ ok?: boolean; msg?: string } | null>(null);
-  const [showAdvancedLfm, setShowAdvancedLfm] = useState(false);
+  const [lfmAuthToken, setLfmAuthToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -158,6 +159,79 @@ export function SettingsPanel({
   const [diskInfo, setDiskInfo] = useState<DiskInfo | null>(null);
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [cacheLimit, setCacheLimit] = useState<string>(() => loadLS('vg_cacheLimit', '1gb'));
+
+  const [localDiscordTimeDisplay, setLocalDiscordTimeDisplay] = useState<'remaining' | 'elapsed'>(() => {
+    const v = loadLS<string>('vg_discordTimeDisplay', 'remaining');
+    return v === 'elapsed' ? 'elapsed' : 'remaining';
+  });
+  const [localDiscordShowCover, setLocalDiscordShowCover] = useState<boolean>(() => loadLS('vg_discordShowCover', true));
+  const [localDiscordCustomBtn, setLocalDiscordCustomBtn] = useState<boolean>(() => loadLS('vg_discordCustomBtn', false));
+  const [localDiscordBtnLabel, setLocalDiscordBtnLabel] = useState<string>(() => loadLS('vg_discordBtnLabel', ''));
+  const [localDiscordBtnUrl, setLocalDiscordBtnUrl] = useState<string>(() => loadLS('vg_discordBtnUrl', ''));
+
+  const discordTimeDisplay = propDiscordTimeDisplay !== undefined ? propDiscordTimeDisplay : localDiscordTimeDisplay;
+  const setDiscordTimeDisplay = (v: 'remaining' | 'elapsed') => {
+    setLocalDiscordTimeDisplay(v);
+    propSetDiscordTimeDisplay?.(v);
+    saveLS('vg_discordTimeDisplay', v);
+  };
+
+  const discordShowCover = propDiscordShowCover !== undefined ? propDiscordShowCover : localDiscordShowCover;
+  const setDiscordShowCover = (v: boolean) => {
+    setLocalDiscordShowCover(v);
+    propSetDiscordShowCover?.(v);
+    saveLS('vg_discordShowCover', v);
+  };
+
+  const discordCustomBtn = propDiscordCustomBtn !== undefined ? propDiscordCustomBtn : localDiscordCustomBtn;
+  const setDiscordCustomBtn = (v: boolean) => {
+    setLocalDiscordCustomBtn(v);
+    propSetDiscordCustomBtn?.(v);
+    saveLS('vg_discordCustomBtn', v);
+  };
+
+  const discordBtnLabel = propDiscordBtnLabel !== undefined ? propDiscordBtnLabel : localDiscordBtnLabel;
+  const setDiscordBtnLabel = (v: string) => {
+    setLocalDiscordBtnLabel(v);
+    propSetDiscordBtnLabel?.(v);
+    saveLS('vg_discordBtnLabel', v);
+  };
+
+  const discordBtnUrl = propDiscordBtnUrl !== undefined ? propDiscordBtnUrl : localDiscordBtnUrl;
+  const setDiscordBtnUrl = (v: string) => {
+    setLocalDiscordBtnUrl(v);
+    propSetDiscordBtnUrl?.(v);
+    saveLS('vg_discordBtnUrl', v);
+  };
+
+  const [networkProxy, setNetworkProxy] = useState<string>(() => loadLS('vg_networkProxy', ''));
+  const [customInstance, setCustomInstance] = useState<string>(() => loadLS('vg_customInstance', ''));
+  const [testConnStatus, setTestConnStatus] = useState<{ loading: boolean; msg?: string; ok?: boolean } | null>(null);
+
+  const handleTestConnection = async () => {
+    setTestConnStatus({ loading: true });
+    try {
+      const res: string = await invoke('test_network_connection', {
+        proxyUrl: networkProxy.trim() || null,
+        customInstance: customInstance.trim() || null,
+      });
+      setTestConnStatus({ loading: false, ok: true, msg: res });
+    } catch (err: any) {
+      setTestConnStatus({ loading: false, ok: false, msg: String(err) });
+    }
+  };
+
+  const handleSaveNetwork = (proxyVal: string, instVal: string) => {
+    setNetworkProxy(proxyVal);
+    setCustomInstance(instVal);
+    setTestConnStatus(null);
+    saveLS('vg_networkProxy', proxyVal);
+    saveLS('vg_customInstance', instVal);
+    invoke('set_network_config', {
+      proxyUrl: proxyVal.trim() || null,
+      customInstance: instVal.trim() || null,
+    }).catch(() => {});
+  };
   const [internalCacheEnabled, setInternalCacheEnabled] = useState(() => loadLS('vg_cacheEnabled', true));
   const cacheEnabled = propCacheEnabled !== undefined ? propCacheEnabled : internalCacheEnabled;
   const [internalUiScale, setInternalUiScale] = useState<number>(() => loadLS('vg_uiScale', 0));
@@ -247,39 +321,20 @@ export function SettingsPanel({
   }, [downloadPath, activeTab]);
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'playback',     label: 'Playback',     icon: <Zap size={15} /> },
-    { id: 'downloads',    label: 'Downloads',    icon: <FolderDown size={15} /> },
-    { id: 'integrations', label: 'Integrations', icon: <Globe size={15} /> },
-    { id: 'appearance',   label: 'Appearance',   icon: <Moon size={15} /> },
-    { id: 'storage',      label: 'Storage',      icon: <Database size={15} /> },
-    { id: 'updates',      label: 'Updates',      icon: <ArrowUpCircle size={15} /> },
+    { id: 'playback',     label: 'Playback',        icon: <Zap size={15} /> },
+    { id: 'appearance',   label: 'Appearance',      icon: <Palette size={15} /> },
+    { id: 'downloads',    label: 'Downloads',       icon: <FolderDown size={15} /> },
+    { id: 'integrations', label: 'Integrations',    icon: <Radio size={15} /> },
+    { id: 'network',      label: 'Network & Proxy', icon: <Globe size={15} /> },
+    { id: 'storage',      label: 'Storage & Backup',icon: <HardDrive size={15} /> },
+    { id: 'updates',      label: 'Updates',         icon: <ArrowUpCircle size={15} /> },
   ];
-
-  const matchesUpdates = showTab('updates') && (
-    matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "GitHub", "Changelog", appVersion, updateAvailable || ""]) ||
-    matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])
-  );
-
-  const matchesDownloads = showTab('downloads') && (
-    matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality]) ||
-    matchCard(["Downloads", "Audio Specifications", "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat]) ||
-    matchCard(["Downloads", "Download Directory", "Download Folder", "Download Path", "Storage Location", "Save Location", "Folder", "Browse", "Offline tracks", downloadPath]) ||
-    matchCard(["Downloads", "File Options", "Embed Artwork Thumbnail", "Thumbnail", "Album Cover", "Cover Art", "ID3 Tags", "Artwork"]) ||
-    matchCard(["Downloads", "File Options", "Smart Duplicate Detection", "Duplicate Detection", "Skip existing", "Duplicates", "Overwrite"])
-  );
 
   const matchesPlayback = showTab('playback') && (
     matchCard(["Playback", "Audio Processing", "Loudness Normalization", "Loudnorm", "EBU R128", "Volume Normalization", "Sound leveling", "Gain"]) ||
     matchCard(["Playback", "Audio Processing", "Skip Silence", "Silence Removal", "Remove silent gaps", "Silence"]) ||
     matchCard(["Playback", "Audio Processing", "Autoplay Recommendations", "Autoplay", "Continuous playback", "Queue similar", "Infinite music"]) ||
     matchCard(["Playback", "Equalizer", "EQ", "Bass", "Mid", "Treble", "Flat", "Bass Boost", "Vocal", "Rock", "Electronic", "Presets", "dB", "60Hz", "1kHz", "16kHz", "Frequencies", "Sound tuning"])
-  );
-
-  const matchesIntegrations = showTab('integrations') && (
-    matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing"]) ||
-    matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource]) ||
-    matchCard(["Integrations", "Last.fm Scrobbling", "Last.fm", "Lastfm", "Scrobbler", "Track scrobbling", "Session key", "API key", lastfmUsername]) ||
-    matchCard(["Integrations", "ListenBrainz Scrobbling", "ListenBrainz", "User token", "Scrobbler", listenbrainzUsername])
   );
 
   const matchesAppearance = showTab('appearance') && (
@@ -291,6 +346,24 @@ export function SettingsPanel({
     matchCard(["Appearance", "Performance & Graphics", "Low-Spec / Performance Mode", "Low-Spec Mode", "Performance Mode", "Eco Mode", "Performance", "Graphics", "GPU", "Battery", "Lag", "Speed", "Animations", "Blur", "Low power"])
   );
 
+  const matchesDownloads = showTab('downloads') && (
+    matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality]) ||
+    matchCard(["Downloads", "Audio Specifications", "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat]) ||
+    matchCard(["Downloads", "Download Directory", "Download Folder", "Download Path", "Storage Location", "Save Location", "Folder", "Browse", "Offline tracks", "Folder watcher", "Auto watcher", "Auto scan", "Live sync", downloadPath]) ||
+    matchCard(["Downloads", "File Options", "Embed Artwork Thumbnail", "Thumbnail", "Album Cover", "Cover Art", "ID3 Tags", "Artwork"]) ||
+    matchCard(["Downloads", "File Options", "Smart Duplicate Detection", "Duplicate Detection", "Skip existing", "Duplicates", "Overwrite"])
+  );
+
+  const matchesIntegrations = showTab('integrations') && (
+    matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing", "Time display", "Elapsed time", "Remaining time", "Album art", "Thumbnail", "Buttons", "Custom button", "Discord button", discordBtnLabel, discordBtnUrl]) ||
+    matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource]) ||
+    matchCard(["Integrations", "Last.fm Scrobbling", "Last.fm", "Lastfm", "Scrobbler", "Track scrobbling", "Session key", "API key", lastfmUsername])
+  );
+
+  const matchesNetwork = showTab('network') && (
+    matchCard(["Network", "Network & Audio Proxy", "Proxy", "HTTP", "HTTPS", "SOCKS5", "socks", "Invidious", "Piped", "Audio Proxy", "Custom Mirror", "Mirror", "VPN", "Connection", "Endpoint", "Test Connection", networkProxy, customInstance])
+  );
+
   const matchesStorage = showTab('storage') && (
     matchCard(["Storage", "Cache Storage & Auto-Cleaner", "Cache", "Enable Caching & Stream Prefetch", "Prefetch", "Cache Size Limit", "Auto-Cleaner", "Clear Cache", "Disk Usage", "Temp Storage", cacheLimit, cacheInfo?.formatted_size || ""]) ||
     matchCard(["Storage", "Backup Location", "Download Directory", "veluna_backup.json", backupPath, downloadPath, "Save path", "Folder"]) ||
@@ -298,7 +371,12 @@ export function SettingsPanel({
     matchCard(["Storage", "Reset Veluna App", "Reset", "Clear data", "Factory reset", "Wipe database", "Delete all", "Danger zone", "Irreversible"])
   );
 
-  const hasAnyMatches = !searchQuery.trim() || matchesUpdates || matchesDownloads || matchesPlayback || matchesIntegrations || matchesAppearance || matchesStorage;
+  const matchesUpdates = showTab('updates') && (
+    matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "GitHub", "Changelog", appVersion, updateAvailable || ""]) ||
+    matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])
+  );
+
+  const hasAnyMatches = !searchQuery.trim() || matchesPlayback || matchesAppearance || matchesDownloads || matchesIntegrations || matchesNetwork || matchesStorage || matchesUpdates;
 
   return (
     <div style={{flex:1,display:"flex",overflow:"hidden",background:"var(--v-bg0)"}}>
@@ -388,33 +466,6 @@ export function SettingsPanel({
             </button>
           );
         })}
-
-        {searchQuery && (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            fontSize: "13.5px",
-            fontWeight: 500,
-            background: "rgba(226, 221, 217, 0.04)",
-            color: "#e2ddd9",
-            position: "relative"
-          }}>
-            <span style={{
-              position: "absolute",
-              left: "0",
-              top: "10px",
-              bottom: "10px",
-              width: "3px",
-              borderRadius: "1.5px",
-              background: "#9e9894"
-            }} />
-            <span style={{ color: "#9e9894", display: "flex", flexShrink: 0 }}><Search size={12} /></span>
-            <span>Search Results</span>
-          </div>
-        )}
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:"20px 24px 140px 24px"}} className="custom-scrollbar">
@@ -432,335 +483,6 @@ export function SettingsPanel({
           </div>
         ) : (
           <>
-        {matchesUpdates && (
-          <div style={{display:"flex",flexDirection:"column",gap:"24px"}}>
-            {!searchQuery.trim() && (
-              <div>
-                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Updates</h2>
-                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Check for new releases and view version status.</p>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "GitHub", "Changelog", appVersion, updateAvailable || ""])) && (
-              <>
-                {/* Clean Status Area (Not in a box) */}
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "18px",
-                  padding: "4px 0 8px 0",
-                }}>
-                  {/* Clean App Icon */}
-                  <div style={{
-                    width: "52px",
-                    height: "52px",
-                    borderRadius: "12px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    flexShrink: 0,
-                    position: "relative"
-                  }}>
-                    <svg width="30" height="30" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
-                      <rect width="28" height="28" rx="6" fill="var(--v-accent)"/>
-                      <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
-                      <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
-                    </svg>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {updateAvailable ? (
-                      <div>
-                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
-                          Update available: v{updateAvailable}
-                        </div>
-                        <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 12px 0", lineHeight: 1.4 }}>
-                          A new version of Veluna is ready to download. Features and stability updates await.
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                          <button
-                            onClick={() => openUrl('https://github.com/rry0ku/veluna/releases/latest')}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "7px 16px",
-                              borderRadius: "18px",
-                              background: "var(--v-accent)",
-                              color: "var(--v-bg0)",
-                              border: "none",
-                              fontSize: "12px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              transition: "all 0.15s ease",
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.1)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
-                          >
-                            <Download size={13} strokeWidth={2.4} /> Download v{updateAvailable}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
-                          You're up to date
-                        </div>
-                        <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 8px 0" }}>
-                          Veluna v{appVersion} is currently the latest version.
-                        </p>
-                        <a
-                          href="#"
-                          onClick={e => { e.preventDefault(); openUrl('https://github.com/rry0ku/veluna'); }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            color: "var(--v-accent)",
-                            textDecoration: "none"
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
-                          onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
-                        >
-                          <ExternalLink size={12} /> Visit GitHub Repository
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Version Metadata Strip */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
-                  gap: "12px",
-                }}>
-                  <div style={{
-                    borderRadius: "10px",
-                    border: "1px solid var(--v-bdr)",
-                    background: "var(--v-bg0)",
-                    padding: "13px 15px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px"
-                  }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Installed Version</span>
-                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#e2ddd9", fontFamily: "monospace" }}>v{appVersion}</span>
-                  </div>
-
-                  <div style={{
-                    borderRadius: "10px",
-                    border: "1px solid var(--v-bdr)",
-                    background: "var(--v-bg0)",
-                    padding: "13px 15px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px"
-                  }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Latest Available</span>
-                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: updateAvailable ? "var(--v-accent)" : "#10b981", fontFamily: "monospace" }}>
-                      v{updateAvailable || appVersion}
-                    </span>
-                  </div>
-
-                  <div style={{
-                    borderRadius: "10px",
-                    border: "1px solid var(--v-bdr)",
-                    background: "var(--v-bg0)",
-                    padding: "13px 15px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px"
-                  }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Update Source</span>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#e2ddd9", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <GitBranch size={13} style={{ color: "var(--v-accent)" }} /> GitHub Releases
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Standard Settings Card */}
-            {(!searchQuery.trim() || matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Check Automatically on Startup</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Automatically check for new releases when launching Veluna</p>
-                  </div>
-                  <SettingsSwitch checked={autoCheckUpdates} onChange={() => setAutoCheckUpdates(!autoCheckUpdates)} />
-                </div>
-                
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Manual Update Check</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Force a search for the latest version of Veluna on GitHub</p>
-                  </div>
-                  <button
-                    onClick={handleCheckUpdate}
-                    disabled={isCheckingUpdate}
-                    style={{
-                      padding: "7px 16px",
-                      borderRadius: "18px",
-                      background: isCheckingUpdate ? "rgba(255,255,255,0.02)" : "var(--v-accent)",
-                      color: isCheckingUpdate ? "#5c5755" : "var(--v-bg0)",
-                      border: "none",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      cursor: isCheckingUpdate ? "not-allowed" : "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      transition: "all 0.15s ease",
-                      boxShadow: isCheckingUpdate ? "none" : "0 2px 8px rgba(0,0,0,0.15)"
-                    }}
-                    onMouseEnter={e => {
-                      if (!isCheckingUpdate) {
-                        e.currentTarget.style.filter = "brightness(1.1)";
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      if (!isCheckingUpdate) {
-                        e.currentTarget.style.filter = "none";
-                      }
-                    }}
-                  >
-                    {isCheckingUpdate ? (
-                      <>
-                        <div style={{width:"12px",height:"12px",border:"2px solid #5c5755",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
-                        Checking...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw size={13} />
-                        Check Now
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {matchesDownloads && (
-          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-            {!searchQuery.trim() && (
-              <div>
-                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Downloads</h2>
-                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure download quality, formats, and folders.</p>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality, "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Audio Specifications</h3>
-                </div>
-                
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Download Quality</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                      {downloadQuality === 'High' ? 'Best available audio bitrate (320kbps+)' : downloadQuality === 'Medium' ? 'Balanced quality (~128kbps)' : 'Smallest file size'}
-                    </p>
-                  </div>
-                  <ThemedSelect
-                    value={downloadQuality}
-                    onChange={setDownloadQuality}
-                    options={[
-                      { value: 'High', label: 'High' },
-                      { value: 'Medium', label: 'Medium' },
-                      { value: 'Low', label: 'Low' },
-                    ]}
-                  />
-                </div>
-
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Audio Format</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                      {downloadFormat === 'opus' ? 'Best compression, native YouTube codec' : downloadFormat === 'm4a' ? 'AAC in M4A, great Apple/car stereo compat' : downloadFormat === 'flac' ? 'Lossless — largest files' : 'MP3 — widest compatibility'}
-                    </p>
-                  </div>
-                  <ThemedSelect
-                    value={downloadFormat}
-                    onChange={setDownloadFormat}
-                    options={[
-                      { value: 'mp3',  label: 'MP3' },
-                      { value: 'opus', label: 'Opus' },
-                      { value: 'm4a',  label: 'M4A' },
-                      { value: 'flac', label: 'FLAC' },
-                    ]}
-                  />
-                </div>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Downloads", "Download Directory", "Download Folder", "Download Path", "Storage Location", "Save Location", "Folder", "Browse", "Offline tracks", downloadPath])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Download Directory</h3>
-                </div>
-                <div className="v-settings-row" style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={handleSelectDirectory}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div className="v-settings-path-capsule" style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "12.5px",
-                      color: "#9e9894",
-                      background: "rgba(255, 255, 255, 0.02)",
-                      border: "1px solid var(--v-bdr)",
-                      borderRadius: "20px",
-                      padding: "4px 10px",
-                      transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                      fontFamily: "monospace",
-                      maxWidth: "90%"
-                    }}>
-                      <FolderOpen size={13} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{downloadPath}</span>
-                    </div>
-                    {diskInfo && <p style={{fontSize:"12px",color:"#5c5755",marginTop:"6px"}}>{formatBytes(diskInfo.used_bytes)} used · {diskInfo.track_count} offline tracks</p>}
-                  </div>
-                  <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
-                    <FolderOpen size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Downloads", "File Options", "Embed Artwork Thumbnail", "Thumbnail", "Album Cover", "Cover Art", "ID3 Tags", "Artwork", "Smart Duplicate Detection", "Duplicate Detection", "Skip existing", "Duplicates", "Overwrite"])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",display:"flex",alignItems:"center",gap:"8px",margin:0}}><Image size={14} style={{color:"#8c8682"}} /> File Options</h3>
-                </div>
-                
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Embed Artwork Thumbnail</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{embedThumbnail ? 'Active — album/track cover art is embedded into audio file tags' : 'Disabled — downloaded audio files will have no embedded cover'}</p>
-                  </div>
-                  <SettingsSwitch checked={embedThumbnail} onChange={() => setEmbedThumbnail(!embedThumbnail)} />
-                </div>
-                
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Smart Duplicate Detection</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{duplicateDetect ? 'Active — tracks already in your download folder are skipped' : 'Disabled — duplicates will download and overwrite if triggered'}</p>
-                  </div>
-                  <SettingsSwitch checked={duplicateDetect} onChange={() => setDuplicateDetect(!duplicateDetect)} />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {matchesPlayback && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             {!searchQuery.trim() && (
@@ -942,358 +664,12 @@ export function SettingsPanel({
           </div>
         )}
 
-        {matchesIntegrations && (
-          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
-            {!searchQuery.trim() && (
-              <div>
-                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Integrations</h2>
-                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure external integrations and social status activity.</p>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing"])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Discord Integration</h3>
-                </div>
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Discord Rich Presence</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{discordRpcEnabled ? 'Active — shows listening activity on your Discord profile' : 'Disabled — listening activity is hidden'}</p>
-                  </div>
-                  <SettingsSwitch checked={discordRpcEnabled} onChange={() => setDiscordRpcEnabled(!discordRpcEnabled)} />
-                </div>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
-                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Lyrics Provider</h3>
-                </div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Primary Source</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                      {lyricsSource === 'musixmatch' ? 'Musixmatch — word-level richsync when available'
-                        : lyricsSource === 'netease' ? 'NetEase — great for Asian artists & translations'
-                        : 'lrclib — open, fast, fully synced and community-driven'}
-                    </p>
-                  </div>
-                  <ThemedSelect value={lyricsSource} onChange={setLyricsSource} options={[
-                    { value: 'lrclib', label: 'lrclib' },
-                    { value: 'musixmatch', label: 'Musixmatch' },
-                    { value: 'netease', label: 'NetEase' },
-                  ]} />
-                </div>
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Integrations", "Last.fm Scrobbling", "Last.fm", "Scrobbler", "Track scrobbling", "Session key", "API key", lastfmUsername])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-                    <Radio size={15} style={{color:"#d51007"}} />
-                    <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Last.fm Scrobbling</h3>
-                  </div>
-                  <button
-                    onClick={() => openUrl('https://www.last.fm/api/account/create')}
-                    style={{fontSize:"11.5px",color:"#8a817c",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",padding:0}}
-                    onMouseEnter={e => e.currentTarget.style.color = '#e2ddd9'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#8a817c'}
-                  >
-                    <span>Last.fm API Portal</span>
-                    <ExternalLink size={12} />
-                  </button>
-                </div>
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable Last.fm Scrobbling</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                      {lastfmEnabled ? 'Logs Now Playing updates and scrobbles to your Last.fm profile' : 'Disabled — scrobbles are not sent'}
-                    </p>
-                  </div>
-                  <SettingsSwitch checked={lastfmEnabled} onChange={() => setLastfmEnabled(!lastfmEnabled)} />
-                </div>
-
-                {lastfmEnabled && (
-                  <div style={{padding:"0 16px 16px 16px",display:"flex",flexDirection:"column",gap:"12px",borderTop:"1px solid rgba(255,255,255,0.03)",paddingTop:"14px"}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <label style={{fontSize:"11.5px",fontWeight:600,color:"#8a817c",letterSpacing:".04em",textTransform:"uppercase"}}>
-                          Session Key (sk)
-                        </label>
-                        {lastfmUsername && (
-                          <span style={{fontSize:"11.5px",fontWeight:600,color:"#10b981",display:"flex",alignItems:"center",gap:"4px"}}>
-                            <CheckCircle2 size={12} />
-                            Connected as @{lastfmUsername}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-                        <input
-                          type="password"
-                          value={lastfmSessionKey}
-                          onChange={e => {
-                            setLastfmSessionKey(e.target.value);
-                            setLfmStatus(null);
-                          }}
-                          placeholder="Enter your Last.fm Session Key"
-                          style={{
-                            flex: 1,
-                            padding: "8px 12px",
-                            borderRadius: "8px",
-                            background: "var(--v-bg2)",
-                            border: "1px solid var(--v-bdr2)",
-                            color: "#e2ddd9",
-                            fontSize: "12.5px",
-                            outline: "none"
-                          }}
-                        />
-                        <button
-                          disabled={lfmTesting || !lastfmSessionKey.trim()}
-                          onClick={async () => {
-                            setLfmTesting(true);
-                            setLfmStatus(null);
-                            const res = await validateLastFmSession(lastfmSessionKey, lastfmApiKey, lastfmApiSecret);
-                            setLfmTesting(false);
-                            if (res.valid && res.username) {
-                              setLastfmUsername(res.username);
-                              setLfmStatus({ ok: true, msg: `Verified as @${res.username}` });
-                              showToast(`Last.fm connected: @${res.username}`);
-                            } else {
-                              setLfmStatus({ ok: false, msg: res.error || 'Invalid session' });
-                              showToast(`Last.fm error: ${res.error || 'Invalid session'}`);
-                            }
-                          }}
-                          style={{
-                            padding: "8px 16px",
-                            borderRadius: "8px",
-                            border: "1px solid var(--v-bdr2)",
-                            background: "var(--v-bg2)",
-                            color: lastfmSessionKey.trim() ? "#e2ddd9" : "#5c5755",
-                            fontWeight: 600,
-                            fontSize: "12px",
-                            cursor: lastfmSessionKey.trim() ? "pointer" : "not-allowed",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            whiteSpace: "nowrap"
-                          }}
-                        >
-                          <RefreshCw size={12} className={lfmTesting ? "animate-spin" : ""} />
-                          <span>{lfmTesting ? 'Checking...' : 'Test Connection'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {lfmStatus && (
-                      <div style={{
-                        padding: "8px 12px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        background: lfmStatus.ok ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
-                        border: `1px solid ${lfmStatus.ok ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
-                        color: lfmStatus.ok ? "#10b981" : "#ef4444"
-                      }}>
-                        {lfmStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                        <span>{lfmStatus.msg}</span>
-                      </div>
-                    )}
-
-                    {/* Advanced Custom API Keys toggle */}
-                    <div style={{marginTop:"4px"}}>
-                      <button
-                        onClick={() => setShowAdvancedLfm(!showAdvancedLfm)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          fontSize: "11.5px",
-                          color: "#8a817c",
-                          cursor: "pointer",
-                          padding: 0,
-                          textDecoration: "underline"
-                        }}
-                      >
-                        {showAdvancedLfm ? 'Hide Custom API Key Settings' : 'Custom Last.fm API Key / Secret (Optional)'}
-                      </button>
-
-                      {showAdvancedLfm && (
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginTop:"10px"}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
-                            <label style={{fontSize:"11px",color:"#6f6966"}}>API Key</label>
-                            <input
-                              type="text"
-                              value={lastfmApiKey}
-                              onChange={e => setLastfmApiKey(e.target.value)}
-                              placeholder={DEFAULT_LASTFM_API_KEY}
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: "6px",
-                                background: "var(--v-bg2)",
-                                border: "1px solid var(--v-bdr2)",
-                                color: "#e2ddd9",
-                                fontSize: "11.5px",
-                                outline: "none"
-                              }}
-                            />
-                          </div>
-                          <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
-                            <label style={{fontSize:"11px",color:"#6f6966"}}>API Secret</label>
-                            <input
-                              type="password"
-                              value={lastfmApiSecret}
-                              onChange={e => setLastfmApiSecret(e.target.value)}
-                              placeholder={DEFAULT_LASTFM_API_SECRET}
-                              style={{
-                                padding: "6px 10px",
-                                borderRadius: "6px",
-                                background: "var(--v-bg2)",
-                                border: "1px solid var(--v-bdr2)",
-                                color: "#e2ddd9",
-                                fontSize: "11.5px",
-                                outline: "none"
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(!searchQuery.trim() || matchCard(["Integrations", "ListenBrainz Scrobbling", "ListenBrainz", "User token", "Scrobbler", listenbrainzUsername])) && (
-              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
-                    <Radio size={15} style={{color:"#eb743b"}} />
-                    <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>ListenBrainz Scrobbling</h3>
-                  </div>
-                  <button
-                    onClick={() => openUrl('https://listenbrainz.org/profile/')}
-                    style={{fontSize:"11.5px",color:"#8a817c",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",padding:0}}
-                    onMouseEnter={e => e.currentTarget.style.color = '#e2ddd9'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#8a817c'}
-                  >
-                    <span>Get User Token</span>
-                    <ExternalLink size={12} />
-                  </button>
-                </div>
-                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div>
-                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable ListenBrainz Scrobbling</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
-                      {listenbrainzEnabled ? 'Submits Now Playing status and scrobbles after 50% track duration' : 'Disabled — listens are not submitted'}
-                    </p>
-                  </div>
-                  <SettingsSwitch checked={listenbrainzEnabled} onChange={() => setListenbrainzEnabled(!listenbrainzEnabled)} />
-                </div>
-
-                {listenbrainzEnabled && (
-                  <div style={{padding:"0 16px 16px 16px",display:"flex",flexDirection:"column",gap:"12px",borderTop:"1px solid rgba(255,255,255,0.03)",paddingTop:"14px"}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <label style={{fontSize:"11.5px",fontWeight:600,color:"#8a817c",letterSpacing:".04em",textTransform:"uppercase"}}>
-                          User Token
-                        </label>
-                        {listenbrainzUsername && (
-                          <span style={{fontSize:"11.5px",fontWeight:600,color:"#10b981",display:"flex",alignItems:"center",gap:"4px"}}>
-                            <CheckCircle2 size={12} />
-                            Connected as @{listenbrainzUsername}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
-                        <input
-                          type="password"
-                          value={listenbrainzToken}
-                          onChange={e => {
-                            setListenbrainzToken(e.target.value);
-                            setLbStatus(null);
-                          }}
-                          placeholder="Paste your ListenBrainz User Token"
-                          style={{
-                            flex: 1,
-                            padding: "8px 12px",
-                            borderRadius: "8px",
-                            background: "var(--v-bg2)",
-                            border: "1px solid var(--v-bdr2)",
-                            color: "#e2ddd9",
-                            fontSize: "12.5px",
-                            outline: "none"
-                          }}
-                        />
-                        <button
-                          disabled={lbTesting || !listenbrainzToken.trim()}
-                          onClick={async () => {
-                            setLbTesting(true);
-                            setLbStatus(null);
-                            const res = await validateListenBrainzToken(listenbrainzToken);
-                            setLbTesting(false);
-                            if (res.valid && res.username) {
-                              setListenbrainzUsername(res.username);
-                              setLbStatus({ ok: true, msg: `Verified as @${res.username}` });
-                              showToast(`ListenBrainz connected: @${res.username}`);
-                            } else {
-                              setLbStatus({ ok: false, msg: res.error || 'Invalid token' });
-                              showToast(`ListenBrainz error: ${res.error || 'Invalid token'}`);
-                            }
-                          }}
-                          style={{
-                            padding: "8px 16px",
-                            borderRadius: "8px",
-                            border: "1px solid var(--v-bdr2)",
-                            background: "var(--v-bg2)",
-                            color: listenbrainzToken.trim() ? "#e2ddd9" : "#5c5755",
-                            fontWeight: 600,
-                            fontSize: "12px",
-                            cursor: listenbrainzToken.trim() ? "pointer" : "not-allowed",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            whiteSpace: "nowrap"
-                          }}
-                        >
-                          <RefreshCw size={12} className={lbTesting ? "animate-spin" : ""} />
-                          <span>{lbTesting ? 'Checking...' : 'Test Connection'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {lbStatus && (
-                      <div style={{
-                        padding: "8px 12px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        background: lbStatus.ok ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
-                        border: `1px solid ${lbStatus.ok ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)"}`,
-                        color: lbStatus.ok ? "#10b981" : "#ef4444"
-                      }}>
-                        {lbStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                        <span>{lbStatus.msg}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {matchesAppearance && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             {!searchQuery.trim() && (
               <div>
                 <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Appearance</h2>
-                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Customize application themes, accent colors, and startup behaviors.</p>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Customize application themes, accent colors, interface scaling, and system integration.</p>
               </div>
             )}
 
@@ -1755,12 +1131,611 @@ export function SettingsPanel({
           </div>
         )}
 
+        {matchesDownloads && (
+          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+            {!searchQuery.trim() && (
+              <div>
+                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Downloads</h2>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure download quality, formats, and folders.</p>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Downloads", "Audio Specifications", "Download Quality", "Audio Quality", "Bitrate", "High", "Medium", "Low", "320kbps", "128kbps", "Sound quality", downloadQuality, "Audio Format", "Format", "Codec", "MP3", "Opus", "M4A", "FLAC", "Lossless", "AAC", downloadFormat])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Audio Specifications</h3>
+                </div>
+                
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Download Quality</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                      {downloadQuality === 'High' ? 'Best available audio bitrate (320kbps+)' : downloadQuality === 'Medium' ? 'Balanced quality (~128kbps)' : 'Smallest file size'}
+                    </p>
+                  </div>
+                  <ThemedSelect
+                    value={downloadQuality}
+                    onChange={setDownloadQuality}
+                    options={[
+                      { value: 'High', label: 'High' },
+                      { value: 'Medium', label: 'Medium' },
+                      { value: 'Low', label: 'Low' },
+                    ]}
+                  />
+                </div>
+
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Audio Format</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                      {downloadFormat === 'opus' ? 'Best compression, native YouTube codec' : downloadFormat === 'm4a' ? 'AAC in M4A, great Apple/car stereo compat' : downloadFormat === 'flac' ? 'Lossless — largest files' : 'MP3 — widest compatibility'}
+                    </p>
+                  </div>
+                  <ThemedSelect
+                    value={downloadFormat}
+                    onChange={setDownloadFormat}
+                    options={[
+                      { value: 'mp3',  label: 'MP3' },
+                      { value: 'opus', label: 'Opus' },
+                      { value: 'm4a',  label: 'M4A' },
+                      { value: 'flac', label: 'FLAC' },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Downloads", "Download Directory", "Download Folder", "Download Path", "Storage Location", "Save Location", "Folder", "Browse", "Offline tracks", downloadPath])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Download Directory</h3>
+                </div>
+                <div className="v-settings-row" style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"background 0.15s ease-out"}} onMouseEnter={e=>(e.currentTarget.style.background="rgba(226,221,217,0.005)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")} onClick={handleSelectDirectory}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div className="v-settings-path-capsule" style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "12.5px",
+                      color: "#9e9894",
+                      background: "rgba(255, 255, 255, 0.02)",
+                      border: "1px solid var(--v-bdr)",
+                      borderRadius: "20px",
+                      padding: "4px 10px",
+                      transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                      fontFamily: "monospace",
+                      maxWidth: "90%"
+                    }}>
+                      <FolderOpen size={13} style={{ color: "var(--v-accent)", flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{downloadPath}</span>
+                    </div>
+                    {diskInfo && <p style={{fontSize:"12px",color:"#5c5755",marginTop:"6px"}}>{formatBytes(diskInfo.used_bytes)} used · {diskInfo.track_count} offline tracks</p>}
+                  </div>
+                  <button style={{padding:"6px",marginLeft:"12px",color:"#5c5755",background:"none",border:"none",cursor:"pointer",flexShrink:0,borderRadius:"7px",display:"flex",transition:"color .12s"}} onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
+                    <FolderOpen size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Downloads", "File Options", "Embed Artwork Thumbnail", "Thumbnail", "Album Cover", "Cover Art", "ID3 Tags", "Artwork", "Smart Duplicate Detection", "Duplicate Detection", "Skip existing", "Duplicates", "Overwrite"])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",display:"flex",alignItems:"center",gap:"8px",margin:0}}><Image size={14} style={{color:"#8c8682"}} /> File Options</h3>
+                </div>
+                
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Embed Artwork Thumbnail</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{embedThumbnail ? 'Active — album/track cover art is embedded into audio file tags' : 'Disabled — downloaded audio files will have no embedded cover'}</p>
+                  </div>
+                  <SettingsSwitch checked={embedThumbnail} onChange={() => setEmbedThumbnail(!embedThumbnail)} />
+                </div>
+                
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Smart Duplicate Detection</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{duplicateDetect ? 'Active — tracks already in your download folder are skipped' : 'Disabled — duplicates will download and overwrite if triggered'}</p>
+                  </div>
+                  <SettingsSwitch checked={duplicateDetect} onChange={() => setDuplicateDetect(!duplicateDetect)} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+
+        {matchesIntegrations && (
+          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+            {!searchQuery.trim() && (
+              <div>
+                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Integrations</h2>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure external integrations and social status activity.</p>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Integrations", "Discord Integration", "Discord Rich Presence", "Discord RPC", "Discord", "Playing status", "Activity", "Now playing", "Time display", "Album art", "Thumbnail", "Buttons"])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Discord Integration</h3>
+                </div>
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:discordRpcEnabled?"1px solid var(--v-bdr)":"none"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Discord Rich Presence</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>{discordRpcEnabled ? 'Active — shows listening activity on your Discord profile' : 'Disabled — listening activity is hidden'}</p>
+                  </div>
+                  <SettingsSwitch checked={discordRpcEnabled} onChange={() => setDiscordRpcEnabled(!discordRpcEnabled)} />
+                </div>
+
+                {discordRpcEnabled && (
+                  <>
+                    <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
+                      <div>
+                        <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Show Album Artwork</p>
+                        <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Display large track thumbnail on Discord presence</p>
+                      </div>
+                      <SettingsSwitch
+                        checked={discordShowCover}
+                        onChange={() => {
+                          const next = !discordShowCover;
+                          setDiscordShowCover(next);
+                          saveLS('vg_discordShowCover', next);
+                        }}
+                      />
+                    </div>
+
+                    <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid var(--v-bdr)"}}>
+                      <div>
+                        <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Time Display Mode</p>
+                        <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Control how timestamps appear on your Discord profile</p>
+                      </div>
+                      <ThemedSelect
+                        value={discordTimeDisplay}
+                        onChange={v => {
+                          setDiscordTimeDisplay(v as any);
+                          saveLS('vg_discordTimeDisplay', v);
+                        }}
+                        options={[
+                          { value: 'remaining', label: 'Time Remaining' },
+                          { value: 'elapsed', label: 'Time Elapsed' },
+                        ]}
+                      />
+                    </div>
+
+                    <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"12px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div>
+                          <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Custom Action Button</p>
+                          <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Show a custom link button on your Discord profile card</p>
+                        </div>
+                        <SettingsSwitch
+                          checked={discordCustomBtn}
+                          onChange={() => {
+                            const next = !discordCustomBtn;
+                            setDiscordCustomBtn(next);
+                            saveLS('vg_discordCustomBtn', next);
+                          }}
+                        />
+                      </div>
+
+                      {discordCustomBtn && (
+                        <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
+                          <input
+                            type="text"
+                            placeholder="Button Label (e.g. My Music)"
+                            value={discordBtnLabel}
+                            onChange={e => {
+                              setDiscordBtnLabel(e.target.value);
+                              saveLS('vg_discordBtnLabel', e.target.value);
+                            }}
+                            style={{
+                              flex: 1,
+                              background: 'var(--v-bg3)',
+                              border: '1px solid var(--v-bdr3)',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '12.5px',
+                              color: 'var(--v-fg)',
+                              outline: 'none',
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="URL (https://...)"
+                            value={discordBtnUrl}
+                            onChange={e => {
+                              setDiscordBtnUrl(e.target.value);
+                              saveLS('vg_discordBtnUrl', e.target.value);
+                            }}
+                            style={{
+                              flex: 1.5,
+                              background: 'var(--v-bg3)',
+                              border: '1px solid var(--v-bdr3)',
+                              borderRadius: '8px',
+                              padding: '8px 12px',
+                              fontSize: '12.5px',
+                              color: 'var(--v-fg)',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Integrations", "Lyrics Provider", "Primary Source", "Lyrics", "lrclib", "Musixmatch", "NetEase", "Synced lyrics", "Richsync", "Subtitles", "Karaoke", lyricsSource])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)"}}>
+                  <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Lyrics Provider</h3>
+                </div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Primary Source</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                      {lyricsSource === 'musixmatch' ? 'Musixmatch — word-level richsync when available'
+                        : lyricsSource === 'netease' ? 'NetEase — great for Asian artists & translations'
+                        : 'lrclib — open, fast, fully synced and community-driven'}
+                    </p>
+                  </div>
+                  <ThemedSelect value={lyricsSource} onChange={setLyricsSource} options={[
+                    { value: 'lrclib', label: 'lrclib' },
+                    { value: 'musixmatch', label: 'Musixmatch' },
+                    { value: 'netease', label: 'NetEase' },
+                  ]} />
+                </div>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Integrations", "Last.fm Scrobbling", "Last.fm", "Scrobbler", "Track scrobbling", "Session key", "API key", lastfmUsername])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                    <Radio size={15} style={{color:"#d51007"}} />
+                    <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Last.fm Scrobbling</h3>
+                  </div>
+                  <button
+                    onClick={() => openUrl('https://www.last.fm/api/account/create')}
+                    style={{fontSize:"11.5px",color:"#8a817c",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"4px",padding:0}}
+                    onMouseEnter={e => e.currentTarget.style.color = '#e2ddd9'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#8a817c'}
+                  >
+                    <span>Last.fm API Portal</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Enable Last.fm Scrobbling</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>
+                      {lastfmEnabled ? 'Logs Now Playing updates and scrobbles to your Last.fm profile' : 'Disabled — scrobbles are not sent'}
+                    </p>
+                  </div>
+                  <SettingsSwitch checked={lastfmEnabled} onChange={() => setLastfmEnabled(!lastfmEnabled)} />
+                </div>
+
+                {lastfmEnabled && (
+                  <div style={{padding:"0 16px 16px 16px",display:"flex",flexDirection:"column",gap:"12px",borderTop:"1px solid rgba(255,255,255,0.03)",paddingTop:"14px"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <label style={{fontSize:"11.5px",fontWeight:600,color:"#8a817c",letterSpacing:".04em",textTransform:"uppercase"}}>
+                          API Credentials
+                        </label>
+                        {lastfmUsername?.trim() && (
+                          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                            <span style={{fontSize:"11.5px",fontWeight:600,color:"#10b981",display:"flex",alignItems:"center",gap:"4px"}}>
+                              <CheckCircle2 size={12} />
+                              Connected as @{lastfmUsername}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setLastfmApiKey('');
+                                setLastfmApiSecret('');
+                                setLastfmSessionKey('');
+                                setLastfmUsername('');
+                                setLfmAuthToken(null);
+                                saveLS('vg_lfm_apikey', '');
+                                saveLS('vg_lfm_secret', '');
+                                saveLS('vg_lfm_session', '');
+                                saveLS('vg_lfm_username', '');
+                                showToast('Last.fm account disconnected');
+                              }}
+                              style={{
+                                background: "rgba(239, 68, 68, 0.1)",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                borderRadius: "6px",
+                                color: "#ef4444",
+                                padding: "2px 8px",
+                                fontSize: "11px",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* API Key & API Secret Inputs (2-Column Grid) */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginTop:"2px"}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                          <label style={{fontSize:"11px",color:"#6f6966"}}>API Key</label>
+                          <input
+                            type="text"
+                            value={lastfmApiKey}
+                            onChange={e => {
+                              setLastfmApiKey(e.target.value.trim());
+                              setLastfmUsername('');
+                              setLfmAuthToken(null);
+                            }}
+                            placeholder="Paste 32-character API Key"
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              background: "var(--v-bg2)",
+                              border: "1px solid var(--v-bdr2)",
+                              color: "#e2ddd9",
+                              fontSize: "12px",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                          <label style={{fontSize:"11px",color:"#6f6966"}}>API Secret</label>
+                          <input
+                            type="password"
+                            value={lastfmApiSecret}
+                            onChange={e => {
+                              setLastfmApiSecret(e.target.value.trim());
+                              setLastfmUsername('');
+                              setLfmAuthToken(null);
+                            }}
+                            placeholder="Paste 32-character API Secret"
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              background: "var(--v-bg2)",
+                              border: "1px solid var(--v-bdr2)",
+                              color: "#e2ddd9",
+                              fontSize: "12px",
+                              outline: "none"
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{display:"flex",gap:"8px",alignItems:"center",marginTop:"4px"}}>
+                        <button
+                          disabled={lfmTesting || !lastfmApiKey.trim() || !lastfmApiSecret.trim()}
+                          onClick={async () => {
+                            const key = lastfmApiKey.trim();
+                            const secret = lastfmApiSecret.trim();
+                            if (!key || !secret) {
+                              showToast('Enter both API Key and API Secret');
+                              return;
+                            }
+                            setLfmTesting(true);
+
+                            if (!lfmAuthToken) {
+                              const res = await getLastFmAuthToken(key, secret);
+                              setLfmTesting(false);
+                              if (res.success && res.token) {
+                                setLfmAuthToken(res.token);
+                                const authUrl = `https://www.last.fm/api/auth/?api_key=${key}&token=${res.token}`;
+                                openUrl(authUrl).catch(() => window.open(authUrl, '_blank'));
+                                showToast('Approve Veluna in the browser, then click Complete Connection');
+                              } else {
+                                showToast(`Last.fm error: ${res.error || 'Failed to start authorization'}`);
+                              }
+                            } else {
+                              const res = await createLastFmSession(lfmAuthToken, key, secret);
+                              setLfmTesting(false);
+                              if (res.success && res.sessionKey && res.username) {
+                                setLastfmSessionKey(res.sessionKey);
+                                setLastfmUsername(res.username);
+                                setLfmAuthToken(null);
+                                saveLS('vg_lfm_session', res.sessionKey);
+                                saveLS('vg_lfm_username', res.username);
+                                saveLS('vg_lfm_apikey', key);
+                                saveLS('vg_lfm_secret', secret);
+                                showToast(`Last.fm connected: @${res.username}`);
+                              } else {
+                                showToast(`Last.fm: ${res.error || 'Approval not completed yet'}`);
+                              }
+                            }
+                          }}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: "8px",
+                            border: lfmAuthToken ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid var(--v-bdr2)",
+                            background: lfmAuthToken ? "rgba(16, 185, 129, 0.12)" : "var(--v-bg2)",
+                            color: lfmAuthToken ? "#10b981" : (lastfmApiKey.trim() && lastfmApiSecret.trim()) ? "#e2ddd9" : "#5c5755",
+                            fontWeight: 600,
+                            fontSize: "12px",
+                            cursor: (lastfmApiKey.trim() && lastfmApiSecret.trim()) ? "pointer" : "not-allowed",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          <RefreshCw size={12} className={lfmTesting ? "animate-spin" : ""} />
+                          <span>{lfmTesting ? 'Processing...' : lfmAuthToken ? 'Complete Connection' : 'Connect & Authorize'}</span>
+                        </button>
+                        {lfmAuthToken && (
+                          <button
+                            onClick={() => setLfmAuthToken(null)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#8a817c",
+                              fontSize: "11.5px",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                              padding: "4px 6px"
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+
+        {matchesNetwork && (
+          <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
+            {!searchQuery.trim() && (
+              <div>
+                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Network & Proxy</h2>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Configure proxy servers and custom streaming mirror instances.</p>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Network", "Network & Audio Proxy", "Proxy", "HTTP", "HTTPS", "SOCKS5", "socks", "Invidious", "Piped", "Audio Proxy", "Custom Mirror", "Mirror", "VPN", "Connection", "Endpoint", "Test Connection", networkProxy, customInstance])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{padding:"12px 16px",borderBottom:"1px solid var(--v-bdr)",background:"rgba(226,221,217,0.015)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                    <Globe size={15} style={{color:"var(--v-accent)"}} />
+                    <h3 style={{fontSize:"14px",fontWeight:600,color:"#e2ddd9",margin:0}}>Network & Audio Proxy</h3>
+                  </div>
+                  <button
+                    onClick={handleTestConnection}
+                    disabled={testConnStatus?.loading}
+                    style={{
+                      fontSize:"11.5px",
+                      color: testConnStatus?.loading ? "#5c5755" : "#e2ddd9",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid var(--v-bdr2)",
+                      borderRadius: "6px",
+                      padding: "4px 10px",
+                      cursor: testConnStatus?.loading ? "not-allowed" : "pointer",
+                      display:"flex",
+                      alignItems:"center",
+                      gap:"5px",
+                      transition: "all 0.15s"
+                    }}
+                    onMouseEnter={e => { if (!testConnStatus?.loading) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--v-bdr2)'; }}
+                  >
+                    <RefreshCw size={11} className={testConnStatus?.loading ? "animate-spin" : ""} />
+                    <span>{testConnStatus?.loading ? 'Testing...' : 'Test Connection'}</span>
+                  </button>
+                </div>
+
+                <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:"14px"}}>
+                  <div>
+                    <label style={{display:"block",fontSize:"13px",fontWeight:500,color:"#e2ddd9",marginBottom:"4px"}}>HTTP / SOCKS5 Proxy</label>
+                    <p style={{fontSize:"12px",color:"#6f6966",margin:"0 0 8px"}}>Route audio streaming and search queries through a custom proxy (e.g. <code>http://127.0.0.1:8080</code> or <code>socks5://127.0.0.1:1080</code>)</p>
+                    <input
+                      type="text"
+                      placeholder="Leave empty for direct connection"
+                      value={networkProxy}
+                      onChange={e => {
+                        const v = e.target.value;
+                        handleSaveNetwork(v, customInstance);
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "var(--v-bg3)",
+                        border: "1px solid var(--v-bdr3)",
+                        borderRadius: "8px",
+                        padding: "8px 12px",
+                        fontSize: "12.5px",
+                        color: "var(--v-fg)",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{borderTop:"1px solid var(--v-bdr)",paddingTop:"14px"}}>
+                    <label style={{display:"block",fontSize:"13px",fontWeight:500,color:"#e2ddd9",marginBottom:"4px"}}>Custom Invidious / Piped Mirror</label>
+                    <p style={{fontSize:"12px",color:"#6f6966",margin:"0 0 8px"}}>Optional mirror endpoint for regions where YouTube / Google Video CDN is restricted (e.g. <code>https://pipedapi.kavin.rocks</code>)</p>
+                    <input
+                      type="text"
+                      placeholder="https://..."
+                      value={customInstance}
+                      onChange={e => {
+                        const v = e.target.value;
+                        handleSaveNetwork(networkProxy, v);
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "var(--v-bg3)",
+                        border: "1px solid var(--v-bdr3)",
+                        borderRadius: "8px",
+                        padding: "8px 12px",
+                        fontSize: "12.5px",
+                        color: "var(--v-fg)",
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  {testConnStatus && (
+                    <div style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      background: testConnStatus.ok ? "rgba(46, 160, 67, 0.1)" : "rgba(224, 85, 85, 0.1)",
+                      border: `1px solid ${testConnStatus.ok ? "rgba(46, 160, 67, 0.3)" : "rgba(224, 85, 85, 0.3)"}`,
+                      color: testConnStatus.ok ? "#4ade80" : "#f87171",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px"
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {testConnStatus.loading ? (
+                          <span>Testing connection...</span>
+                        ) : testConnStatus.ok ? (
+                          <span>✓ {testConnStatus.msg}</span>
+                        ) : (
+                          <span>✕ {testConnStatus.msg}</span>
+                        )}
+                      </div>
+                      {!testConnStatus.loading && (
+                        <button
+                          onClick={() => setTestConnStatus(null)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'inherit',
+                            opacity: 0.6,
+                            cursor: 'pointer',
+                            padding: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                          title="Dismiss"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {matchesStorage && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             {!searchQuery.trim() && (
               <div>
-                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage</h2>
-                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Backup, restore data, and manage application maintenance.</p>
+                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Storage & Backup</h2>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Manage local streaming cache, application backups, and data retention.</p>
               </div>
             )}
 
@@ -1966,6 +1941,222 @@ export function SettingsPanel({
                   </div>
                   <button style={{padding:"6px",color:"#ef4444",background:"none",border:"none",cursor:"pointer",display:"flex",flexShrink:0,marginLeft:"10px"}}>
                     <Trash2 size={16}/>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {matchesUpdates && (
+          <div style={{display:"flex",flexDirection:"column",gap:"24px"}}>
+            {!searchQuery.trim() && (
+              <div>
+                <h2 style={{fontSize:"24px",fontWeight:800,letterSpacing:"-0.01em",color:"#e2ddd9",margin:"0 0 4px"}}>Updates</h2>
+                <p style={{fontSize:"13.5px",color:"#6f6966",margin:0}}>Check for new releases and view version status.</p>
+              </div>
+            )}
+
+            {(!searchQuery.trim() || matchCard(["Updates", "Check for new releases of Veluna", "Update available", "You're up to date", "Latest version", "GitHub", "Changelog", appVersion, updateAvailable || ""])) && (
+              <>
+                {/* Clean Status Area (Not in a box) */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "18px",
+                  padding: "4px 0 8px 0",
+                }}>
+                  {/* Clean App Icon */}
+                  <div style={{
+                    width: "52px",
+                    height: "52px",
+                    borderRadius: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    flexShrink: 0,
+                    position: "relative"
+                  }}>
+                    <svg width="30" height="30" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
+                      <rect width="28" height="28" rx="6" fill="var(--v-accent)"/>
+                      <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
+                      <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
+                    </svg>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {updateAvailable ? (
+                      <div>
+                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
+                          Update available: v{updateAvailable}
+                        </div>
+                        <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 12px 0", lineHeight: 1.4 }}>
+                          A new version of Veluna is ready to download. Features and stability updates await.
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <button
+                            onClick={() => openUrl('https://github.com/rry0ku/veluna/releases/latest')}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "7px 16px",
+                              borderRadius: "18px",
+                              background: "var(--v-accent)",
+                              color: "var(--v-bg0)",
+                              border: "none",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
+                          >
+                            <Download size={13} strokeWidth={2.4} /> Download v{updateAvailable}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff" }}>
+                          You're up to date
+                        </div>
+                        <p style={{ fontSize: "12.5px", color: "#8c8682", margin: "4px 0 8px 0" }}>
+                          Veluna v{appVersion} is currently the latest version.
+                        </p>
+                        <a
+                          href="#"
+                          onClick={e => { e.preventDefault(); openUrl('https://github.com/rry0ku/veluna'); }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "var(--v-accent)",
+                            textDecoration: "none"
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
+                          onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
+                        >
+                          <ExternalLink size={12} /> Visit GitHub Repository
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Version Metadata Strip */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "12px",
+                }}>
+                  <div style={{
+                    borderRadius: "10px",
+                    border: "1px solid var(--v-bdr)",
+                    background: "var(--v-bg0)",
+                    padding: "13px 15px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px"
+                  }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Installed Version</span>
+                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: "#e2ddd9", fontFamily: "monospace" }}>v{appVersion}</span>
+                  </div>
+
+                  <div style={{
+                    borderRadius: "10px",
+                    border: "1px solid var(--v-bdr)",
+                    background: "var(--v-bg0)",
+                    padding: "13px 15px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px"
+                  }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Latest Available</span>
+                    <span style={{ fontSize: "13.5px", fontWeight: 700, color: updateAvailable ? "var(--v-accent)" : "#10b981", fontFamily: "monospace" }}>
+                      v{updateAvailable || appVersion}
+                    </span>
+                  </div>
+
+                  <div style={{
+                    borderRadius: "10px",
+                    border: "1px solid var(--v-bdr)",
+                    background: "var(--v-bg0)",
+                    padding: "13px 15px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px"
+                  }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#6f6966", textTransform: "uppercase", letterSpacing: "0.04em" }}>Update Source</span>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#e2ddd9", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <GitBranch size={13} style={{ color: "var(--v-accent)" }} /> GitHub Releases
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Standard Settings Card */}
+            {(!searchQuery.trim() || matchCard(["Updates", "Check Automatically on Startup", "Manual Update Check", "Check Now", "Startup check", "Force update", "Releases"])) && (
+              <div style={{borderRadius:"12px",border:"1px solid var(--v-bdr)",background:"var(--v-bg0)",overflow:"hidden"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #141312"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Check Automatically on Startup</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Automatically check for new releases when launching Veluna</p>
+                  </div>
+                  <SettingsSwitch checked={autoCheckUpdates} onChange={() => setAutoCheckUpdates(!autoCheckUpdates)} />
+                </div>
+                
+                <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div>
+                    <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Manual Update Check</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Force a search for the latest version of Veluna on GitHub</p>
+                  </div>
+                  <button
+                    onClick={handleCheckUpdate}
+                    disabled={isCheckingUpdate}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: "18px",
+                      background: isCheckingUpdate ? "rgba(255,255,255,0.02)" : "var(--v-accent)",
+                      color: isCheckingUpdate ? "#5c5755" : "var(--v-bg0)",
+                      border: "none",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: isCheckingUpdate ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.15s ease",
+                      boxShadow: isCheckingUpdate ? "none" : "0 2px 8px rgba(0,0,0,0.15)"
+                    }}
+                    onMouseEnter={e => {
+                      if (!isCheckingUpdate) {
+                        e.currentTarget.style.filter = "brightness(1.1)";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isCheckingUpdate) {
+                        e.currentTarget.style.filter = "none";
+                      }
+                    }}
+                  >
+                    {isCheckingUpdate ? (
+                      <>
+                        <div style={{width:"12px",height:"12px",border:"2px solid #5c5755",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={13} />
+                        Check Now
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

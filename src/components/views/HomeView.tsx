@@ -17,6 +17,8 @@ import { GENRES } from '../../constants';
 import { getTrackGradient, cleanArtist } from '../../utils';
 import { TrackRow, TrackRowSkeleton } from '../TrackRow';
 import { VirtualTrackList } from '../VirtualTrackList';
+import { BatchActionBar } from '../BatchActionBar';
+import { useMultiSelect } from '../../hooks/useMultiSelect';
 
 interface HomeViewProps {
   searchQuery: string;
@@ -72,6 +74,7 @@ interface HomeViewProps {
   getTrackCover?: (track: Track | null | undefined) => string;
   setOpenPlaylistId?: (id: string | null) => void;
   showToast?: (msg: string) => void;
+  addToQueue?: (tracks: Track | Track[]) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -128,6 +131,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   getTrackCover: customGetTrackCover,
   setOpenPlaylistId,
   showToast: _showToast,
+  addToQueue,
 }) => {
   const defaultSearchRef = useRef<HTMLInputElement>(null);
   const searchRef = customSearchRef || defaultSearchRef;
@@ -135,6 +139,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const hoveredTrackUrl = customHoveredTrackUrl !== undefined ? customHoveredTrackUrl : internalHoveredTrackUrl;
   const setHoveredTrackUrl = customSetHoveredTrackUrl || setInternalHoveredTrackUrl;
   const prefetchOnHover = customPrefetchOnHover || (() => {});
+
+  const { selectedUrls, isMultiSelectActive, toggleSelect, clearSelection } = useMultiSelect();
+
+  React.useEffect(() => {
+    clearSelection();
+  }, [searchTab, searchQuery, clearSelection]);
 
   const playAll = customPlayAll || ((list: Track[]) => {
     if (list.length > 0) handlePlayInContext(list[0], list);
@@ -1331,15 +1341,73 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           isPlaying={isPlaying}
                           isLiked={isTrackLiked(track.url)}
                           isDownloading={(downloadingTracks[track.url] ?? 0)}
+                          isSelected={selectedUrls.has(track.url)}
+                          isMultiSelectActive={isMultiSelectActive}
                           onPlay={() => handlePlayInContext(track, activeTracks)}
                           onHoverEnter={() => { setHoveredTrackUrl(track.url); prefetchOnHover(track.url); }}
                           onHoverLeave={() => setHoveredTrackUrl(null)}
                           onLike={() => toggleLikeTrack(track)}
                           onDownload={() => handleDownload(track)}
                           onCtx={e => openCtx(e, { type: 'track', track })}
+                          onSelectToggle={e => toggleSelect(track, i, e, activeTracks)}
                         />
                       )}
                     />
+                    {isMultiSelectActive && (
+                      <BatchActionBar
+                        selectedTracks={activeTracks.filter(t => selectedUrls.has(t.url))}
+                        playlists={playlists}
+                        onClearSelection={clearSelection}
+                        onPlaySelected={() => {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          if (selected.length > 0) {
+                            handlePlayInContext(selected[0], selected);
+                          }
+                          clearSelection();
+                        }}
+                        onQueueSelected={() => {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          if (selected.length > 0 && addToQueue) {
+                            addToQueue(selected);
+                            _showToast?.(`Added ${selected.length} track${selected.length > 1 ? 's' : ''} to queue`);
+                          }
+                          clearSelection();
+                        }}
+                        onAddToPlaylist={(playlistId) => {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          if (selected.length > 0 && _setPlaylists) {
+                            _setPlaylists(prev => prev.map(p => {
+                              if (p.id !== playlistId) return p;
+                              const existingUrls = new Set(p.tracks.map(t => t.url));
+                              const newTracks = selected.filter(t => !existingUrls.has(t.url));
+                              return { ...p, tracks: [...p.tracks, ...newTracks] };
+                            }));
+                            _showToast?.(`Added ${selected.length} tracks to playlist`);
+                          }
+                          clearSelection();
+                        }}
+                        onCreatePlaylistWithSelected={(name) => {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          if (_setPlaylists) {
+                            const newPl: Playlist = {
+                              id: `pl-${Date.now()}`,
+                              name,
+                              description: '',
+                              tracks: selected,
+                            };
+                            _setPlaylists(prev => [...prev, newPl]);
+                            _showToast?.(`Created playlist "${name}" with ${selected.length} tracks`);
+                          }
+                          clearSelection();
+                        }}
+                        onDownloadSelected={() => {
+                          const selected = activeTracks.filter(t => selectedUrls.has(t.url));
+                          selected.forEach(t => handleDownload(t));
+                          _showToast?.(`Queued ${selected.length} downloads`);
+                          clearSelection();
+                        }}
+                      />
+                    )}
                   </div>
                 </>
               )}

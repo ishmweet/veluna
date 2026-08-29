@@ -1,5 +1,8 @@
 mod tray;
 mod cache;
+mod metadata;
+mod db;
+mod downloader;
 
 use std::io::{Write, BufRead, BufReader};
 use std::process::Command;
@@ -232,6 +235,7 @@ lazy_static::lazy_static! {
 
     static ref LOUDNORM_ENABLED: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
     static ref SKIP_SILENCE: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref CURRENT_EQ: Arc<Mutex<(f64, f64, f64)>> = Arc::new(Mutex::new((0.0, 0.0, 0.0)));
 }
 
 // Persistent mpv process handle — spawned once at startup, reused across all tracks.
@@ -287,6 +291,205 @@ fn sanitize_file_path(path: &str) -> Result<std::path::PathBuf, String> {
 
 fn safe_f64(v: f64) -> f64 {
     if v.is_finite() { v } else { 0.0 }
+}
+
+#[derive(Clone, Default)]
+struct NetworkConfig {
+    proxy_url: Option<String>,
+    custom_instance: Option<String>,
+}
+
+static NETWORK_CONFIG: std::sync::OnceLock<Mutex<NetworkConfig>> = std::sync::OnceLock::new();
+
+fn network_config() -> &'static Mutex<NetworkConfig> {
+    NETWORK_CONFIG.get_or_init(|| Mutex::new(NetworkConfig::default()))
+}
+
+fn get_proxy_url() -> Option<String> {
+    network_config().lock().unwrap().proxy_url.clone()
+}
+
+fn get_custom_instance() -> Option<String> {
+    network_config().lock().unwrap().custom_instance.clone()
+}
+
+fn apply_proxy_to_cmd(cmd: &mut std::process::Command) {
+    if let Some(proxy_str) = get_proxy_url() {
+        cmd.args(["--proxy", &proxy_str]);
+    }
+}
+
+static CURRENT_HTTP_CLIENT: std::sync::OnceLock<Mutex<Option<(Option<String>, reqwest::Client)>>> = std::sync::OnceLock::new();
+
+fn create_http_client(timeout_ms: u64) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .tcp_keepalive(std::time::Duration::from_secs(60));
+
+    if let Some(proxy_str) = get_proxy_url() {
+        if let Ok(proxy) = reqwest::Proxy::all(&proxy_str) {
+            builder = builder.proxy(proxy);
+        }
+    }
+
+    builder.build().unwrap_or_default()
+}
+
+fn get_http_client() -> reqwest::Client {
+    let current_proxy = get_proxy_url();
+    let cache_lock = CURRENT_HTTP_CLIENT.get_or_init(|| Mutex::new(None));
+    let mut guard = cache_lock.lock().unwrap();
+    if let Some((ref cached_proxy, ref client)) = *guard {
+        if cached_proxy == &current_proxy {
+            return client.clone();
+        }
+    }
+    let new_client = create_http_client(2500);
+    *guard = Some((current_proxy, new_client.clone()));
+    new_client
+}
+
+async fn search_custom_instance(query: &str, instance_url: &str) -> Option<String> {
+    let clean_inst = instance_url.trim().trim_end_matches('/');
+    if clean_inst.is_empty() { return None; }
+    let base_url = if clean_inst.starts_with("http://") || clean_inst.starts_with("https://") {
+        clean_inst.to_string()
+    } else {
+        format!("https://{}", clean_inst)
+    };
+
+    let client = get_http_client();
+    let encoded_q = urlencoding::encode(query);
+
+    // 1. Try Piped Search API: /search?q={query}&filter=music_songs
+    let piped_url = format!("{}/search?q={}&filter=music_songs", base_url, encoded_q);
+    if let Ok(res) = client.get(&piped_url).send().await {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(arr) = json.get("items").and_then(|i| i.as_array()).or_else(|| json.as_array()) {
+                    let mut items = Vec::new();
+                    for item in arr {
+                        let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("").trim();
+                        let uploader = item.get("uploaderName").and_then(|u| u.as_str()).unwrap_or("Unknown").trim();
+                        let dur_secs = item.get("duration").and_then(|d| d.as_i64()).unwrap_or(0);
+                        let dur_str = if dur_secs > 0 {
+                            format!("{}:{:02}", dur_secs / 60, dur_secs % 60)
+                        } else {
+                            "0:00".to_string()
+                        };
+                        let url_str = item.get("url").and_then(|u| u.as_str()).unwrap_or("");
+                        let video_id = if let Some(idx) = url_str.find("v=") {
+                            &url_str[idx+2..]
+                        } else if let Some(idx) = url_str.find("/watch?v=") {
+                            &url_str[idx+9..]
+                        } else {
+                            url_str.trim_start_matches('/')
+                        };
+                        if !title.is_empty() && !video_id.is_empty() {
+                            items.push(format!("{}===={}===={}===={}", title, uploader, dur_str, video_id));
+                        }
+                    }
+                    if !items.is_empty() {
+                        return Some(items.join("\n"));
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Try Invidious Search API: /api/v1/search?q={query}&type=video
+    let inv_url = format!("{}/api/v1/search?q={}&type=video", base_url, encoded_q);
+    if let Ok(res) = client.get(&inv_url).send().await {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(arr) = json.as_array() {
+                    let mut items = Vec::new();
+                    for item in arr {
+                        let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("").trim();
+                        let uploader = item.get("author").and_then(|u| u.as_str()).unwrap_or("Unknown").trim();
+                        let dur_secs = item.get("lengthSeconds").and_then(|d| d.as_i64()).unwrap_or(0);
+                        let dur_str = if dur_secs > 0 {
+                            format!("{}:{:02}", dur_secs / 60, dur_secs % 60)
+                        } else {
+                            "0:00".to_string()
+                        };
+                        let video_id = item.get("videoId").and_then(|v| v.as_str()).unwrap_or("");
+                        if !title.is_empty() && !video_id.is_empty() {
+                            items.push(format!("{}===={}===={}===={}", title, uploader, dur_str, video_id));
+                        }
+                    }
+                    if !items.is_empty() {
+                        return Some(items.join("\n"));
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+async fn extract_stream_custom_instance(video_id: &str, instance_url: &str) -> Option<String> {
+    let clean_inst = instance_url.trim().trim_end_matches('/');
+    if clean_inst.is_empty() { return None; }
+    let base_url = if clean_inst.starts_with("http://") || clean_inst.starts_with("https://") {
+        clean_inst.to_string()
+    } else {
+        format!("https://{}", clean_inst)
+    };
+
+    let client = get_http_client();
+
+    // 1. Try Piped stream endpoint: /streams/{video_id}
+    let piped_url = format!("{}/streams/{}", base_url, video_id);
+    if let Ok(res) = client.get(&piped_url).send().await {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(audio_streams) = json.get("audioStreams").and_then(|a| a.as_array()) {
+                    let mut best_url: Option<(i64, String)> = None;
+                    for stream in audio_streams {
+                        if let Some(url) = stream.get("url").and_then(|u| u.as_str()) {
+                            let bitrate = stream.get("bitrate").and_then(|b| b.as_i64()).unwrap_or(0);
+                            if best_url.as_ref().map(|(b, _)| bitrate > *b).unwrap_or(true) {
+                                best_url = Some((bitrate, url.to_string()));
+                            }
+                        }
+                    }
+                    if let Some((_, url)) = best_url {
+                        return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Try Invidious video endpoint: /api/v1/videos/{video_id}
+    let inv_url = format!("{}/api/v1/videos/{}", base_url, video_id);
+    if let Ok(res) = client.get(&inv_url).send().await {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(formats) = json.get("adaptiveFormats").and_then(|a| a.as_array()) {
+                    let mut best_url: Option<(i64, String)> = None;
+                    for fmt in formats {
+                        let type_str = fmt.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                        if type_str.starts_with("audio/") {
+                            if let Some(url) = fmt.get("url").and_then(|u| u.as_str()) {
+                                let bitrate = fmt.get("bitrate").and_then(|b| b.as_i64()).or_else(|| fmt.get("bitrate").and_then(|b| b.as_str()?.parse().ok())).unwrap_or(0);
+                                if best_url.as_ref().map(|(b, _)| bitrate > *b).unwrap_or(true) {
+                                    best_url = Some((bitrate, url.to_string()));
+                                }
+                            }
+                        }
+                    }
+                    if let Some((_, url)) = best_url {
+                        return Some(url);
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 async fn search_youtube_direct(query: &str) -> Option<String> {
@@ -404,7 +607,14 @@ async fn search_youtube(query: String) -> Result<String, String> {
         || q_trim.contains("youtu.be");
 
     if !is_url {
-        // Fast-path: Direct YouTube Music in-memory JSON search (~150-250ms)
+        // 1. Custom Mirror search if configured
+        if let Some(custom_inst) = get_custom_instance() {
+            if let Some(custom_results) = search_custom_instance(&q_trim, &custom_inst).await {
+                return Ok(custom_results);
+            }
+        }
+
+        // 2. Fast-path: Direct YouTube Music in-memory JSON search (~150-250ms)
         if let Some(direct_results) = search_youtube_direct(&q_trim).await {
             return Ok(direct_results);
         }
@@ -416,16 +626,18 @@ async fn search_youtube(query: String) -> Result<String, String> {
         } else {
             format!("ytsearch25:{}", q_trim)
         };
-        let mut child = Command::new(bin_ytdlp())
-            .args([
-                &search_arg,
-                "--flat-playlist",
-                "--print", "%(title)s====%(uploader)s====%(duration_string)s====%(id)s",
-                "--no-warnings",
-                "--no-check-certificates",
-                "--geo-bypass",
-                "--socket-timeout", "15",
-            ])
+        let mut cmd = Command::new(bin_ytdlp());
+        cmd.args([
+            &search_arg,
+            "--flat-playlist",
+            "--print", "%(title)s====%(uploader)s====%(duration_string)s====%(id)s",
+            "--no-warnings",
+            "--no-check-certificates",
+            "--geo-bypass",
+            "--socket-timeout", "15",
+        ]);
+        apply_proxy_to_cmd(&mut cmd);
+        let mut child = cmd
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .no_window()
@@ -482,19 +694,21 @@ async fn open_url_in_browser(url: String) -> Result<(), String> {
 async fn import_youtube_playlist(url: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let u_trim = url.trim();
-        let mut child = Command::new(bin_ytdlp())
-            .args([
-                "--flat-playlist",
-                "--yes-playlist",
-                "--no-warnings",
-                "--ignore-errors",
-                "--geo-bypass",
-                "--socket-timeout", "15",
-                "--no-config",
-                "--print", "%(id)s====%(title)s====%(duration_string|0:00)s====%(artist,uploader,channel,creator,uploader_id|Unknown)s====%(playlist,playlist_title|YouTube Playlist)s",
-                "--",
-                u_trim,
-            ])
+        let mut cmd = Command::new(bin_ytdlp());
+        cmd.args([
+            "--flat-playlist",
+            "--yes-playlist",
+            "--no-warnings",
+            "--ignore-errors",
+            "--geo-bypass",
+            "--socket-timeout", "15",
+            "--no-config",
+            "--print", "%(id)s====%(title)s====%(duration_string|0:00)s====%(artist,uploader,channel,creator,uploader_id|Unknown)s====%(playlist,playlist_title|YouTube Playlist)s",
+            "--",
+            u_trim,
+        ]);
+        apply_proxy_to_cmd(&mut cmd);
+        let mut child = cmd
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .no_window()
@@ -623,9 +837,48 @@ async fn prefetch_track(url: String) -> Result<(), String> {
     Ok(())
 }
 
+fn build_af_string(loudnorm_on: bool, skip_sil: bool, (b, m, t): (f64, f64, f64)) -> Option<String> {
+    let eq_active = !(b == 0.0 && m == 0.0 && t == 0.0);
+    let mut parts: Vec<String> = Vec::new();
+
+    if loudnorm_on {
+        parts.push("loudnorm=I=-16:TP=-1.5:LRA=11".to_string());
+    }
+    if skip_sil {
+        parts.push("silenceremove=1:0:-50dB".to_string());
+    }
+    if eq_active {
+        parts.push(format!(
+            "lavfi=[equalizer=f=60:width_type=o:width=2:g={b},equalizer=f=1000:width_type=o:width=2:g={m},equalizer=f=10000:width_type=o:width=2:g={t}]",
+            b = b, m = m, t = t
+        ));
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(","))
+    }
+}
+
+fn sync_active_af_filters() {
+    let loudnorm_on = *LOUDNORM_ENABLED.lock().unwrap();
+    let skip_sil = *SKIP_SILENCE.lock().unwrap();
+    let eq = *CURRENT_EQ.lock().unwrap();
+
+    let af_opt = build_af_string(loudnorm_on, skip_sil, eq);
+    let cmd = if let Some(af_str) = af_opt {
+        serde_json::json!({"command": ["set_property", "af", af_str]}).to_string()
+    } else {
+        r#"{"command": ["set_property", "af", ""]}"#.to_string()
+    };
+    let _ = send_ipc_fire_and_forget(&cmd);
+}
+
 #[tauri::command]
 fn set_loudnorm_enabled(enabled: bool) -> Result<(), String> {
     *LOUDNORM_ENABLED.lock().unwrap() = enabled;
+    sync_active_af_filters();
     Ok(())
 }
 
@@ -637,25 +890,15 @@ fn get_loudnorm_enabled() -> bool {
 #[tauri::command]
 fn set_skip_silence(enabled: bool) -> Result<(), String> {
     *SKIP_SILENCE.lock().unwrap() = enabled;
-    
-    let af_cmd = if enabled {
-        r#"{"command": ["set_property", "af", "silenceremove=1:0:-50dB"]}"#.to_string()
-    } else {
-        r#"{"command": ["set_property", "af", ""]}"#.to_string()
-    };
-    let _ = send_ipc_command(&af_cmd);
+    sync_active_af_filters();
     Ok(())
 }
 
 fn mpv_af_flag() -> Option<String> {
     let loudnorm = *LOUDNORM_ENABLED.lock().unwrap();
     let skip_silence = *SKIP_SILENCE.lock().unwrap();
-    match (loudnorm, skip_silence) {
-        (true,  true)  => Some("--af=loudnorm=I=-16:TP=-1.5:LRA=11,silenceremove=1:0:-50dB".to_string()),
-        (true,  false) => Some("--af=loudnorm=I=-16:TP=-1.5:LRA=11".to_string()),
-        (false, true)  => Some("--af=silenceremove=1:0:-50dB".to_string()),
-        (false, false) => None,
-    }
+    let eq = *CURRENT_EQ.lock().unwrap();
+    build_af_string(loudnorm, skip_silence, eq).map(|s| format!("--af={}", s))
 }
 
 fn ensure_mpv_running() -> bool {
@@ -745,17 +988,7 @@ fn log_debug(msg: &str) {
     }
 }
 
-static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
 
-fn get_http_client() -> &'static reqwest::Client {
-    HTTP_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(std::time::Duration::from_millis(2500))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .build()
-            .unwrap_or_default()
-    })
-}
 
 fn extract_video_id(url: &str) -> Option<String> {
     if url.len() == 11 && !url.contains('/') && !url.contains('?') && !url.contains('&') {
@@ -873,6 +1106,21 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
         }
     }
 
+    // Custom Mirror instance fast-path if configured
+    if let Some(custom_inst) = get_custom_instance() {
+        if let Some(v_id) = extract_video_id(&youtube_url) {
+            if let Some(mirror_stream_url) = extract_stream_custom_instance(&v_id, &custom_inst).await {
+                if let Some(id) = my_id {
+                    if PLAY_COUNTER.load(std::sync::atomic::Ordering::SeqCst) != id {
+                        return None;
+                    }
+                }
+                log_debug("extract_stream_url_async resolved via Custom Mirror instance");
+                return Some(mirror_stream_url);
+            }
+        }
+    }
+
     // Fast-path: Direct Innertube JSON extraction (~150ms)
     if let Some(direct_url) = extract_stream_url_direct_innertube(&youtube_url).await {
         if let Some(id) = my_id {
@@ -907,6 +1155,7 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
             "-f", "ba/b/bestaudio/best/18/22",
             "--", &youtube_url
         ]);
+        apply_proxy_to_cmd(&mut cmd);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         cmd.stdin(Stdio::null());
@@ -942,6 +1191,7 @@ async fn extract_stream_url_async(youtube_url: String, my_id: Option<u64>) -> Op
                     "-f", "ba/b/bestaudio/best/18/22",
                     "--", &youtube_url
                 ]);
+                apply_proxy_to_cmd(&mut cmd2);
                 cmd2.stdout(Stdio::piped());
                 cmd2.stderr(Stdio::piped());
                 cmd2.stdin(Stdio::null());
@@ -1339,35 +1589,9 @@ async fn set_equalizer(bass: f64, mid: f64, treble: f64) -> Result<(), String> {
         let b = bass.clamp(-12.0, 12.0);
         let m = mid.clamp(-12.0, 12.0);
         let t = treble.clamp(-12.0, 12.0);
-        let loudnorm_on = *LOUDNORM_ENABLED.lock().unwrap();
-        let skip_sil    = *SKIP_SILENCE.lock().unwrap();
-        let eq_active   = !(b == 0.0 && m == 0.0 && t == 0.0);
-
-        let eq_chain = if eq_active {
-            format!(
-                "lavfi=[equalizer=f=60:width_type=o:width=2:g={b},equalizer=f=1000:width_type=o:width=2:g={m},equalizer=f=10000:width_type=o:width=2:g={t}]",
-                b = b, m = m, t = t
-            )
-        } else {
-            String::new()
-        };
-
-        let mut parts: Vec<&str> = Vec::new();
-        let loudnorm = "loudnorm=I=-16:TP=-1.5:LRA=11";
-        let silence  = "silenceremove=1:0:-50dB";
-        let ln_owned;
-        if loudnorm_on { parts.push(loudnorm); }
-        if skip_sil    { parts.push(silence); }
-        if eq_active   { ln_owned = eq_chain.clone(); parts.push(&ln_owned); }
-
-        if parts.is_empty() {
-            let cmd = r#"{"command": ["set_property", "af", ""]}"#;
-            return send_ipc_fire_and_forget(cmd);
-        }
-
-        let af_value = parts.join(",");
-        let cmd = serde_json::json!({"command": ["set_property", "af", af_value]}).to_string();
-        send_ipc_fire_and_forget(&cmd)
+        *CURRENT_EQ.lock().unwrap() = (b, m, t);
+        sync_active_af_filters();
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1437,6 +1661,10 @@ async fn download_song(
     ];
     if do_embed {
         args.push("--embed-thumbnail".to_string());
+    }
+    if let Some(proxy_str) = get_proxy_url() {
+        args.push("--proxy".to_string());
+        args.push(proxy_str);
     }
     args.push(url.clone());
 
@@ -1612,10 +1840,12 @@ async fn batch_download(
                 };
                 let sep = std::path::MAIN_SEPARATOR;
                 let tpl = format!("{}{}%(title)s.%(ext)s", p, sep);
-                let out = Command::new(bin_ytdlp())
-                    .args(["-f", format, "--extract-audio", "--audio-format", "mp3",
+                let mut cmd = Command::new(bin_ytdlp());
+                cmd.args(["-f", format, "--extract-audio", "--audio-format", "mp3",
                            "--audio-quality", audio_quality, "--embed-thumbnail", "--add-metadata",
-                           "--no-check-certificates", "--no-warnings", "-o", &tpl, &url_clone])
+                           "--no-check-certificates", "--no-warnings", "-o", &tpl, &url_clone]);
+                apply_proxy_to_cmd(&mut cmd);
+                let out = cmd
                     .no_window()
                     .output()
                     .map_err(|e| format!("yt-dlp not found: {}", e))?;
@@ -1642,8 +1872,19 @@ async fn batch_download(
     Ok(())
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-struct LocalTrack { title: String, path: String, size_bytes: u64, extension: String }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct LocalTrack {
+    pub title: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub extension: String,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration: Option<String>,
+    pub duration_secs: Option<f64>,
+    pub bitrate: Option<u32>,
+    pub has_cover: Option<bool>,
+}
 
 fn collect_local_tracks(dir: &std::path::Path, tracks: &mut Vec<LocalTrack>, extensions: &[&str]) {
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -1652,12 +1893,34 @@ fn collect_local_tracks(dir: &std::path::Path, tracks: &mut Vec<LocalTrack>, ext
             if p.is_file() {
                 if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
                     if extensions.contains(&ext.to_lowercase().as_str()) {
-                        tracks.push(LocalTrack {
-                            title:      p.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown").to_string(),
-                            path:       p.to_string_lossy().to_string(),
-                            size_bytes: entry.metadata().map(|m| m.len()).unwrap_or(0),
-                            extension:  ext.to_lowercase(),
-                        });
+                        if let Some(meta) = metadata::probe_track_metadata(&p) {
+                            let _ = db::index_local_track_fts(&meta.title, &meta.artist, &meta.album, &meta.path);
+                            tracks.push(LocalTrack {
+                                title: meta.title,
+                                path: meta.path,
+                                size_bytes: meta.size_bytes,
+                                extension: meta.extension,
+                                artist: if meta.artist.is_empty() { None } else { Some(meta.artist) },
+                                album: if meta.album.is_empty() { None } else { Some(meta.album) },
+                                duration: Some(meta.duration_str),
+                                duration_secs: Some(meta.duration_secs),
+                                bitrate: meta.bitrate,
+                                has_cover: Some(meta.has_cover),
+                            });
+                        } else {
+                            tracks.push(LocalTrack {
+                                title: p.file_stem().and_then(|s| s.to_str()).unwrap_or("Unknown").to_string(),
+                                path: p.to_string_lossy().to_string(),
+                                size_bytes: entry.metadata().map(|m| m.len()).unwrap_or(0),
+                                extension: ext.to_lowercase(),
+                                artist: None,
+                                album: None,
+                                duration: None,
+                                duration_secs: None,
+                                bitrate: None,
+                                has_cover: None,
+                            });
+                        }
                     }
                 }
             } else if p.is_dir() {
@@ -1754,6 +2017,16 @@ struct AudioMetadata { title: String, artist: String, album: String, duration: S
 #[tauri::command]
 async fn get_audio_metadata(path: String) -> Result<AudioMetadata, String> {
     tokio::task::spawn_blocking(move || {
+        let p = std::path::PathBuf::from(expand_tilde(&path));
+        if let Some(meta) = metadata::probe_track_metadata(&p) {
+            return Ok(AudioMetadata {
+                title: meta.title,
+                artist: meta.artist,
+                album: meta.album,
+                duration: meta.duration_str,
+                has_cover: meta.has_cover,
+            });
+        }
         let output = Command::new(bin_ffprobe())
             .args(["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", &path])
             .no_window()
@@ -1791,6 +2064,11 @@ async fn get_audio_metadata(path: String) -> Result<AudioMetadata, String> {
 #[tauri::command]
 async fn get_audio_cover(path: String) -> Result<Option<String>, String> {
     tokio::task::spawn_blocking(move || {
+        let p = std::path::PathBuf::from(expand_tilde(&path));
+        if let Some(uri) = metadata::extract_cover_art_data_uri(&p) {
+            return Ok(Some(uri));
+        }
+
         let output = Command::new(bin_ffmpeg())
             .args(["-i", &path, "-an", "-vcodec", "copy", "-f", "image2pipe", "-"])
             .no_window()
@@ -1826,6 +2104,12 @@ async fn get_audio_cover(path: String) -> Result<Option<String>, String> {
 #[tauri::command]
 async fn write_audio_metadata(path: String, title: String, artist: String, album: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
+        let p = std::path::PathBuf::from(expand_tilde(&path));
+        if metadata::write_track_tags(&p, Some(&title), Some(&artist), Some(&album)).is_ok() {
+            let _ = db::index_local_track_fts(&title, &artist, &album, &path);
+            return Ok(());
+        }
+
         let ext = std::path::Path::new(&path)
             .extension()
             .and_then(|e| e.to_str())
@@ -1853,6 +2137,7 @@ async fn write_audio_metadata(path: String, title: String, artist: String, album
         
         std::fs::rename(&temp_path, &path)
             .map_err(|e| format!("Failed to replace audio file: {}", e))?;
+        let _ = db::index_local_track_fts(&title, &artist, &album, &path);
             
         Ok(())
     })
@@ -2387,59 +2672,129 @@ fn parse_f64_from_response(response: &str) -> Result<f64, String> {
     json["data"].as_f64().ok_or_else(|| format!("Unexpected data type: {}", response))
 }
 
-#[tauri::command]
-async fn fetch_lyrics(title: String, artist: String, duration: f64) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("veluna/1.0")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let url = format!(
-        "https://lrclib.net/api/get?track_name={}&artist_name={}&duration={}",
-        title.replace(' ', "+").replace('&', "%26"),
-        artist.replace(' ', "+").replace('&', "%26"),
-        duration as u64,
-    );
-
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("lrclib: {}", resp.status()));
-    }
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-
-    if let Some(synced) = json["syncedLyrics"].as_str().filter(|s| !s.is_empty()) {
-        
-        let mut lines: Vec<serde_json::Value> = Vec::new();
-        for line in synced.lines() {
-            let line = line.trim();
-            if line.is_empty() { continue; }
-            if let Some(rest) = line.strip_prefix('[') {
-                if let Some(end) = rest.find(']') {
-                    let ts = &rest[..end];
-                    let text = rest[end+1..].trim();
-                    
-                    let secs: f64 = if let Some(colon) = ts.find(':') {
-                        let mins: f64 = ts[..colon].parse().unwrap_or(0.0);
-                        let s: f64 = ts[colon+1..].parse().unwrap_or(0.0);
-                        mins * 60.0 + s
-                    } else { continue; };
+fn parse_lrc_string(lrc_text: &str, duration: f64) -> Option<String> {
+    let mut lines: Vec<serde_json::Value> = Vec::new();
+    for line in lrc_text.lines() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if let Some(rest) = line.strip_prefix('[') {
+            if let Some(end) = rest.find(']') {
+                let ts = &rest[..end];
+                let text = rest[end+1..].trim();
+                
+                let secs: f64 = if let Some(colon) = ts.find(':') {
+                    let mins: f64 = ts[..colon].parse().unwrap_or(0.0);
+                    let s: f64 = ts[colon+1..].parse().unwrap_or(0.0);
+                    mins * 60.0 + s
+                } else { continue; };
+                if !text.is_empty() {
                     lines.push(serde_json::json!({"time": secs, "text": text}));
                 }
             }
         }
-        if !lines.is_empty() {
-            return Ok(serde_json::to_string(&lines).unwrap_or_default());
+    }
+    if !lines.is_empty() {
+        return Some(serde_json::to_string(&lines).unwrap_or_default());
+    }
+
+    let plain_lines: Vec<&str> = lrc_text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if !plain_lines.is_empty() {
+        let total = duration.max(1.0);
+        let step = total / plain_lines.len().max(1) as f64;
+        let arr: Vec<serde_json::Value> = plain_lines.iter().enumerate()
+            .map(|(i, l)| serde_json::json!({"time": i as f64 * step, "text": l.trim()}))
+            .collect();
+        return Some(serde_json::to_string(&arr).unwrap_or_default());
+    }
+    None
+}
+
+#[tauri::command]
+async fn fetch_lyrics(title: String, artist: String, duration: f64, _album: Option<String>, source: Option<String>) -> Result<String, String> {
+    // 0. Instant offline resolution from SQLite lyrics cache
+    if let Ok(Some(cached)) = db::get_cached_lyrics(&title, &artist) {
+        return Ok(cached);
+    }
+
+    let client = create_http_client(6000);
+    let src = source.as_deref().unwrap_or("lrclib");
+
+    // 1. If NetEase is selected, query NetEase Cloud Music API first
+    if src == "netease" {
+        let q = format!("{} {}", title.trim(), artist.trim());
+        let encoded_q = urlencoding::encode(&q);
+        let netease_search_url = format!("https://music.163.com/api/search/get/web?s={}&type=1&offset=0&total=true&limit=1", encoded_q);
+        if let Ok(resp) = client.get(&netease_search_url).header("User-Agent", "Mozilla/5.0").send().await {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(song_id) = json.pointer("/result/songs/0/id").and_then(|id| id.as_i64()) {
+                    let lyric_url = format!("https://music.163.com/api/song/lyric?id={}&lv=-1&kv=-1&tv=-1", song_id);
+                    if let Ok(l_resp) = client.get(&lyric_url).header("User-Agent", "Mozilla/5.0").send().await {
+                        if let Ok(l_json) = l_resp.json::<serde_json::Value>().await {
+                            if let Some(lrc) = l_json.pointer("/lrc/lyric").and_then(|s| s.as_str()) {
+                                if let Some(parsed) = parse_lrc_string(lrc, duration) {
+                                    let _ = db::cache_lyrics(&title, &artist, &parsed);
+                                    return Ok(parsed);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
-    if let Some(plain) = json["plainLyrics"].as_str().filter(|s| !s.is_empty()) {
-        let lines: Vec<&str> = plain.lines().filter(|l| !l.trim().is_empty()).collect();
-        let total = duration.max(1.0);
-        let step = total / lines.len().max(1) as f64;
-        let arr: Vec<serde_json::Value> = lines.iter().enumerate()
-            .map(|(i, l)| serde_json::json!({"time": i as f64 * step, "text": l.trim()}))
-            .collect();
-        return Ok(serde_json::to_string(&arr).unwrap_or_default());
+    // 2. Query LRCLIB (Direct track query)
+    let url = format!(
+        "https://lrclib.net/api/get?track_name={}&artist_name={}&duration={}",
+        urlencoding::encode(title.trim()),
+        urlencoding::encode(artist.trim()),
+        duration as u64,
+    );
+
+    if let Ok(resp) = client.get(&url).send().await {
+        if resp.status().is_success() {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(synced) = json["syncedLyrics"].as_str().filter(|s| !s.is_empty()) {
+                    if let Some(parsed) = parse_lrc_string(synced, duration) {
+                        let _ = db::cache_lyrics(&title, &artist, &parsed);
+                        return Ok(parsed);
+                    }
+                }
+                if let Some(plain) = json["plainLyrics"].as_str().filter(|s| !s.is_empty()) {
+                    if let Some(parsed) = parse_lrc_string(plain, duration) {
+                        let _ = db::cache_lyrics(&title, &artist, &parsed);
+                        return Ok(parsed);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: LRCLIB search query (if exact match duration differs)
+    let search_url = format!(
+        "https://lrclib.net/api/search?track_name={}&artist_name={}",
+        urlencoding::encode(title.trim()),
+        urlencoding::encode(artist.trim()),
+    );
+    if let Ok(resp) = client.get(&search_url).send().await {
+        if resp.status().is_success() {
+            if let Ok(items) = resp.json::<Vec<serde_json::Value>>().await {
+                for item in items {
+                    if let Some(synced) = item["syncedLyrics"].as_str().filter(|s| !s.is_empty()) {
+                        if let Some(parsed) = parse_lrc_string(synced, duration) {
+                            let _ = db::cache_lyrics(&title, &artist, &parsed);
+                            return Ok(parsed);
+                        }
+                    }
+                    if let Some(plain) = item["plainLyrics"].as_str().filter(|s| !s.is_empty()) {
+                        if let Some(parsed) = parse_lrc_string(plain, duration) {
+                            let _ = db::cache_lyrics(&title, &artist, &parsed);
+                            return Ok(parsed);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Err("No lyrics found".to_string())
@@ -2455,15 +2810,17 @@ async fn search_yt_music(query: String, search_type: String) -> Result<String, S
             _        => query.clone(),
         };
         let search_arg = format!("ytsearch15:{}", full_query);
-        let mut child = Command::new(bin_ytdlp())
-            .args([
-                &search_arg,
-                "--flat-playlist",
-                "--print", "%(title)s====%(uploader)s====%(id)s====%(thumbnails.0.url)s====%(view_count)s",
-                "--no-warnings",
-                "--no-check-certificates",
-                "--socket-timeout", "8",
-            ])
+        let mut cmd = Command::new(bin_ytdlp());
+        cmd.args([
+            &search_arg,
+            "--flat-playlist",
+            "--print", "%(title)s====%(uploader)s====%(id)s====%(thumbnails.0.url)s====%(view_count)s",
+            "--no-warnings",
+            "--no-check-certificates",
+            "--socket-timeout", "8",
+        ]);
+        apply_proxy_to_cmd(&mut cmd);
+        let mut child = cmd
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .no_window()
@@ -2526,13 +2883,11 @@ fn get_app_version() -> String {
 #[tauri::command]
 async fn check_for_update() -> Result<Option<String>, String> {
     let current = env!("CARGO_PKG_VERSION");
-    let client = reqwest::Client::builder()
-        .user_agent("veluna")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = create_http_client(8000);
 
     let resp = client
         .get("https://api.github.com/repos/rry0ku/veluna/releases/latest")
+        .header("User-Agent", "veluna")
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -2755,6 +3110,116 @@ fn get_discord_client() -> &'static Mutex<Option<DiscordIpcClient>> {
 }
 
 #[tauri::command]
+fn set_network_config(proxy_url: Option<String>, custom_instance: Option<String>) -> Result<(), String> {
+    let clean_proxy = proxy_url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let clean_inst = custom_instance.map(|s| s.trim().trim_end_matches('/').to_string()).filter(|s| !s.is_empty());
+    {
+        let mut cfg = network_config().lock().unwrap();
+        cfg.proxy_url = clean_proxy;
+        cfg.custom_instance = clean_inst;
+    }
+    if let Some(cache_lock) = CURRENT_HTTP_CLIENT.get() {
+        let mut guard = cache_lock.lock().unwrap();
+        *guard = None;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn test_network_connection(proxy_url: Option<String>, custom_instance: Option<String>) -> Result<String, String> {
+    let clean_proxy = proxy_url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let mut clean_inst = custom_instance.map(|s| s.trim().trim_end_matches('/').to_string()).filter(|s| !s.is_empty());
+
+    let has_proxy = clean_proxy.is_some();
+    let has_inst = clean_inst.is_some();
+
+    if let Some(ref inst) = clean_inst {
+        if !inst.starts_with("http://") && !inst.starts_with("https://") {
+            clean_inst = Some(format!("https://{}", inst));
+        }
+    }
+
+    let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(5));
+    if let Some(ref p) = clean_proxy {
+        let proxy = reqwest::Proxy::all(p).map_err(|e| format!("Invalid proxy URL: {}", e))?;
+        builder = builder.proxy(proxy);
+    }
+    let client = builder.build().map_err(|e| e.to_string())?;
+
+    let test_url = clean_inst.unwrap_or_else(|| "https://www.youtube.com".to_string());
+    let res = client.get(&test_url).send().await.map_err(|e| format!("Connection failed: {}", e))?;
+
+    if res.status().is_success() || res.status().is_redirection() {
+        let status_code = res.status().as_u16();
+        if has_proxy && has_inst {
+            Ok(format!("Proxy & Custom Mirror reachable (HTTP {})", status_code))
+        } else if has_proxy {
+            Ok(format!("Proxy connected successfully (HTTP {})", status_code))
+        } else if has_inst {
+            Ok(format!("Custom Mirror reachable (HTTP {})", status_code))
+        } else {
+            Ok(format!("Direct internet connection OK (HTTP {} — no proxy configured)", status_code))
+        }
+    } else {
+        Err(format!("Server returned HTTP {}", res.status().as_u16()))
+    }
+}
+
+static FOLDER_WATCHER: std::sync::OnceLock<Mutex<Option<notify::RecommendedWatcher>>> = std::sync::OnceLock::new();
+static WATCHED_FOLDER: std::sync::OnceLock<Mutex<Option<String>>> = std::sync::OnceLock::new();
+
+#[tauri::command]
+fn watch_download_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use notify::{Watcher, RecursiveMode, Event, EventKind};
+
+    let resolved = expand_tilde(&path);
+    let p = std::path::PathBuf::from(&resolved);
+    if !p.exists() || !p.is_dir() {
+        return Ok(());
+    }
+
+    let mut cur_folder = WATCHED_FOLDER.get_or_init(|| Mutex::new(None)).lock().unwrap();
+    if cur_folder.as_deref() == Some(&resolved) {
+        return Ok(());
+    }
+    *cur_folder = Some(resolved.clone());
+
+    let app_clone = app.clone();
+    let mut watcher_lock = FOLDER_WATCHER.get_or_init(|| Mutex::new(None)).lock().unwrap();
+    *watcher_lock = None;
+
+    let debounce_tx = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(5)));
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+        if let Ok(event) = res {
+            match event.kind {
+                EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_) => {
+                    let is_audio = event.paths.iter().any(|p| {
+                        if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                            matches!(ext.to_lowercase().as_str(), "mp3" | "flac" | "wav" | "m4a" | "ogg" | "opus" | "aac" | "m4b")
+                        } else {
+                            false
+                        }
+                    });
+                    if is_audio || event.paths.is_empty() {
+                        let mut last = debounce_tx.lock().unwrap();
+                        if last.elapsed() > std::time::Duration::from_millis(400) {
+                            *last = std::time::Instant::now();
+                            let _ = app_clone.emit("local_folder_changed", ());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }).map_err(|e| e.to_string())?;
+
+    watcher.watch(&p, RecursiveMode::NonRecursive).map_err(|e| e.to_string())?;
+    *watcher_lock = Some(watcher);
+    Ok(())
+}
+
+#[tauri::command]
 fn update_discord_rpc(
     title: String,
     artist: Option<String>,
@@ -2762,6 +3227,10 @@ fn update_discord_rpc(
     track_url: Option<String>,
     start_timestamp: Option<i64>,
     end_timestamp: Option<i64>,
+    show_cover: Option<bool>,
+    time_display: Option<String>,
+    custom_button_label: Option<String>,
+    custom_button_url: Option<String>,
 ) {
     std::thread::spawn(move || {
         let mut client_lock = get_discord_client().lock().unwrap();
@@ -2772,36 +3241,77 @@ fn update_discord_rpc(
             }
         }
         if let Some(ref mut client) = *client_lock {
-            let mut act = activity::Activity::new()
-                .details(&title)
-                .activity_type(activity::ActivityType::Listening);
+            let title_trim = title.trim();
+            let safe_title: String = if title_trim.is_empty() {
+                "Listening to Music".to_string()
+            } else if title_trim.chars().count() > 120 {
+                title_trim.chars().take(120).collect()
+            } else {
+                title_trim.to_string()
+            };
             let clean_artist = artist.as_deref().unwrap_or("").trim();
-            if !clean_artist.is_empty() {
-                act = act.state(clean_artist);
+            let safe_artist: String = if clean_artist.chars().count() > 120 {
+                clean_artist.chars().take(120).collect()
+            } else {
+                clean_artist.to_string()
+            };
+
+            let mut act = activity::Activity::new()
+                .details(&safe_title)
+                .activity_type(activity::ActivityType::Listening);
+            if !safe_artist.is_empty() {
+                act = act.state(&safe_artist);
             }
             let mut assets = activity::Assets::new()
                 .small_image("icon")
                 .small_text("Veluna");
-            if let Some(ref url) = cover_url {
-                if !url.trim().is_empty() {
-                    assets = assets.large_image(url);
+            if show_cover.unwrap_or(true) {
+                if let Some(ref url) = cover_url {
+                    if !url.trim().is_empty() {
+                        assets = assets.large_image(url);
+                    }
                 }
             }
             act = act.assets(assets);
 
-            if let (Some(start), Some(end)) = (start_timestamp, end_timestamp) {
-                if end > start {
-                    act = act.timestamps(activity::Timestamps::new().start(start).end(end));
+            let t_mode = time_display.as_deref().unwrap_or("remaining");
+            if let Some(start) = start_timestamp {
+                if t_mode == "elapsed" {
+                    act = act.timestamps(activity::Timestamps::new().start(start));
+                } else if let Some(end) = end_timestamp {
+                    if end > start {
+                        act = act.timestamps(activity::Timestamps::new().start(start).end(end));
+                    } else {
+                        act = act.timestamps(activity::Timestamps::new().start(start));
+                    }
+                } else {
+                    act = act.timestamps(activity::Timestamps::new().start(start));
                 }
             }
 
+            let c_label = custom_button_label.unwrap_or_default();
+            let c_url = custom_button_url.unwrap_or_default();
+            let l_trim = c_label.trim();
+            let u_trim = c_url.trim();
+            let safe_btn_label: String = if l_trim.chars().count() > 32 {
+                l_trim.chars().take(32).collect()
+            } else {
+                l_trim.to_string()
+            };
             let mut buttons = Vec::new();
-            if let Some(ref url) = track_url {
-                if url.starts_with("http") {
-                    buttons.push(activity::Button::new("Listen on YouTube", url));
+            if !safe_btn_label.is_empty() && (u_trim.starts_with("http://") || u_trim.starts_with("https://")) {
+                buttons.push(activity::Button::new(&safe_btn_label, u_trim));
+            }
+            if buttons.is_empty() {
+                if let Some(ref url) = track_url {
+                    if url.starts_with("http://") || url.starts_with("https://") {
+                        buttons.push(activity::Button::new("Listen on YouTube", url));
+                    }
                 }
             }
-            buttons.push(activity::Button::new("Download Veluna", "https://github.com/rry0ku/veluna/releases/"));
+            if buttons.len() < 2 {
+                buttons.push(activity::Button::new("Download Veluna", "https://github.com/rry0ku/veluna/releases/"));
+            }
             act = act.buttons(buttons);
 
             if client.set_activity(act).is_err() {
@@ -2857,6 +3367,96 @@ fn silence_ayatana_warnings() {
     }
 }
 
+#[tauri::command]
+async fn get_local_track_cover(path: String) -> Result<Option<String>, String> {
+    let p = std::path::PathBuf::from(expand_tilde(&path));
+    if let Some(uri) = metadata::extract_cover_art_data_uri(&p) {
+        return Ok(Some(uri));
+    }
+    get_audio_cover(path).await
+}
+
+#[tauri::command]
+async fn write_local_track_tags(
+    path: String,
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+) -> Result<(), String> {
+    let p = std::path::PathBuf::from(expand_tilde(&path));
+    tokio::task::spawn_blocking(move || {
+        metadata::write_track_tags(&p, title.as_deref(), artist.as_deref(), album.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn db_save_playlist(playlist: db::DbPlaylist) -> Result<(), String> {
+    db::save_playlist(playlist)
+}
+
+#[tauri::command]
+fn db_get_playlists() -> Result<Vec<db::DbPlaylist>, String> {
+    db::get_all_playlists()
+}
+
+#[tauri::command]
+fn db_delete_playlist(id: String) -> Result<(), String> {
+    db::delete_playlist(&id)
+}
+
+#[tauri::command]
+fn db_record_play_event(url: String, title: String, artist: String, secs: i64) -> Result<(), String> {
+    db::record_play_event(&url, &title, &artist, secs)
+}
+
+#[tauri::command]
+fn db_get_listening_stats() -> Result<Vec<db::DbTrackStat>, String> {
+    db::get_listening_stats()
+}
+
+#[tauri::command]
+fn db_get_listening_history(limit: Option<usize>) -> Result<Vec<db::DbListeningEvent>, String> {
+    db::get_listening_history(limit.unwrap_or(100))
+}
+
+#[tauri::command]
+fn db_clear_listening_stats() -> Result<(), String> {
+    db::clear_listening_stats()
+}
+
+#[tauri::command]
+fn db_search_library(query: String) -> Result<Vec<db::DbSearchResult>, String> {
+    db::search_library_fts(&query)
+}
+
+#[tauri::command]
+async fn download_stream_chunked(
+    app: tauri::AppHandle,
+    stream_url: String,
+    target_path: String,
+    track_url: String,
+    title: String,
+    artist: String,
+    album: String,
+    cover_url: Option<String>,
+    lyrics_text: Option<String>,
+) -> Result<String, String> {
+    let resolved = std::path::PathBuf::from(expand_tilde(&target_path));
+    downloader::download_audio_stream_chunked(
+        app,
+        stream_url,
+        resolved,
+        track_url,
+        title,
+        artist,
+        album,
+        cover_url,
+        lyrics_text,
+    ).await
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
     silence_ayatana_warnings();
@@ -2873,6 +3473,7 @@ fn main() {
             let handle = app.handle().clone();
 
             init_log_path(&app.handle());
+            let _ = db::init_db(&app.handle());
             app.manage(tray::init());
 
             #[cfg(target_os = "linux")]
@@ -2916,6 +3517,17 @@ fn main() {
             check_for_update,
             set_mpris_metadata,
             update_mpris_playback,
+            get_local_track_cover,
+            write_local_track_tags,
+            db_save_playlist,
+            db_get_playlists,
+            db_delete_playlist,
+            db_record_play_event,
+            db_get_listening_stats,
+            db_get_listening_history,
+            db_clear_listening_stats,
+            db_search_library,
+            download_stream_chunked,
             search_youtube,
             prefetch_track,
             import_csv_playlist,
@@ -2970,6 +3582,9 @@ fn main() {
             get_cache_enabled,
             update_discord_rpc,
             clear_discord_rpc,
+            watch_download_folder,
+            set_network_config,
+            test_network_connection,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

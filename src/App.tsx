@@ -167,8 +167,16 @@ export function App() {
   const [backupPath, setBackupPathState] = useState<string>(() => loadLS('vg_backupPath', ''));
   const [trayEnabled, setTrayEnabled] = useState<boolean>(() => loadLS('vg_trayEnabled', false));
   const [discordRpcEnabled, setDiscordRpcEnabled] = useState<boolean>(() => loadLS('vg_discordRpcEnabled', true));
+  const [discordShowCover, setDiscordShowCover] = useState<boolean>(() => loadLS('vg_discordShowCover', true));
+  const [discordTimeDisplay, setDiscordTimeDisplay] = useState<'remaining' | 'elapsed'>(() => {
+    const v = loadLS<string>('vg_discordTimeDisplay', 'remaining');
+    return v === 'elapsed' ? 'elapsed' : 'remaining';
+  });
+  const [discordCustomBtn, setDiscordCustomBtn] = useState<boolean>(() => loadLS('vg_discordCustomBtn', false));
+  const [discordBtnLabel, setDiscordBtnLabel] = useState<string>(() => loadLS('vg_discordBtnLabel', ''));
+  const [discordBtnUrl, setDiscordBtnUrl] = useState<string>(() => loadLS('vg_discordBtnUrl', ''));
   const [autoplayEnabled, setAutoplayEnabled] = useState<boolean>(() => loadLS('vg_autoplay', true));
-  const [appVersion, setAppVersion] = useState<string>('0.1.3');
+  const [appVersion, setAppVersion] = useState<string>('0.1.4');
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
 
   const setCacheEnabled = useCallback((enabled: boolean) => {
@@ -215,6 +223,11 @@ export function App() {
   useEffect(() => { saveLS('vg_eq', eq); }, [eq]);
   useEffect(() => { saveLS('vg_trayEnabled', trayEnabled); }, [trayEnabled]);
   useEffect(() => { saveLS('vg_discordRpcEnabled', discordRpcEnabled); }, [discordRpcEnabled]);
+  useEffect(() => { saveLS('vg_discordShowCover', discordShowCover); }, [discordShowCover]);
+  useEffect(() => { saveLS('vg_discordTimeDisplay', discordTimeDisplay); }, [discordTimeDisplay]);
+  useEffect(() => { saveLS('vg_discordCustomBtn', discordCustomBtn); }, [discordCustomBtn]);
+  useEffect(() => { saveLS('vg_discordBtnLabel', discordBtnLabel); }, [discordBtnLabel]);
+  useEffect(() => { saveLS('vg_discordBtnUrl', discordBtnUrl); }, [discordBtnUrl]);
   useEffect(() => { saveLS('vg_autoplay', autoplayEnabled); }, [autoplayEnabled]);
   useEffect(() => {
     saveLS('vg_loudnorm', loudnormEnabled);
@@ -241,7 +254,9 @@ export function App() {
     abLoop,
     setAbLoop,
     shuffle,
+    setShuffle,
     repeatMode,
+    setRepeatMode,
     toggleShuffle,
     cycleRepeat,
     playlistContextRef,
@@ -304,12 +319,6 @@ export function App() {
   } = useLyrics(currentTrack, trackDurationSeconds, progressSeconds);
 
   const {
-    listenbrainzEnabled,
-    setListenbrainzEnabled,
-    listenbrainzToken,
-    setListenbrainzToken,
-    listenbrainzUsername,
-    setListenbrainzUsername,
     lastfmEnabled,
     setLastfmEnabled,
     lastfmSessionKey,
@@ -555,12 +564,18 @@ export function App() {
 
   // Discord RPC presence synchronization
   const lastRpcProgressRef = useRef<number>(0);
+  const lastRpcStateRef = useRef<string>('');
+
   useEffect(() => {
     if (discordRpcEnabled && isPlaying && currentTrack) {
       const delta = Math.abs(progressSeconds - lastRpcProgressRef.current);
-      // Update RPC on initial play, track switch, or when user seeks/skips (> 2s jump)
-      if (delta > 2 || lastRpcProgressRef.current === 0) {
+      const stateSig = `${currentTrack.id}-${discordShowCover}-${discordTimeDisplay}-${discordCustomBtn}-${discordBtnLabel}-${discordBtnUrl}`;
+      const stateChanged = stateSig !== lastRpcStateRef.current;
+
+      // Update RPC on initial play, track switch, seeking (> 2s jump), or setting change
+      if (delta > 2 || lastRpcProgressRef.current === 0 || stateChanged) {
         lastRpcProgressRef.current = progressSeconds;
+        lastRpcStateRef.current = stateSig;
         const coverUrl = currentTrack.cover && !currentTrack.cover.startsWith('data:') && !currentTrack.cover.startsWith('blob:') ? currentTrack.cover : null;
         const trackUrl = currentTrack.url && currentTrack.url.startsWith('http') ? currentTrack.url : null;
         const now = Math.floor(Date.now() / 1000);
@@ -568,20 +583,39 @@ export function App() {
         const startTimestamp = now - Math.floor(progressSeconds);
         const endTimestamp = trackDurationSeconds > 0 ? now + Math.floor(remainingSecs) : null;
 
+        const customBtnLabel = discordCustomBtn ? discordBtnLabel : null;
+        const customBtnUrl = discordCustomBtn ? discordBtnUrl : null;
+
         invoke('update_discord_rpc', {
           title: currentTrack.title,
           artist: cleanArtist(currentTrack.artist) || null,
           coverUrl,
           trackUrl,
           startTimestamp,
-          endTimestamp
+          endTimestamp,
+          showCover: discordShowCover,
+          timeDisplay: discordTimeDisplay,
+          customButtonLabel: customBtnLabel || null,
+          customButtonUrl: customBtnUrl || null,
         }).catch(() => {});
       }
     } else {
       lastRpcProgressRef.current = 0;
+      lastRpcStateRef.current = '';
       invoke('clear_discord_rpc').catch(() => {});
     }
-  }, [discordRpcEnabled, isPlaying, currentTrack, trackDurationSeconds, progressSeconds]);
+  }, [
+    discordRpcEnabled,
+    isPlaying,
+    currentTrack,
+    trackDurationSeconds,
+    progressSeconds,
+    discordShowCover,
+    discordTimeDisplay,
+    discordCustomBtn,
+    discordBtnLabel,
+    discordBtnUrl
+  ]);
 
   // App version & Update check
   useEffect(() => {
@@ -589,6 +623,18 @@ export function App() {
     const autoCheck = loadLS('vg_autoCheckUpdates', true);
     if (autoCheck) {
       invoke<string | null>('check_for_update').then(v => setUpdateAvailable(v ?? null)).catch(() => {});
+    }
+  }, []);
+
+  // Sync Network / Proxy config on boot
+  useEffect(() => {
+    const p = loadLS<string>('vg_networkProxy', '');
+    const inst = loadLS<string>('vg_customInstance', '');
+    if (p || inst) {
+      invoke('set_network_config', {
+        proxyUrl: p.trim() || null,
+        customInstance: inst.trim() || null,
+      }).catch(() => {});
     }
   }, []);
 
@@ -917,18 +963,117 @@ export function App() {
     input.click();
   }, [showToast, setPlaylists]);
 
-  // Backup & Restore
+  // Backup & Restore (All settings, playlists, stats, integrations — excluding offline audio files/paths)
   const handleBackup = useCallback(async () => {
     try {
+      // 1. Clean playlists: filter out any local disk tracks (local://)
+      const cleanPlaylists = (playlists || []).map(p => ({
+        ...p,
+        tracks: (p.tracks || []).filter(t => t && t.url && !t.url.startsWith('local://')),
+      }));
+
+      // 2. Clean queue, play history, quick picks, and current track
+      const cleanQueue = (queue || []).filter(t => t && t.url && !t.url.startsWith('local://'));
+      const cleanPlayHistory = (playHistory || []).filter(t => t && t.url && !t.url.startsWith('local://'));
+      const cleanQuickPicks = (quickPicks || []).filter(t => t && t.url && !t.url.startsWith('local://'));
+      const cleanCurrentTrack = currentTrack && !currentTrack.url?.startsWith('local://') ? currentTrack : null;
+
+      // 3. Clean listening stats: strip local:// keys and events
+      const cleanPlayCounts: Record<string, number> = {};
+      Object.entries(playCounts || {}).forEach(([k, v]) => {
+        if (!k.startsWith('local://')) cleanPlayCounts[k] = v;
+      });
+
+      const cleanListenSecs: Record<string, number> = {};
+      Object.entries(listenSecs || {}).forEach(([k, v]) => {
+        if (!k.startsWith('local://')) cleanListenSecs[k] = v;
+      });
+
+      const cleanDailyPlays: Record<string, number> = {};
+      Object.entries(dailyPlays || {}).forEach(([k, v]) => {
+        if (!k.startsWith('local://')) cleanDailyPlays[k] = v;
+      });
+
+      const cleanFirstSeen: Record<string, string> = {};
+      Object.entries(firstSeen || {}).forEach(([k, v]) => {
+        if (!k.startsWith('local://')) cleanFirstSeen[k] = v;
+      });
+
+      const cleanListeningHistory = (listeningHistory || []).filter(item => item && item.url && !item.url.startsWith('local://'));
+
       const data = {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
-        playlists, queue, playHistory, playCounts, listenSecs, dailyPlays, firstSeen, listeningHistory,
-        shuffle, repeatMode, volume, playbackSpeed, eq,
-        downloadQuality, downloadFormat, downloadPath, backupPath,
-        embedThumbnail, duplicateDetect, loudnormEnabled, skipSilence,
-        searchHistory, quickPicks, currentTrack,
+        // Playlists & Queue
+        playlists: cleanPlaylists,
+        playlistViewMode,
+        queue: cleanQueue,
+        currentTrack: cleanCurrentTrack,
+        quickPicks: cleanQuickPicks,
+        searchHistory: searchHistory || [],
+
+        // Stats & History
+        playHistory: cleanPlayHistory,
+        playCounts: cleanPlayCounts,
+        listenSecs: cleanListenSecs,
+        dailyPlays: cleanDailyPlays,
+        firstSeen: cleanFirstSeen,
+        listeningHistory: cleanListeningHistory,
+        statsTimeRange,
+        artistThumbs: loadLS('vg_artistThumbs', {}),
+
+        // Playback & Audio Processing Settings
+        volume,
+        playbackSpeed,
+        crossfadeSeconds,
+        shuffle,
+        repeatMode,
+        eq,
+        loudnormEnabled,
+        skipSilence,
+        autoplayEnabled,
+
+        // Appearance & Customization Settings
+        theme,
+        customBgColor,
+        accentColor,
+        uiScale,
+        performanceMode,
+        startupNav,
+        trayEnabled,
+
+        // Downloads & Storage Preferences
+        downloadQuality,
+        downloadFormat,
+        downloadPath,
+        backupPath,
+        embedThumbnail,
+        duplicateDetect,
+        cacheEnabled,
+        cacheLimit: loadLS('vg_cacheLimit', '1gb'),
+        autoCheckUpdates,
+
+        // Discord Rich Presence Settings
+        discordRpcEnabled,
+        discordShowCover,
+        discordTimeDisplay,
+        discordCustomBtn,
+        discordBtnLabel,
+        discordBtnUrl,
+
+        // Network & Audio Proxy Settings
+        networkProxy: loadLS('vg_networkProxy', ''),
+        customInstance: loadLS('vg_customInstance', ''),
+
+        // Lyrics & Scrobblers Settings
+        lyricsSource,
+        lastfmEnabled,
+        lastfmUsername,
+        lastfmSessionKey,
+        lastfmApiKey,
+        lastfmApiSecret,
       };
+
       const json = JSON.stringify(data, null, 2);
       const sep = navigator.platform.includes('Win') ? '\\' : '/';
       const resolvedBase = backupPath || downloadPath || '';
@@ -940,15 +1085,24 @@ export function App() {
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'veluna_backup.json'; a.click();
+        a.href = url;
+        a.download = 'veluna_backup.json';
+        a.click();
         URL.revokeObjectURL(url);
         showToast('Backup saved');
       }
-    } catch (e) { showToast(`Backup failed: ${e}`); }
-  }, [playlists, queue, playHistory, playCounts, listenSecs, dailyPlays, firstSeen, listeningHistory,
-      shuffle, repeatMode, volume, playbackSpeed, eq, downloadQuality, downloadFormat, downloadPath,
-      backupPath, embedThumbnail, duplicateDetect, loudnormEnabled, skipSilence, searchHistory,
-      quickPicks, currentTrack, showToast]);
+    } catch (e) {
+      showToast(`Backup failed: ${e}`);
+    }
+  }, [
+    playlists, playlistViewMode, queue, playHistory, playCounts, listenSecs, dailyPlays, firstSeen,
+    listeningHistory, statsTimeRange, shuffle, repeatMode, volume, playbackSpeed, crossfadeSeconds, eq, downloadQuality,
+    downloadFormat, downloadPath, backupPath, embedThumbnail, duplicateDetect, loudnormEnabled,
+    skipSilence, autoplayEnabled, theme, customBgColor, accentColor, uiScale, performanceMode,
+    startupNav, trayEnabled, cacheEnabled, autoCheckUpdates, discordRpcEnabled, discordShowCover, discordTimeDisplay,
+    discordCustomBtn, discordBtnLabel, discordBtnUrl, lyricsSource,
+    searchHistory, quickPicks, currentTrack, showToast
+  ]);
 
   const handleRestore = useCallback(() => {
     const input = document.createElement('input');
@@ -962,32 +1116,194 @@ export function App() {
       if (!file) return;
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
-        if (data.version !== 1) { showToast('Invalid backup file'); return; }
+        const parsed = JSON.parse(text);
+        if (!parsed || (typeof parsed !== 'object')) {
+          showToast('Invalid backup file');
+          return;
+        }
+
+        // Support raw array of playlists, wrapped { data: ... }, or flat backup objects
+        const data: any = Array.isArray(parsed) ? { playlists: parsed } : (parsed.data || parsed);
+
         const ls = <T,>(key: string, val: T): T => { saveLS(key, val); return val; };
-        if (data.playlists) setPlaylists(ls('vg_playlists', data.playlists));
-        if (data.queue) setQueue(ls('vg_queue', data.queue));
-        if (data.playHistory) setPlayHistory(ls('vg_playHistory', data.playHistory));
-        if (data.playCounts) setPlayCounts(ls('vg_playCounts', data.playCounts));
-        if (data.listenSecs) setListenSecs(ls('vg_listenSecs', data.listenSecs));
-        if (data.dailyPlays) setDailyPlays(ls('vg_dailyPlays', data.dailyPlays));
-        if (data.firstSeen) setFirstSeen(ls('vg_firstSeen', data.firstSeen));
-        if (data.listeningHistory) setListeningHistory(ls('vg_listeningHistory', data.listeningHistory));
-        if (data.volume !== undefined) { setVolume(ls('vg_volume', data.volume)); invoke('set_volume', { volume: data.volume }).catch(() => {}); }
-        if (data.playbackSpeed) setPlaybackSpeedState(ls('vg_speed', data.playbackSpeed));
-        if (data.eq) setEqState(ls('vg_eq', data.eq));
-        if (data.downloadQuality) setDownloadQuality(ls('vg_dlQuality', data.downloadQuality));
-        if (data.downloadFormat) setDownloadFormatState(ls('vg_dlFormat', data.downloadFormat));
-        if (data.downloadPath) setDownloadPath(ls('vg_dlPath', data.downloadPath));
-        if (data.backupPath) setBackupPath(ls('vg_backupPath', data.backupPath));
-        if (data.currentTrack) setCurrentTrack(data.currentTrack);
+
+        // 1. Playlists & Queue (Support both modern and legacy playlist structures)
+        if (Array.isArray(data.playlists)) {
+          let plList = data.playlists;
+          if (!plList.some((p: any) => p.id === 'p1')) {
+            plList = [{ id: 'p1', name: 'Liked Songs', description: '', tracks: [] }, ...plList];
+          }
+          setPlaylists(ls('vg_playlists', plList));
+        }
+        if (data.playlistViewMode) setPlaylistViewMode(ls('vg_playlistViewMode', data.playlistViewMode));
+        if (Array.isArray(data.queue)) setQueue(ls('vg_queue', data.queue));
+        if (Array.isArray(data.quickPicks)) setQuickPicks(ls('vg_quickPicks', data.quickPicks));
+        if (Array.isArray(data.searchHistory)) ls('vg_searchHistory', data.searchHistory);
+        if (data.currentTrack !== undefined) setCurrentTrack(data.currentTrack ? ls('vg_lastTrack', data.currentTrack) : null);
+
+        // 2. Stats & History
+        if (Array.isArray(data.playHistory)) setPlayHistory(ls('vg_playHistory', data.playHistory));
+        if (data.playCounts && typeof data.playCounts === 'object') setPlayCounts(ls('vg_playCounts', data.playCounts));
+        if (data.listenSecs && typeof data.listenSecs === 'object') setListenSecs(ls('vg_listenSecs', data.listenSecs));
+        if (data.dailyPlays && typeof data.dailyPlays === 'object') setDailyPlays(ls('vg_dailyPlays', data.dailyPlays));
+        if (data.firstSeen && typeof data.firstSeen === 'object') setFirstSeen(ls('vg_firstSeen', data.firstSeen));
+        if (Array.isArray(data.listeningHistory)) setListeningHistory(ls('vg_listeningHistory', data.listeningHistory));
+        if (data.statsTimeRange) setStatsTimeRange(ls('vg_statsTimeRange', data.statsTimeRange));
+        if (data.artistThumbs && typeof data.artistThumbs === 'object') ls('vg_artistThumbs', data.artistThumbs);
+
+        // 3. Audio & Playback Settings (Support legacy property aliases)
+        const vol = data.volume !== undefined ? data.volume : data.vg_volume;
+        if (vol !== undefined) {
+          setVolume(ls('vg_volume', Number(vol)));
+          invoke('set_volume', { volume: Number(vol) }).catch(() => {});
+        }
+
+        const speed = data.playbackSpeed !== undefined ? data.playbackSpeed : (data.speed !== undefined ? data.speed : data.vg_speed);
+        if (speed !== undefined) setPlaybackSpeedState(ls('vg_speed', Number(speed)));
+
+        const eqVal = data.eq || data.vg_eq;
+        if (eqVal && typeof eqVal === 'object') setEqState(ls('vg_eq', eqVal));
+
+        const shuffleVal = data.shuffle !== undefined ? data.shuffle : data.vg_shuffle;
+        if (shuffleVal !== undefined) setShuffle(ls('vg_shuffle', Boolean(shuffleVal)));
+
+        const repeatVal = data.repeatMode || data.repeat || data.vg_repeat;
+        if (repeatVal) setRepeatMode(ls('vg_repeat', repeatVal));
+
+        const loudnormVal = data.loudnormEnabled !== undefined ? data.loudnormEnabled : (data.loudnorm !== undefined ? data.loudnorm : data.vg_loudnorm);
+        if (loudnormVal !== undefined) {
+          setLoudnormEnabledState(ls('vg_loudnorm', Boolean(loudnormVal)));
+          invoke('set_loudnorm_enabled', { enabled: Boolean(loudnormVal) }).catch(() => {});
+        }
+
+        const skipSilenceVal = data.skipSilence !== undefined ? data.skipSilence : data.vg_skipSilence;
+        if (skipSilenceVal !== undefined) {
+          setSkipSilenceState(ls('vg_skipSilence', Boolean(skipSilenceVal)));
+          invoke('set_skip_silence', { enabled: Boolean(skipSilenceVal) }).catch(() => {});
+        }
+
+        const autoplayVal = data.autoplayEnabled !== undefined ? data.autoplayEnabled : (data.autoplay !== undefined ? data.autoplay : data.vg_autoplay);
+        if (autoplayVal !== undefined) setAutoplayEnabled(ls('vg_autoplay', Boolean(autoplayVal)));
+
+        // 4. Appearance & Customization Settings
+        const themeVal = data.theme || data.vg_theme;
+        if (themeVal) setTheme(ls('vg_theme', themeVal));
+
+        const customBg = data.customBgColor || data.vg_customBgColor;
+        if (customBg !== undefined) setCustomBgColor(ls('vg_customBgColor', customBg));
+
+        const accent = data.accentColor || data.accent || data.vg_accentColor;
+        if (accent) setAccentColor(ls('vg_accentColor', accent));
+
+        const scaleVal = data.uiScale !== undefined ? data.uiScale : data.vg_uiScale;
+        if (scaleVal !== undefined) setUiScale(ls('vg_uiScale', Number(scaleVal)));
+
+        const perfMode = data.performanceMode !== undefined ? data.performanceMode : data.vg_performanceMode;
+        if (perfMode !== undefined) setPerformanceMode(ls('vg_performanceMode', Boolean(perfMode)));
+
+        const startup = data.startupNav || data.vg_startupNav;
+        if (startup) setStartupNav(ls('vg_startupNav', startup));
+
+        const tray = data.trayEnabled !== undefined ? data.trayEnabled : data.vg_trayEnabled;
+        if (tray !== undefined) setTrayEnabled(ls('vg_trayEnabled', Boolean(tray)));
+
+        // 5. Downloads & Storage Preferences
+        const dlQuality = data.downloadQuality || data.dlQuality || data.vg_dlQuality;
+        if (dlQuality) setDownloadQuality(ls('vg_dlQuality', dlQuality));
+
+        const dlFormat = data.downloadFormat || data.dlFormat || data.vg_dlFormat;
+        if (dlFormat) setDownloadFormatState(ls('vg_dlFormat', dlFormat));
+
+        const dlPath = data.downloadPath || data.dlPath || data.vg_dlPath;
+        if (dlPath) setDownloadPath(ls('vg_dlPath', dlPath));
+
+        const bkpPath = data.backupPath || data.vg_backupPath;
+        if (bkpPath !== undefined) setBackupPath(ls('vg_backupPath', bkpPath));
+
+        const embedThumb = data.embedThumbnail !== undefined ? data.embedThumbnail : (data.embedThumb !== undefined ? data.embedThumb : data.vg_embedThumb);
+        if (embedThumb !== undefined) setEmbedThumbnailState(ls('vg_embedThumb', Boolean(embedThumb)));
+
+        const dupDetect = data.duplicateDetect !== undefined ? data.duplicateDetect : (data.dupDetect !== undefined ? data.dupDetect : data.vg_dupDetect);
+        if (dupDetect !== undefined) setDuplicateDetectState(ls('vg_dupDetect', Boolean(dupDetect)));
+
+        const cacheEn = data.cacheEnabled !== undefined ? data.cacheEnabled : data.vg_cacheEnabled;
+        if (cacheEn !== undefined) setCacheEnabled(ls('vg_cacheEnabled', Boolean(cacheEn)));
+
+        const cacheLim = data.cacheLimit || data.vg_cacheLimit;
+        if (cacheLim) ls('vg_cacheLimit', cacheLim);
+
+        const autoUpdates = data.autoCheckUpdates !== undefined ? data.autoCheckUpdates : data.vg_autoCheckUpdates;
+        if (autoUpdates !== undefined) setAutoCheckUpdates(ls('vg_autoCheckUpdates', Boolean(autoUpdates)));
+
+        // 6. Discord Rich Presence Settings
+        const discordRpc = data.discordRpcEnabled !== undefined ? data.discordRpcEnabled : data.vg_discordRpcEnabled;
+        if (discordRpc !== undefined) setDiscordRpcEnabled(ls('vg_discordRpcEnabled', Boolean(discordRpc)));
+
+        const showCover = data.discordShowCover !== undefined ? data.discordShowCover : data.vg_discordShowCover;
+        if (showCover !== undefined) setDiscordShowCover(ls('vg_discordShowCover', Boolean(showCover)));
+
+        const timeDisplay = data.discordTimeDisplay || data.vg_discordTimeDisplay;
+        if (timeDisplay) setDiscordTimeDisplay(ls('vg_discordTimeDisplay', timeDisplay === 'elapsed' ? 'elapsed' : 'remaining'));
+
+        const customBtn = data.discordCustomBtn !== undefined ? data.discordCustomBtn : data.vg_discordCustomBtn;
+        if (customBtn !== undefined) setDiscordCustomBtn(ls('vg_discordCustomBtn', Boolean(customBtn)));
+
+        const btnLabel = data.discordBtnLabel !== undefined ? data.discordBtnLabel : data.vg_discordBtnLabel;
+        if (btnLabel !== undefined) setDiscordBtnLabel(ls('vg_discordBtnLabel', btnLabel));
+
+        const btnUrl = data.discordBtnUrl !== undefined ? data.discordBtnUrl : data.vg_discordBtnUrl;
+        if (btnUrl !== undefined) setDiscordBtnUrl(ls('vg_discordBtnUrl', btnUrl));
+
+        // 7. Network & Audio Proxy Settings
+        const proxyVal = data.networkProxy !== undefined ? data.networkProxy : data.vg_networkProxy;
+        if (proxyVal !== undefined) ls('vg_networkProxy', proxyVal);
+
+        const instVal = data.customInstance !== undefined ? data.customInstance : data.vg_customInstance;
+        if (instVal !== undefined) ls('vg_customInstance', instVal);
+
+        if (proxyVal !== undefined || instVal !== undefined) {
+          invoke('set_network_config', {
+            proxyUrl: proxyVal?.trim() || null,
+            customInstance: instVal?.trim() || null,
+          }).catch(() => {});
+        }
+
+        // 8. Lyrics & Scrobblers Settings
+        const lyrics = data.lyricsSource || data.vg_lyricsSource;
+        if (lyrics) setLyricsSource(ls('vg_lyricsSource', lyrics));
+
+        const lfmEn = data.lastfmEnabled !== undefined ? data.lastfmEnabled : (data.vg_lastfmEnabled !== undefined ? data.vg_lastfmEnabled : data.vg_lfm_enabled);
+        if (lfmEn !== undefined) setLastfmEnabled(Boolean(lfmEn));
+
+        const lfmUser = data.lastfmUsername !== undefined ? data.lastfmUsername : (data.vg_lastfmUsername || data.vg_lfm_username);
+        if (lfmUser !== undefined) setLastfmUsername(lfmUser);
+
+        const lfmKey = data.lastfmSessionKey !== undefined ? data.lastfmSessionKey : (data.vg_lastfmSessionKey || data.vg_lfm_session);
+        if (lfmKey !== undefined) setLastfmSessionKey(lfmKey);
+
+        const lfmApi = data.lastfmApiKey !== undefined ? data.lastfmApiKey : (data.vg_lastfmApiKey || data.vg_lfm_apikey);
+        if (lfmApi !== undefined) setLastfmApiKey(lfmApi);
+
+        const lfmSecret = data.lastfmApiSecret !== undefined ? data.lastfmApiSecret : (data.vg_lastfmApiSecret || data.vg_lfm_secret);
+        if (lfmSecret !== undefined) setLastfmApiSecret(lfmSecret);
+
         showToast('Backup restored successfully');
       } catch (err) {
         showToast(`Restore failed: ${err}`);
       }
     };
     input.click();
-  }, [showToast, setPlaylists, setQueue, setPlayHistory, setPlayCounts, setListenSecs, setDailyPlays, setFirstSeen, setListeningHistory, setVolume, setBackupPath, setCurrentTrack]);
+  }, [
+    showToast, setPlaylists, setPlaylistViewMode, setQueue, setPlayHistory, setPlayCounts, setListenSecs,
+    setDailyPlays, setFirstSeen, setListeningHistory, setStatsTimeRange, setQuickPicks, setCurrentTrack, setVolume,
+    setPlaybackSpeedState, setEqState, setShuffle, setRepeatMode, setLoudnormEnabledState,
+    setSkipSilenceState, setAutoplayEnabled, setTheme, setAccentColor, setCustomBgColor,
+    setPerformanceMode, setUiScale, setStartupNav, setTrayEnabled, setDownloadQuality,
+    setDownloadFormatState, setDownloadPath, setBackupPath, setEmbedThumbnailState,
+    setDuplicateDetectState, setCacheEnabled, setAutoCheckUpdates, setDiscordRpcEnabled,
+    setLyricsSource, setLastfmEnabled, setLastfmUsername, setLastfmSessionKey, setLastfmApiKey,
+    setLastfmApiSecret
+  ]);
 
   return (
     <div
@@ -1108,6 +1424,7 @@ export function App() {
             setSettingsTab={setSettingsTab}
             getTrackCover={getTrackCover}
             localTracks={localTracks}
+            addToQueue={addToQueue}
           />
         )}
 
@@ -1138,6 +1455,10 @@ export function App() {
             })}
             tracks={localTracks}
             setTracks={setLocalTracks}
+            playlists={playlists}
+            setPlaylists={setPlaylists}
+            addToQueue={addToQueue}
+            showToast={showToast}
           />
         )}
 
@@ -1181,6 +1502,7 @@ export function App() {
             playCounts={playCounts}
             showToast={showToast}
             getPlaylistCover={getPlaylistCover}
+            addToQueue={addToQueue}
           />
         )}
 
@@ -1257,12 +1579,16 @@ export function App() {
             setTrayEnabled={setTrayEnabled}
             discordRpcEnabled={discordRpcEnabled}
             setDiscordRpcEnabled={setDiscordRpcEnabled}
-            listenbrainzEnabled={listenbrainzEnabled}
-            setListenbrainzEnabled={setListenbrainzEnabled}
-            listenbrainzToken={listenbrainzToken}
-            setListenbrainzToken={setListenbrainzToken}
-            listenbrainzUsername={listenbrainzUsername}
-            setListenbrainzUsername={setListenbrainzUsername}
+            discordShowCover={discordShowCover}
+            setDiscordShowCover={setDiscordShowCover}
+            discordTimeDisplay={discordTimeDisplay}
+            setDiscordTimeDisplay={setDiscordTimeDisplay}
+            discordCustomBtn={discordCustomBtn}
+            setDiscordCustomBtn={setDiscordCustomBtn}
+            discordBtnLabel={discordBtnLabel}
+            setDiscordBtnLabel={setDiscordBtnLabel}
+            discordBtnUrl={discordBtnUrl}
+            setDiscordBtnUrl={setDiscordBtnUrl}
             lastfmEnabled={lastfmEnabled}
             setLastfmEnabled={setLastfmEnabled}
             lastfmSessionKey={lastfmSessionKey}

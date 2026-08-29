@@ -403,10 +403,11 @@ export function useAudioPlayer({
       invoke('seek_to_start').catch(() => {
         invoke('seek_audio', { time: 0 }).catch(() => {});
       });
+      invoke('resume_audio').catch(() => {});
       progressSecondsRef.current = 0;
       setProgressSeconds(0);
       setIsPlayingSync(true);
-      setTimeout(() => { endDetectedRef.current = false; }, 1500);
+      setTimeout(() => { endDetectedRef.current = false; }, 1200);
       return;
     }
 

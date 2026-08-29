@@ -13,7 +13,7 @@ body:
       label: Veluna Version
       description: What version of Veluna are you running?
       options:
-        - v0.1.3 (Latest Release)
+        - v0.1.4 (Latest Release)
         - Built from source (main branch)
         - Other (specify in description)
     validations:

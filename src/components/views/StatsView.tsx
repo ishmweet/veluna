@@ -98,7 +98,20 @@ export const StatsView: React.FC<StatsViewProps> = ({
     .sort((a, b) => (b[1] as number) - (a[1] as number))
     .slice(0, 5)
     .reduce((acc: { track: Track; count: number }[], [url, count]) => {
-      const track = allKnownTracksMap.get(url);
+      let track = allKnownTracksMap.get(url);
+      if (!track && url.startsWith('http')) {
+        const ytId = url.match(/(?:[?&]v=|youtu\.be\/)([A-Za-z0-9_-]{11})/)?.[1] || '';
+        if (ytId) {
+          track = {
+            id: 0,
+            title: 'YouTube Track',
+            artist: 'YouTube',
+            duration: '0:00',
+            url,
+            cover: `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`,
+          };
+        }
+      }
       if (track) acc.push({ track, count: count as number });
       return acc;
     }, []);

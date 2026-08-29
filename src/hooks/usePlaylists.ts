@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Playlist, Track } from '../types';
 import { loadLS, saveLS } from '../utils';
+import { dbSavePlaylist, dbDeletePlaylist } from '../services/db';
 
 export function usePlaylists(showToast?: (msg: string) => void) {
   const [playlists, setPlaylistsState] = useState<Playlist[]>(() =>
@@ -25,6 +26,7 @@ export function usePlaylists(showToast?: (msg: string) => void) {
 
   useEffect(() => {
     saveLS('vg_playlists', playlists);
+    playlists.forEach(p => dbSavePlaylist(p));
   }, [playlists]);
 
   useEffect(() => {
@@ -71,6 +73,7 @@ export function usePlaylists(showToast?: (msg: string) => void) {
     if (!playlistDeleteModal) return;
     const idsToDelete = playlistDeleteModal.ids;
     setPlaylists(p => p.filter(x => !idsToDelete.includes(x.id)));
+    idsToDelete.forEach(id => dbDeletePlaylist(id));
     if (openPlaylistId && idsToDelete.includes(openPlaylistId)) {
       setOpenPlaylistId(null);
     }

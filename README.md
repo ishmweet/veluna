@@ -61,6 +61,7 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - **Local Track Cover Art Support**, dynamically reads embedded metadata covers or cached artwork for local files
 - **Waveform Visualisation**, automatic waveform thumbnail generation for local audio tracks
 - **Metadata Editor**, edit title, artist, and album tags directly on local files with changes written to disk
+- **Batch Multi-Select & Action Bar**, select multiple tracks using `Shift+Click` and `Ctrl+Click` to batch play, batch add to playlist, or batch delete
 - Filter your library in real time, zero latency, pure in-memory search
 - Drag-to-reorder tracks, rename or delete files from the UI, open any track in your system file manager
 - Export and import playlists in standard **M3U format**
@@ -79,6 +80,7 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - **Collapsible Sidebar Playlists** with clean active indicators, track counts, and outward-expanding action menus
 - **Smart Duplicate Finder**, detects and highlights duplicate tracks in playlists with one-click batch removal (`Remove All`)
 - **Bulk Tag Editor**, mass update Artist, Album, Genre, and Year metadata across entire playlists at once
+- **Batch Actions**, multi-select items with floating action toolbar to add to another playlist, download in bulk, or remove
 - **Search within a playlist**, filter tracks by title or artist in real time
 - **Liked Songs**, built-in smart playlist. Heart any track anywhere in the app to save it
 - **Import from Spotify**, export your Spotify playlist as a CSV via [exportify.net](https://exportify.net), upload it, and Veluna matches each track against YouTube with a live progress feed
@@ -99,7 +101,7 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - **A-B Loop**, loop any segment continuously until cleared
 - **Bookmarks**, save one position per track, restored on next play
 - **Continue Where Left Off**, saves position every 5 seconds per track
-- **Next-track prefetching** for gapless transitions
+- **Audio Caching & Stream Prefetching**, next-track prefetching for gapless transitions with disk limits and auto-cleaner
 - **EBU R128 Loudness Normalisation** and **Skip Silence** filters
 - **3-Band Equalizer**, real-time bass, mid, and treble adjustment applied live
 
@@ -113,11 +115,16 @@ There's no account system, no telemetry, and no ads. It runs identically on Linu
 - Interactive buttons for "Listen on YouTube" and "View on GitHub"
 - Live progress synchronization on play, seek, and track switches
 
-### 🎧 Last.fm & ListenBrainz Scrobbling
-- **Now Playing Updates**, automatically updates your active listening status on both Last.fm and ListenBrainz profiles as soon as a track begins
+### 🎧 Last.fm Scrobbling
+- **Now Playing Updates**, automatically updates your active listening status on your Last.fm profile as soon as a track begins
 - **Smart 50% Scrobbling**, automatically submits standard scrobbles once 50% of the track length (or 4 minutes) is played, with anti-spam duration filters
-- **Instant Connection**, connect to ListenBrainz with a single User Token, or connect to Last.fm via Session Key with built-in or custom API credentials
+- **Seamless Authorization**, 1-click connect & authorize flow directly retrieves your authentic username and session key
 - **Live Connection Tester**, built-in verification tool confirms account connectivity directly within the Settings menu
+
+### 🌐 Network, Proxy & Custom Mirror Instances
+- **Proxy Support**: Configure custom HTTP, HTTPS, or SOCKS5 proxies for streaming and downloads
+- **Custom Mirrors**: Use private or alternative Invidious and Piped instances for zero YouTube rate-limiting
+- **Live Connection Test**: Verify custom endpoints with one click directly inside Settings
 
 ### 🖥️ System Tray *(optional)*
 - Left-click to show/hide the window; tray menu with Play/Pause, Next, Previous, Show, Quit
@@ -182,7 +189,8 @@ Available on every track and playlist: Play, Add to Queue, Add to Playlist, Down
 - **Searchable Settings Engine**: Real-time per-card search filtering shows only the exact setting you are looking for
 - **Downloads**: audio quality, format, destination folder, embed thumbnail, duplicate detection
 - **Playback**: loudness normalization, skip silence, autoplay recommendations, 3-band equalizer, crossfade duration
-- **Integrations**: Discord Rich Presence, primary lyrics source (lrclib / Musixmatch / NetEase), Last.fm & ListenBrainz scrobbling
+- **Integrations**: Discord Rich Presence, primary lyrics source (lrclib / Musixmatch / NetEase), Last.fm scrobbling
+- **Network & Proxy**: proxy configuration (HTTP/HTTPS/SOCKS5), custom Invidious/Piped mirrors with connection test
 - **Appearance & Performance**: curated themes, custom accent and background color, default startup view, system tray toggle, **UI Scale** (-5 to +5), and Low-Spec / Performance Mode
 - **Storage & Cache**: toggle stream prefetching & audio caching, set auto-cleaner disk limits (500MB to Unlimited), one-click cache purge, backup location, create/restore backup, reset app data
 - **Updates**: automatic update check against GitHub Releases
@@ -329,6 +337,7 @@ veluna/
 │   │   │   ├── PlaylistsView.tsx     # Playlist grid/list view, track management & multi-select
 │   │   │   ├── StatsView.tsx         # Listening analytics, activity graphs & top artists/tracks
 │   │   │   └── LyricsView.tsx        # Full-screen synchronized lyrics view with ambient backdrop
+│   │   ├── BatchActionBar.tsx        # Multi-select floating toolbar for batch playlist & library operations
 │   │   ├── DownloadsPanel.tsx        # Offline library scanner, folder picker & metadata tagger
 │   │   ├── Modals.tsx                # Spotify CSV, YouTube URL & M3U playlist import dialogs
 │   │   ├── SettingsPanel.tsx         # Audio filters, EQ, themes, low-spec mode & backups
@@ -342,14 +351,16 @@ veluna/
 │   │   ├── useAudioPlayer.ts         # mpv IPC client, crossfade timers & playback lifecycle
 │   │   ├── useListeningStats.ts      # Local analytics accumulator, play counts & time history
 │   │   ├── useLyrics.ts              # Multi-source LRC lyrics fetcher & auto-scroll synchronizer
+│   │   ├── useMultiSelect.ts         # Shift-click range & Ctrl-click multi-track selection manager
 │   │   ├── usePlaylists.ts           # Playlist state management & localStorage persistence
 │   │   ├── useQueue.ts               # Persistent playback queue with contextual autoplays
-│   │   ├── useScrobbler.ts           # Last.fm & ListenBrainz 50% threshold scrobble scheduler
+│   │   ├── useScrobbler.ts           # Last.fm 50% threshold scrobble scheduler & Now Playing
 │   │   ├── useSearch.ts              # Dual-tab YouTube search & LRU query history cache
 │   │   ├── useTheme.ts               # Theme palette injector & Low-Spec ECO mode manager
 │   │   └── useToast.ts               # Notification toast dispatcher
 │   ├── services/
-│   │   └── scrobbler.ts              # Last.fm 2.0 API (MD5 signed) & ListenBrainz HTTP clients
+│   │   ├── db.ts                     # Local IndexedDB cache for artwork and waveform peaks
+│   │   └── scrobbler.ts              # Last.fm 2.0 API (MD5 signed) HTTP client & session auth
 │   ├── utils/
 │   │   └── md5.ts                    # Pure TypeScript MD5 cryptographic hashing utility
 │   ├── App.tsx                       # Root view router, global keybindings & background sync
@@ -360,6 +371,11 @@ veluna/
 │   └── main.tsx                      # React 19 application entry point
 ├── src-tauri/
 │   ├── src/
+│   │   ├── cache.rs                  # Audio stream prefetcher, cache manager & disk auto-cleaner
+│   │   ├── db.rs                     # Native SQLite persistence & library state helpers
+│   │   ├── downloader.rs             # Asynchronous multi-format yt-dlp download pipeline
+│   │   ├── metadata.rs               # ffprobe/ffmpeg audio tag extraction & waveform generator
+│   │   ├── tray.rs                   # System tray icon, window toggle & media control menu
 │   │   └── main.rs                   # Rust backend: mpv IPC, yt-dlp pipe, MPRIS2 & Discord RPC
 │   ├── Cargo.toml                    # Rust dependencies (Tauri v2, tokio, discord-rpc, zbus)
 │   └── tauri.conf.json               # Window dimensions, CSP policies & native bundle configs
@@ -398,6 +414,7 @@ All application state is stored locally in the webview's `localStorage` under `v
 | YouTube search / stream | When you search or play | Via yt-dlp |
 | YouTube thumbnail images | When displaying track art | Direct img src |
 | lrclib / Musixmatch / NetEase | When lyrics are opened | Synced lyrics fetch |
+| Last.fm 2.0 API | When Last.fm is enabled | Now Playing & track scrobbles |
 | GitHub Releases API | Once on startup | Update check |
 
 No usage data, crash reports, or analytics are ever collected or transmitted. That's not a policy that could change one day. There's simply no code path that sends it anywhere.

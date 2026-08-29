@@ -3,17 +3,15 @@ set -euo pipefail
 
 ROOT_DIR="$(pwd)"
 
-# Determine version: argument > package.json > fallback
 VERSION="${1:-}"
 if [ -z "${VERSION}" ]; then
   if [ -f "package.json" ]; then
-    VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.3")
+    VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "0.1.4")
   else
-    VERSION="0.1.3"
+    VERSION="0.1.4"
   fi
 fi
 
-# Strip leading 'v' if present (e.g. v0.1.3 -> 0.1.3)
 VERSION="${VERSION#v}"
 
 BINARY_PATH="src-tauri/target/release/veluna"
@@ -41,15 +39,12 @@ mkdir -p "${PKG_DIR}/usr/share/icons/hicolor/128x128/apps"
 mkdir -p "${PKG_DIR}/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "${PKG_DIR}/usr/share/licenses/veluna"
 
-# 1. Install binary
 install -Dm755 "${BINARY_PATH}" "${PKG_DIR}/usr/bin/veluna"
 
-# 2. Install desktop entry
 if [ -f "packaging/veluna.desktop" ]; then
   install -Dm644 "packaging/veluna.desktop" "${PKG_DIR}/usr/share/applications/veluna.desktop"
 fi
 
-# 3. Install icons
 if [ -f "src-tauri/icons/32x32.png" ]; then
   install -Dm644 "src-tauri/icons/32x32.png" "${PKG_DIR}/usr/share/icons/hicolor/32x32/apps/veluna.png"
 fi
@@ -60,17 +55,14 @@ if [ -f "src-tauri/icons/128x128@2x.png" ]; then
   install -Dm644 "src-tauri/icons/128x128@2x.png" "${PKG_DIR}/usr/share/icons/hicolor/256x256/apps/veluna.png"
 fi
 
-# 4. Install license
 if [ -f "LICENSE" ]; then
   install -Dm644 "LICENSE" "${PKG_DIR}/usr/share/licenses/veluna/LICENSE"
 fi
 
-# Compute package size in bytes
 PKG_SIZE=$(du -sb "${PKG_DIR}" | awk '{print $1}')
 BUILD_DATE=$(date +%s)
 
-# 5. Generate .PKGINFO
-cat <<EOF > "${PKG_DIR}/.PKGINFO"
+cat <<EOF >"${PKG_DIR}/.PKGINFO"
 pkgname = veluna
 pkgbase = veluna
 pkgver = ${VERSION}-1
@@ -90,7 +82,6 @@ depend = gtk3
 depend = hicolor-icon-theme
 EOF
 
-# 6. Generate .MTREE
 if command -v bsdtar >/dev/null 2>&1; then
   TAR_CMD="bsdtar"
 else
@@ -104,11 +95,10 @@ fi
 OUTPUT_FILE="veluna-${VERSION}-1-x86_64.pkg.tar.zst"
 OUTPUT_PATH="${ROOT_DIR}/${OUTPUT_FILE}"
 
-# 7. Compress into .pkg.tar.zst using zstd
 if [ -f "${PKG_DIR}/.MTREE" ]; then
-  (cd "${PKG_DIR}" && "${TAR_CMD}" -cf - .PKGINFO .MTREE usr | zstd -c -T0 -19 - > "${OUTPUT_PATH}")
+  (cd "${PKG_DIR}" && "${TAR_CMD}" -cf - .PKGINFO .MTREE usr | zstd -c -T0 -19 - >"${OUTPUT_PATH}")
 else
-  (cd "${PKG_DIR}" && "${TAR_CMD}" -cf - .PKGINFO usr | zstd -c -T0 -19 - > "${OUTPUT_PATH}")
+  (cd "${PKG_DIR}" && "${TAR_CMD}" -cf - .PKGINFO usr | zstd -c -T0 -19 - >"${OUTPUT_PATH}")
 fi
 
 echo "==> Successfully created Arch Linux package: ${OUTPUT_FILE}"

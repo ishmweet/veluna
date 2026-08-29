@@ -42,6 +42,7 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
     setLyricsLoading(true);
     setLyricsData(null);
 
+    const activeUrl = currentTrack.url;
     invoke<string>('fetch_lyrics', {
       title,
       artist,
@@ -50,6 +51,7 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
       source: lyricsSource,
     })
       .then(raw => {
+        if (currentTrack?.url !== activeUrl) return;
         try {
           const lines: LyricLine[] = JSON.parse(raw);
           setLyricsData({ lines, title, artist });
@@ -57,8 +59,16 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
           setLyricsData({ lines: [], title, artist });
         }
       })
-      .catch(() => setLyricsData({ lines: [], title, artist }))
-      .finally(() => setLyricsLoading(false));
+      .catch(() => {
+        if (currentTrack?.url === activeUrl) {
+          setLyricsData({ lines: [], title, artist });
+        }
+      })
+      .finally(() => {
+        if (currentTrack?.url === activeUrl) {
+          setLyricsLoading(false);
+        }
+      });
   }, [currentTrack, trackDurationSeconds, lyricsSource]);
 
   useEffect(() => {

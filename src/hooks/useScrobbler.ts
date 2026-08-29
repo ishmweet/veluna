@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Track } from '../types';
 import { loadLS, saveLS } from '../utils';
 import {
-  submitListenBrainzNowPlaying,
-  submitListenBrainzScrobble,
   submitLastFmNowPlaying,
   submitLastFmScrobble,
   DEFAULT_LASTFM_API_KEY,
@@ -23,18 +21,7 @@ export function useScrobbler({
   isPlaying,
   progressSeconds,
   trackDurationSeconds,
-  showToast,
 }: UseScrobblerProps) {
-  const [listenbrainzEnabled, setListenbrainzEnabledState] = useState<boolean>(() =>
-    loadLS('vg_lb_enabled', false)
-  );
-  const [listenbrainzToken, setListenbrainzTokenState] = useState<string>(() =>
-    loadLS('vg_lb_token', '')
-  );
-  const [listenbrainzUsername, setListenbrainzUsernameState] = useState<string>(() =>
-    loadLS('vg_lb_username', '')
-  );
-
   const [lastfmEnabled, setLastfmEnabledState] = useState<boolean>(() =>
     loadLS('vg_lfm_enabled', false)
   );
@@ -50,21 +37,6 @@ export function useScrobbler({
   const [lastfmUsername, setLastfmUsernameState] = useState<string>(() =>
     loadLS('vg_lfm_username', '')
   );
-
-  const setListenbrainzEnabled = useCallback((v: boolean) => {
-    setListenbrainzEnabledState(v);
-    saveLS('vg_lb_enabled', v);
-  }, []);
-
-  const setListenbrainzToken = useCallback((t: string) => {
-    setListenbrainzTokenState(t);
-    saveLS('vg_lb_token', t);
-  }, []);
-
-  const setListenbrainzUsername = useCallback((u: string) => {
-    setListenbrainzUsernameState(u);
-    saveLS('vg_lb_username', u);
-  }, []);
 
   const setLastfmEnabled = useCallback((v: boolean) => {
     setLastfmEnabledState(v);
@@ -124,15 +96,7 @@ export function useScrobbler({
     hasSentNowPlayingRef.current = true;
     const dur = trackDurationSeconds || 0;
 
-    if (listenbrainzEnabled && listenbrainzToken.trim()) {
-      submitListenBrainzNowPlaying(listenbrainzToken, currentTrack, dur).then(res => {
-        if (!res.success && res.error) {
-          console.warn('[ListenBrainz Now Playing Error]:', res.error);
-        }
-      });
-    }
-
-    if (lastfmEnabled && lastfmSessionKey.trim()) {
+    if (lastfmEnabled && lastfmApiKey.trim() && lastfmApiSecret.trim() && lastfmSessionKey.trim()) {
       submitLastFmNowPlaying(lastfmSessionKey, currentTrack, dur, lastfmApiKey, lastfmApiSecret).then(res => {
         if (!res.success && res.error) {
           console.warn('[Last.fm Now Playing Error]:', res.error);
@@ -143,8 +107,6 @@ export function useScrobbler({
     isPlaying,
     currentTrack,
     trackDurationSeconds,
-    listenbrainzEnabled,
-    listenbrainzToken,
     lastfmEnabled,
     lastfmSessionKey,
     lastfmApiKey,
@@ -164,20 +126,10 @@ export function useScrobbler({
       hasScrobbledRef.current = true;
       const startTime = Math.floor(Date.now() / 1000) - Math.floor(progressSeconds);
 
-      if (listenbrainzEnabled && listenbrainzToken.trim()) {
-        submitListenBrainzScrobble(listenbrainzToken, currentTrack, dur, startTime).then(res => {
-          if (!res.success && res.error) {
-            console.warn('[ListenBrainz Scrobble Error]:', res.error);
-            showToast?.(`ListenBrainz scrobble failed: ${res.error}`);
-          }
-        });
-      }
-
-      if (lastfmEnabled && lastfmSessionKey.trim()) {
+      if (lastfmEnabled && lastfmApiKey.trim() && lastfmApiSecret.trim() && lastfmSessionKey.trim()) {
         submitLastFmScrobble(lastfmSessionKey, currentTrack, dur, startTime, lastfmApiKey, lastfmApiSecret).then(res => {
           if (!res.success && res.error) {
             console.warn('[Last.fm Scrobble Error]:', res.error);
-            showToast?.(`Last.fm scrobble failed: ${res.error}`);
           }
         });
       }
@@ -187,22 +139,13 @@ export function useScrobbler({
     currentTrack,
     progressSeconds,
     trackDurationSeconds,
-    listenbrainzEnabled,
-    listenbrainzToken,
     lastfmEnabled,
     lastfmSessionKey,
     lastfmApiKey,
     lastfmApiSecret,
-    showToast,
   ]);
 
   return {
-    listenbrainzEnabled,
-    setListenbrainzEnabled,
-    listenbrainzToken,
-    setListenbrainzToken,
-    listenbrainzUsername,
-    setListenbrainzUsername,
     lastfmEnabled,
     setLastfmEnabled,
     lastfmSessionKey,

@@ -103,6 +103,10 @@ export const ThemedSelect = ({ value, options, onChange, icon, minWidth, buttonS
               onChange(opt.value);
               setOpen(false);
             }}
+            onClick={() => {
+              onChange(opt.value);
+              setOpen(false);
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',

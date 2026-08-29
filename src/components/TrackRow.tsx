@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Music, Heart, Download, X, MoreVertical } from 'lucide-react';
+import { Play, Music, Heart, Download, X, MoreVertical, CheckSquare, Square } from 'lucide-react';
 import { Track } from '../types';
 import { cleanArtist, getTrackGradient } from '../utils';
 
@@ -14,35 +14,65 @@ export type TrackRowProps = {
   isPlaying: boolean;
   isLiked: boolean;
   isDownloading: number;
-  onPlay: () => void;
+  isSelected?: boolean;
+  isMultiSelectActive?: boolean;
+  onPlay: (e?: React.MouseEvent) => void;
   onHoverEnter: () => void;
   onHoverLeave: () => void;
   onLike: () => void;
   onDownload: () => void;
   onCtx: (e: React.MouseEvent) => void;
+  onSelectToggle?: (e: React.MouseEvent) => void;
 };
 
 export const TrackRow = React.memo(({
   track, index, showRemove, onRemove,
   isActive, isHovered, isLoadingTrack, isPlaying, isLiked, isDownloading,
-  onPlay, onHoverEnter, onHoverLeave, onLike, onDownload, onCtx,
+  isSelected, isMultiSelectActive,
+  onPlay, onHoverEnter, onHoverLeave, onLike, onDownload, onCtx, onSelectToggle,
 }: TrackRowProps) => (
   <div
-    className={`v-track${isActive ? ' v-track--active' : ''}`}
-    onClick={onPlay} onContextMenu={onCtx} onMouseEnter={onHoverEnter} onMouseLeave={onHoverLeave}
+    className={`v-track${isActive ? ' v-track--active' : ''}${isSelected ? ' v-track--selected' : ''}`}
+    style={isSelected ? { background: 'rgba(255, 255, 255, 0.08)', borderColor: 'var(--v-bdr3)' } : undefined}
+    onClick={e => {
+      if (e.shiftKey || e.ctrlKey || e.metaKey || (isMultiSelectActive && onSelectToggle)) {
+        e.preventDefault();
+        onSelectToggle?.(e);
+      } else {
+        onPlay(e);
+      }
+    }}
+    onContextMenu={onCtx}
+    onMouseEnter={onHoverEnter}
+    onMouseLeave={onHoverLeave}
   >
-    <div className="v-track__num">
-      {isActive && isLoadingTrack && !isPlaying
-        ? <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
-            <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
-            <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
-          </svg>
-        : isActive && isPlaying
-          ? <div style={{display:'flex',gap:'2px',alignItems:'flex-end',height:'14px',justifyContent:'center'}}>
-              {[100,65,80].map((h,i) => <div key={i} style={{width:'2.5px',background:'#9e9894',borderRadius:'1px',height:`${h}%`,animation:`barBounce ${0.7+i*0.12}s ease-in-out ${i*110}ms infinite`,transformOrigin:'bottom'}} />)}
-            </div>
-          : isHovered ? <Play size={13} style={{fill:'#e2ddd9',color:'#e2ddd9',margin:'0 auto'}} />
-          : index + 1}
+    <div
+      className="v-track__num"
+      onClick={e => {
+        if (onSelectToggle) {
+          e.stopPropagation();
+          onSelectToggle(e);
+        }
+      }}
+    >
+      {isSelected ? (
+        <CheckSquare size={13} style={{ color: 'var(--v-accent)', margin: '0 auto' }} />
+      ) : isMultiSelectActive ? (
+        <Square size={13} style={{ color: '#5c5755', margin: '0 auto' }} />
+      ) : isActive && isLoadingTrack && !isPlaying ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
+          <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
+          <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round"/>
+        </svg>
+      ) : isActive && isPlaying ? (
+        <div style={{display:'flex',gap:'2px',alignItems:'flex-end',height:'14px',justifyContent:'center'}}>
+          {[100,65,80].map((h,i) => <div key={i} style={{width:'2.5px',background:'#9e9894',borderRadius:'1px',height:`${h}%`,animation:`barBounce ${0.7+i*0.12}s ease-in-out ${i*110}ms infinite`,transformOrigin:'bottom'}} />)}
+        </div>
+      ) : isHovered ? (
+        <Play size={13} style={{fill:'#e2ddd9',color:'#e2ddd9',margin:'0 auto'}} />
+      ) : (
+        index + 1
+      )}
     </div>
     <div className="v-track__art" style={{
       position: 'relative',

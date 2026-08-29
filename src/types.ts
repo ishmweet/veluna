@@ -5,6 +5,7 @@ export type Track = {
   duration: string;
   url: string;
   cover: string;
+  album?: string;
   mediaType?: 'music' | 'video';
 };
 
@@ -72,4 +73,4 @@ export type ActiveDownload = {
   startedAt: number;
 };
 export type BatchProgress = { index: number; total: number; title: string; success: boolean; error?: string };
-export type SettingsTab = 'updates' | 'downloads' | 'playback' | 'storage' | 'appearance' | 'integrations';
+export type SettingsTab = 'playback' | 'appearance' | 'downloads' | 'integrations' | 'network' | 'storage' | 'updates';
