@@ -1,5 +1,7 @@
 export function parseDurationToSeconds(d: string): number {
+  if (!d || typeof d !== 'string') return 0;
   const p = d.split(':').map(Number);
+  if (p.some(isNaN)) return 0;
   if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
   if (p.length === 2) return p[0] * 60 + p[1];
   return p[0] || 0;
@@ -42,8 +44,15 @@ export const getTrackGradient = (title?: string | null, artist?: string | null):
 };
 
 export function formatTime(s: number): string {
-  const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
+  if (!Number.isFinite(s) || s <= 0) return '0:00';
+  const total = Math.floor(s);
+  const hrs = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 export function formatBytes(b: number): string {

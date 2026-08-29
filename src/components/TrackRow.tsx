@@ -92,7 +92,7 @@ export const TrackRow = React.memo(({
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            transform: track.cover.includes('ytimg.com') || track.cover.includes('googleusercontent.com') ? 'scale(1.35)' : 'none'
+            transform: typeof track.cover === 'string' && (track.cover.includes('ytimg.com') || track.cover.includes('googleusercontent.com')) ? 'scale(1.35)' : 'none'
           }}
           onError={e => { e.currentTarget.style.display = 'none'; }}
           loading="lazy"

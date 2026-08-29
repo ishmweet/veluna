@@ -193,7 +193,8 @@ export const StatsView: React.FC<StatsViewProps> = ({
   else if (maxHour >= 17 && maxHour < 22) timeOfDay = 'Evening';
 
   const uniqueArtists = new Set(targetHistory.map(ev => allKnownTracksMap.get(ev.url)?.artist).filter(Boolean));
-  const loyaltyIndex = targetHistory.length > 0 ? (targetHistory.length / new Set(targetHistory.map(ev => ev.url)).size).toFixed(1) : '0';
+  const uniqueTracksCount = new Set(targetHistory.map(ev => ev.url)).size;
+  const loyaltyIndex = targetHistory.length > 0 && uniqueTracksCount > 0 ? (targetHistory.length / uniqueTracksCount).toFixed(1) : '1.0';
 
   const hasAnyStats = totalPlays > 0 || totalSecs > 0 || Object.keys(dailyPlays).some(k => (dailyPlays[k] as number) > 0);
   if (!hasAnyStats) {
