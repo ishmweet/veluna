@@ -254,7 +254,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
               value={searchQuery} readOnly={isSearching}
               onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => !isSearching && setShowHistory(searchHistory.length > 0)}
-              onKeyDown={e => { if (e.key === 'Enter') { setShowHistory(false); searchMusic(); } if (e.key === 'Escape') setShowHistory(false); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  setShowHistory(false);
+                  searchMusic();
+                }
+                if (e.key === 'Escape') {
+                  setShowHistory(false);
+                  e.currentTarget.blur();
+                }
+              }}
               style={{width:'100%',height:'42px',background:'var(--v-bg2)',color:'#e2ddd9',border:`1px solid ${isSearching?'rgba(226,221,217,0.15)':'var(--v-bdr2)'}`,borderRadius:'21px',paddingTop:0,paddingBottom:0,paddingLeft:'44px',paddingRight:searchQuery?'38px':'16px',fontSize:'13.5px',outline:'none',opacity:isSearching?0.5:1,cursor:isSearching?'not-allowed':'text',transition:'border-color .15s',boxSizing:'border-box'}}
             />
             {searchQuery && !isSearching && (

@@ -527,6 +527,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                           type="text"
                           value={playlistSearchQ}
                           onChange={e => setPlaylistSearchQ(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur(); }}
                           placeholder="Filter songs in playlist..."
                           style={{
                             width:"100%",

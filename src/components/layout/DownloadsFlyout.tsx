@@ -26,7 +26,11 @@ export const DownloadsFlyout: React.FC<DownloadsFlyoutProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (flyoutRef.current && !flyoutRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (target && target.closest?.('[data-downloads-trigger="true"]')) {
+        return;
+      }
+      if (flyoutRef.current && !flyoutRef.current.contains(target as Node)) {
         onClose();
       }
     };

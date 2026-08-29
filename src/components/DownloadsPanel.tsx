@@ -349,6 +349,7 @@ export function DownloadsPanel({
             <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: searchQ ? "var(--v-accent)" : "var(--v-fg3)", pointerEvents: "none", transition: "color 0.2s" }} />
             <input ref={searchRef} type="text" placeholder="Filter offline tracks…" value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur(); }}
               style={{
                 width: "100%",
                 height: "36px",

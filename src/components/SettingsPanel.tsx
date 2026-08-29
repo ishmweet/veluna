@@ -313,6 +313,7 @@ export function SettingsPanel({
               placeholder="Find a setting..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') e.currentTarget.blur(); }}
               style={{
                 width: "100%",
                 padding: "8px 28px 8px 30px",

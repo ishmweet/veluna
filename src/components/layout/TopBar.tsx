@@ -18,7 +18,7 @@ interface TopBarProps {
   resetSearch: () => void;
   activeDownloads?: ActiveDownload[];
   isDownloadsFlyoutOpen?: boolean;
-  setIsDownloadsFlyoutOpen?: (v: boolean) => void;
+  setIsDownloadsFlyoutOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   downloadPulseKey?: number;
   onOpenShortcuts?: () => void;
 }
@@ -102,7 +102,8 @@ export const TopBar: React.FC<TopBarProps> = ({
           return (
             <button
               key={downloadPulseKey}
-              onClick={() => setIsDownloadsFlyoutOpen?.(!isDownloadsFlyoutOpen)}
+              data-downloads-trigger="true"
+              onClick={() => setIsDownloadsFlyoutOpen?.(prev => !prev)}
               className={downloadPulseKey ? 'animate-dl-pulse' : ''}
               style={{
                 position: "fixed",
