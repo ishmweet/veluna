@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Veluna",
+  "productName": "veluna",
   "version": "0.1.4",
   "identifier": "com.veluna.player",
   "build": {
