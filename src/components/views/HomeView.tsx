@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -275,59 +275,93 @@ export const HomeView: React.FC<HomeViewProps> = ({
   });
   const getTrackCover = customGetTrackCover || ((track: Track | null | undefined) => track?.cover || '');
 
-  const localAsTrack: Track[] = localTracks.map((lt, i) => ({
-    id: -(i + 1),
-    title: lt.title,
-    artist: lt.artist || '',
-    url: `local://${lt.path}`,
-    cover: lt.cover || '',
-    duration: lt.duration || '',
-  }));
+  const localAsTrack: Track[] = useMemo(() => {
+    return localTracks.map((lt, i) => ({
+      id: -(i + 1),
+      title: lt.title,
+      artist: lt.artist || '',
+      url: `local://${lt.path}`,
+      cover: lt.cover || '',
+      duration: lt.duration || '',
+    }));
+  }, [localTracks]);
 
-  const allTracksForGenre = [
-    ...new Map(
-      [
-        ...quickPicks,
-        ...playHistory,
-        ...localAsTrack,
-        ...playlists.flatMap(p => p?.tracks || []),
-      ]
-        .filter((t): t is Track => Boolean(t && t.url))
-        .map(t => [t.url, t])
-    ).values(),
-  ];
-
-  const genreScores: Record<string, { score: number; tracks: Track[] }> = {};
-  GENRES.forEach(g => {
-    genreScores[g.id] = { score: 0, tracks: [] };
-  });
-
-  allTracksForGenre.forEach(track => {
-    const playCount = playCounts[track.url] || 1;
-    GENRES.forEach(g => {
-      if (matchGenreTrack(track, g)) {
-        genreScores[g.id].score += playCount;
-        if (!genreScores[g.id].tracks.find(t => t.url === track.url)) {
-          genreScores[g.id].tracks.push(track);
+  const allTracksForGenre = useMemo(() => {
+    const map = new Map<string, Track>();
+    for (let i = 0; i < quickPicks.length; i++) {
+      const t = quickPicks[i];
+      if (t?.url) map.set(t.url, t);
+    }
+    for (let i = 0; i < playHistory.length; i++) {
+      const t = playHistory[i];
+      if (t?.url) map.set(t.url, t);
+    }
+    for (let i = 0; i < localAsTrack.length; i++) {
+      const t = localAsTrack[i];
+      if (t?.url) map.set(t.url, t);
+    }
+    for (let i = 0; i < playlists.length; i++) {
+      const p = playlists[i];
+      if (p?.tracks) {
+        for (let j = 0; j < p.tracks.length; j++) {
+          const t = p.tracks[j];
+          if (t?.url) map.set(t.url, t);
         }
       }
-    });
-  });
+    }
+    return Array.from(map.values());
+  }, [quickPicks, playHistory, localAsTrack, playlists]);
 
-  GENRES.forEach(g => {
-    genreScores[g.id].tracks.sort((a, b) => (playCounts[b.url] || 0) - (playCounts[a.url] || 0));
-  });
+  const { genreScores, activeGenres } = useMemo(() => {
+    const scores: Record<string, { score: number; tracks: Track[] }> = {};
+    const trackSetMap: Record<string, Set<string>> = {};
+    for (let i = 0; i < GENRES.length; i++) {
+      const g = GENRES[i];
+      scores[g.id] = { score: 0, tracks: [] };
+      trackSetMap[g.id] = new Set<string>();
+    }
 
-  const activeGenres = GENRES.filter(g => genreScores[g.id].tracks.length >= 2)
-    .sort((a, b) => genreScores[b.id].score - genreScores[a.id].score)
-    .slice(0, 5);
+    for (let i = 0; i < allTracksForGenre.length; i++) {
+      const track = allTracksForGenre[i];
+      const playCount = playCounts[track.url] || 1;
+      for (let j = 0; j < GENRES.length; j++) {
+        const g = GENRES[j];
+        if (matchGenreTrack(track, g)) {
+          scores[g.id].score += playCount;
+          if (!trackSetMap[g.id].has(track.url)) {
+            trackSetMap[g.id].add(track.url);
+            scores[g.id].tracks.push(track);
+          }
+        }
+      }
+    }
 
-  const topTracks = Object.entries(playCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([url]) => allTracksForGenre.find(t => t.url === url))
-    .filter(Boolean) as Track[];
-  const recentHistory = playHistory.slice(0, 5);
+    for (let i = 0; i < GENRES.length; i++) {
+      const g = GENRES[i];
+      scores[g.id].tracks.sort((a, b) => (playCounts[b.url] || 0) - (playCounts[a.url] || 0));
+    }
+
+    const active = GENRES.filter(g => scores[g.id].tracks.length >= 2)
+      .sort((a, b) => scores[b.id].score - scores[a.id].score)
+      .slice(0, 5);
+
+    return { genreScores: scores, activeGenres: active };
+  }, [allTracksForGenre, playCounts]);
+
+  const topTracks = useMemo(() => {
+    const trackMap = new Map(allTracksForGenre.map(t => [t.url, t]));
+    return Object.entries(playCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([url]) => trackMap.get(url))
+      .filter(Boolean) as Track[];
+  }, [allTracksForGenre, playCounts]);
+
+  const libraryTotalTrackCount = useMemo(() => {
+    return localAsTrack.length + playlists.reduce((acc, p) => acc + (p?.tracks?.length || 0), 0);
+  }, [localAsTrack, playlists]);
+
+  const recentHistory = useMemo(() => playHistory.slice(0, 5), [playHistory]);
   const hour = new Date().getHours();
   let greeting = 'Welcome back';
   if (hour < 12) {
@@ -551,7 +585,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 }}>
                   <span style={{ fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--v-fg3)', fontWeight: 700 }}>Library</span>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--v-fg)', marginTop: '2px' }}>
-                    {localAsTrack.length + playlists.reduce((acc, p) => acc + p.tracks.length, 0)} Tracks
+                    {libraryTotalTrackCount} Tracks
                   </span>
                 </div>
               </div>

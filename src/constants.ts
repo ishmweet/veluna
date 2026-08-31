@@ -6,6 +6,9 @@ export interface GenreInfo {
   genreTerms: string[];
   exclusions?: string[];
   keywords: string[];
+  compiledExclusions?: RegExp | null;
+  compiledArtists?: RegExp | null;
+  compiledTerms?: RegExp | null;
 }
 
 export const GENRES: GenreInfo[] = [
@@ -311,9 +314,19 @@ export const GENRES: GenreInfo[] = [
   },
 ];
 
-// Populate the keywords array for backwards compatibility
+function buildRegex(items?: string[]): RegExp | null {
+  if (!items || items.length === 0) return null;
+  const sorted = [...items].sort((a, b) => b.length - a.length);
+  const escaped = sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return new RegExp(`(^|[^\\p{L}\\p{N}])(?:${escaped})($|[^\\p{L}\\p{N}])`, 'ui');
+}
+
+// Pre-compile regexes on startup for sub-millisecond classification
 GENRES.forEach(g => {
   g.keywords = Array.from(new Set([...g.artists, ...g.genreTerms]));
+  g.compiledExclusions = buildRegex(g.exclusions);
+  g.compiledArtists = buildRegex(g.artists);
+  g.compiledTerms = buildRegex(g.genreTerms);
 });
 
 /**
@@ -327,7 +340,7 @@ function testBoundaryMatch(source: string, target: string): boolean {
 }
 
 /**
- * Robust genre classifier ensuring zero false positives
+ * High-performance genre classifier ensuring zero false positives
  */
 export function matchGenreTrack(
   track: { title?: string; artist?: string },
@@ -336,45 +349,32 @@ export function matchGenreTrack(
   if (!track) return false;
   const title = (track.title || '').trim().toLowerCase();
   const artist = (track.artist || '').trim().toLowerCase();
+  if (!title && !artist) return false;
   const fullText = `${title} ${artist}`.trim();
 
-  // 1. Check exclusions first
-  if (genre.exclusions && genre.exclusions.length > 0) {
-    for (const exc of genre.exclusions) {
-      if (testBoundaryMatch(fullText, exc)) {
-        return false;
-      }
-    }
+  // 1. Check exclusions first (1 fast regex test)
+  if (genre.compiledExclusions && genre.compiledExclusions.test(fullText)) {
+    return false;
   }
 
-  // 2. Exact or boundary match on artist list
-  if (artist && genre.artists.length > 0) {
-    for (const a of genre.artists) {
-      if (testBoundaryMatch(artist, a)) {
-        return true;
-      }
-    }
+  // 2. Exact or boundary match on artist list (1 fast regex test)
+  if (artist && genre.compiledArtists && genre.compiledArtists.test(artist)) {
+    return true;
   }
 
   // 3. Match artist mentioned in title (e.g. "Artist - Title", "Title (feat. Artist)")
-  if (title && genre.artists.length > 0) {
-    for (const a of genre.artists) {
-      if (
-        testBoundaryMatch(title, a) &&
-        (title.includes('-') || title.includes('feat') || title.includes('ft.') || title.includes('prod'))
-      ) {
-        return true;
-      }
-    }
+  if (
+    title &&
+    genre.compiledArtists &&
+    (title.includes('-') || title.includes('feat') || title.includes('ft.') || title.includes('prod')) &&
+    genre.compiledArtists.test(title)
+  ) {
+    return true;
   }
 
   // 4. Exact match on specific unambiguous genre terms in title
-  if (title && genre.genreTerms.length > 0) {
-    for (const term of genre.genreTerms) {
-      if (testBoundaryMatch(title, term)) {
-        return true;
-      }
-    }
+  if (title && genre.compiledTerms && genre.compiledTerms.test(title)) {
+    return true;
   }
 
   return false;

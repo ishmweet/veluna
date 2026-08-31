@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BarChart2, Clock, ListMusic, Music, Play } from 'lucide-react';
 import { Track, Playlist } from '../../types';
 import { GENRES, matchGenreTrack } from '../../constants';
@@ -126,23 +126,26 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const topArtists: [string, number][] = Object.entries(artistCounts)
     .sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  const genreCounts: Record<string, number> = {};
-  GENRES.forEach(g => { genreCounts[g.id] = 0; });
-  allKnownTracksMap.forEach(track => {
-    const playCount = currentPlayCounts[track.url] || 0;
-    if (playCount > 0) {
-      GENRES.forEach(g => {
-        if (matchGenreTrack(track, g)) {
-          genreCounts[g.id] += playCount;
+  const topGenres = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (let i = 0; i < GENRES.length; i++) { counts[GENRES[i].id] = 0; }
+    allKnownTracksMap.forEach(track => {
+      const playCount = currentPlayCounts[track.url] || 0;
+      if (playCount > 0) {
+        for (let i = 0; i < GENRES.length; i++) {
+          const g = GENRES[i];
+          if (matchGenreTrack(track, g)) {
+            counts[g.id] += playCount;
+          }
         }
-      });
-    }
-  });
-  const topGenres = GENRES
-    .map(g => ({ label: g.label, score: genreCounts[g.id] }))
-    .filter(g => g.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+      }
+    });
+    return GENRES
+      .map(g => ({ label: g.label, score: counts[g.id] }))
+      .filter(g => g.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+  }, [allKnownTracksMap, currentPlayCounts]);
 
   const chartDaysCount = statsTimeRange === '7days' ? 7 : 30;
   const now = new Date();
