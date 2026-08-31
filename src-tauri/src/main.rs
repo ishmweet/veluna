@@ -3535,7 +3535,13 @@ async fn download_stream_chunked(
 
 fn main() {
     #[cfg(target_os = "linux")]
-    silence_ayatana_warnings();
+    {
+        // Fix WebKitGTK Wayland crash: Error 71 (Protocol error) dispatching to Wayland display
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+        silence_ayatana_warnings();
+    }
     
     init_bin_paths();
 
