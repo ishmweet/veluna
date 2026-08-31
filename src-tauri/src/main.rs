@@ -745,56 +745,176 @@ async fn import_youtube_playlist(url: String) -> Result<String, String> {
 #[tauri::command]
 async fn import_csv_playlist(csv_content: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
-        let mut lines = csv_content.lines();
-        let header = lines.next().unwrap_or("").to_lowercase();
-        let cols: Vec<&str> = header.split(',').collect();
-        let find_col = |names: &[&str]| -> Option<usize> {
-            cols.iter().position(|c| names.iter().any(|n| c.contains(n)))
-        };
-        let title_idx  = find_col(&["track name", "title", "name"]).unwrap_or(2);
-        let artist_idx = find_col(&["artist name", "artist(s)", "artists"]).unwrap_or(4);
+        let content = csv_content.trim_start_matches('\u{feff}').trim();
+        if content.is_empty() {
+            return Err("CSV file is empty.".to_string());
+        }
 
-        let mut output = String::from("PLAYLIST:Spotify Import\n");
+        let mut rows: Vec<Vec<String>> = Vec::new();
+        let mut current_row: Vec<String> = Vec::new();
+        let mut current_field = String::new();
+        let mut in_quotes = false;
+        let mut chars = content.chars().peekable();
+
+        while let Some(ch) = chars.next() {
+            match ch {
+                '"' => {
+                    if in_quotes && chars.peek() == Some(&'"') {
+                        chars.next();
+                        current_field.push('"');
+                    } else {
+                        in_quotes = !in_quotes;
+                    }
+                }
+                ',' if !in_quotes => {
+                    current_row.push(current_field.trim().to_string());
+                    current_field.clear();
+                }
+                '\r' if !in_quotes => {
+                    if chars.peek() == Some(&'\n') {
+                        chars.next();
+                    }
+                    current_row.push(current_field.trim().to_string());
+                    current_field.clear();
+                    if !current_row.iter().all(|f| f.is_empty()) {
+                        rows.push(std::mem::take(&mut current_row));
+                    } else {
+                        current_row.clear();
+                    }
+                }
+                '\n' if !in_quotes => {
+                    current_row.push(current_field.trim().to_string());
+                    current_field.clear();
+                    if !current_row.iter().all(|f| f.is_empty()) {
+                        rows.push(std::mem::take(&mut current_row));
+                    } else {
+                        current_row.clear();
+                    }
+                }
+                _ => {
+                    current_field.push(ch);
+                }
+            }
+        }
+
+        if !current_field.is_empty() || !current_row.is_empty() {
+            current_row.push(current_field.trim().to_string());
+            if !current_row.iter().all(|f| f.is_empty()) {
+                rows.push(current_row);
+            }
+        }
+
+        if rows.is_empty() {
+            return Err("No data rows found in CSV.".to_string());
+        }
+
+        let first_row = &rows[0];
+        let normalized_headers: Vec<String> = first_row
+            .iter()
+            .map(|h| h.to_lowercase().replace(['"', '\''], "").trim().to_string())
+            .collect();
+
+        let mut title_idx: Option<usize> = None;
+        let mut artist_idx: Option<usize> = None;
+        let mut playlist_name: Option<String> = None;
+
+        // 1. Exact priority checks for Track Name / Title
+        for (i, h) in normalized_headers.iter().enumerate() {
+            match h.as_str() {
+                "track name" | "track title" | "song title" | "song name" | "master_metadata_track_name" => {
+                    title_idx = Some(i);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        if title_idx.is_none() {
+            for (i, h) in normalized_headers.iter().enumerate() {
+                if h == "title" || h == "track" || h == "song" {
+                    title_idx = Some(i);
+                    break;
+                }
+            }
+        }
+        if title_idx.is_none() {
+            for (i, h) in normalized_headers.iter().enumerate() {
+                if (h.contains("track") || (h.contains("title") && !h.contains("album"))) && !h.contains("artist") {
+                    title_idx = Some(i);
+                    break;
+                }
+            }
+        }
+
+        // 2. Exact priority checks for Artist Name
+        for (i, h) in normalized_headers.iter().enumerate() {
+            match h.as_str() {
+                "artist name(s)" | "artist name" | "artist(s)" | "artists" | "artist" | "track artist" | "master_metadata_album_artist_name" => {
+                    artist_idx = Some(i);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        if artist_idx.is_none() {
+            for (i, h) in normalized_headers.iter().enumerate() {
+                if h.contains("artist") || h.contains("performer") || h.contains("creator") || h.contains("author") {
+                    artist_idx = Some(i);
+                    break;
+                }
+            }
+        }
+
+        // 3. Check for Playlist Name header
+        for (i, h) in normalized_headers.iter().enumerate() {
+            if h == "playlist name" || h == "playlist" {
+                if let Some(second_row) = rows.get(1) {
+                    if let Some(val) = second_row.get(i) {
+                        if !val.trim().is_empty() {
+                            playlist_name = Some(val.trim().to_string());
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        let is_header_detected = title_idx.is_some() || artist_idx.is_some();
+        let data_start = if is_header_detected { 1 } else { 0 };
+
+        let final_title_idx = title_idx.unwrap_or(0);
+        let final_artist_idx = artist_idx.unwrap_or(if first_row.len() >= 2 { 1 } else { 0 });
+
+        let mut output = String::new();
+        if let Some(name) = playlist_name {
+            output.push_str(&format!("PLAYLIST:{}\n", name));
+        } else {
+            output.push_str("PLAYLIST:Spotify Import\n");
+        }
+
         let mut count = 0usize;
-        for line in lines {
-            if line.trim().is_empty() { continue; }
-            let fields = parse_csv_row(line);
-            let title  = fields.get(title_idx).map(|s| s.trim().trim_matches('"').trim()).unwrap_or("").to_string();
-            let artist = fields.get(artist_idx).map(|s| s.trim().trim_matches('"').trim()).unwrap_or("").to_string();
-            if title.is_empty() { continue; }
-            output.push_str(&format!("{}===={}\n", title, artist));
+        for row in rows.iter().skip(data_start) {
+            let title = row.get(final_title_idx).map(|s| s.trim().trim_matches('"').trim()).unwrap_or("");
+            let artist = row.get(final_artist_idx).map(|s| s.trim().trim_matches('"').trim()).unwrap_or("");
+
+            if title.is_empty() && artist.is_empty() {
+                continue;
+            }
+
+            let clean_title = title.replace("==== ", " - ").replace("====", " - ");
+            let clean_artist = artist.replace("==== ", " - ").replace("====", " - ");
+
+            output.push_str(&format!("{}===={}\n", clean_title, clean_artist));
             count += 1;
         }
+
         if count == 0 {
-            return Err("No tracks found in CSV. Make sure this is an Exportify CSV file.".to_string());
+            return Err("No tracks found in CSV. Make sure this is a valid playlist CSV file.".to_string());
         }
+
         Ok(output)
     })
     .await
     .map_err(|e| e.to_string())?
-}
-
-fn parse_csv_row(line: &str) -> Vec<String> {
-    let mut fields = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut chars = line.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => {
-                if in_quotes && chars.peek() == Some(&'"') {
-                    chars.next();
-                    current.push('"');
-                } else {
-                    in_quotes = !in_quotes;
-                }
-            }
-            ',' if !in_quotes => { fields.push(current.clone()); current.clear(); }
-            _ => current.push(ch),
-        }
-    }
-    fields.push(current);
-    fields
 }
 
 static CACHE_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
@@ -1300,7 +1420,7 @@ async fn play_audio(url: String) -> Result<(), String> {
         cache.get(&safe_url).and_then(|entry| {
             let age = std::time::Instant::now().duration_since(entry.ts);
             
-            if age < std::time::Duration::from_secs(4 * 3600)
+            if age < std::time::Duration::from_secs(15 * 60)
                 && entry.url.starts_with("http")
                 && !entry.url.contains(".m3u8")
                 && !entry.url.contains("manifest.googlevideo.com")
@@ -2518,7 +2638,7 @@ fn send_ipc_fire_and_forget(cmd: &str) -> Result<(), String> {
         stream.write_all(cmd.as_bytes()).map_err(|e| e.to_string())?;
         stream.write_all(b"\n").map_err(|e| e.to_string())?;
         stream.flush().map_err(|e| e.to_string())?;
-        let _ = stream.shutdown(std::net::Shutdown::Both);
+        let _ = stream.shutdown(std::net::Shutdown::Write);
         Ok(())
     }
     #[cfg(windows)]
@@ -3168,6 +3288,12 @@ async fn run_mpris_server(
 }
 
 #[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    let safe_path = sanitize_file_path(&path)?;
+    std::fs::read_to_string(&safe_path).map_err(|e| format!("Read failed: {}", e))
+}
+
+#[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     let safe_path = sanitize_file_path(&path)?;
     if let Some(parent) = safe_path.parent() {
@@ -3660,6 +3786,7 @@ fn main() {
             export_playlist_m3u,
             import_playlist_m3u,
             normalize_file,
+            read_text_file,
             write_text_file,
             fetch_lyrics,
             search_yt_music,
@@ -3703,3 +3830,31 @@ fn main() {
             }
         });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_import_exportify_csv() {
+        let csv = "\u{feff}\"Spotify ID\",\"Track URI\",\"Track Name\",\"Artist Name(s)\",\"Album Name\",\"Duration (ms)\"\n\"1\",\"spotify:track:123\",\"Starboy\",\"The Weeknd, Daft Punk\",\"Starboy\",230000\n";
+        let res = import_csv_playlist(csv.to_string()).await.unwrap();
+        assert!(res.contains("Starboy====The Weeknd, Daft Punk"));
+    }
+
+    #[tokio::test]
+    async fn test_import_two_column_csv() {
+        let csv = "Blinding Lights, The Weeknd\nSave Your Tears, The Weeknd\n";
+        let res = import_csv_playlist(csv.to_string()).await.unwrap();
+        assert!(res.contains("Blinding Lights====The Weeknd"));
+        assert!(res.contains("Save Your Tears====The Weeknd"));
+    }
+
+    #[tokio::test]
+    async fn test_import_csv_with_quotes_and_commas() {
+        let csv = "Track Name,Artist Name,Album\n\"Rock, Paper, Scissors\",The Band,\"Greatest, Hits\"\n";
+        let res = import_csv_playlist(csv.to_string()).await.unwrap();
+        assert!(res.contains("Rock, Paper, Scissors====The Band"));
+    }
+}
+

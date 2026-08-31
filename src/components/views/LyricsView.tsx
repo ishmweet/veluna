@@ -65,6 +65,18 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
   lyricsData,
   lyricsScrollContainerRef,
 }) => {
+  React.useEffect(() => {
+    if (!showLyrics) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowLyrics(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showLyrics, setShowLyrics]);
+
   if (!showLyrics || !currentTrack) return null;
 
   const lines = lyricsData?.lines || [];
@@ -159,18 +171,45 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
             onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.6)"}>
             <SkipForward size={20} fill="currentColor"/>
           </button>
-          <button onClick={cycleRepeat} title={`Repeat: ${repeatMode}`}
-            style={{color:repeatMode!=='off'?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)",background:"none",border:"none",cursor:"pointer",display:"flex",padding:"3px",transition:"color .12s"}}
-            onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color=repeatMode!=='off'?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)"}>
-            {repeatMode==='one' ? <Repeat1 size={16}/> : <Repeat size={16}/>}
+          <button
+            onClick={cycleRepeat}
+            title={`Repeat: ${repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'Repeat One' : 'Repeat All'}`}
+            style={{
+              position: "relative",
+              color: repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "rgba(255,255,255,0.45)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "4px",
+              transition: "all .12s ease"
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "#fff"}
+            onMouseLeave={e => e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "rgba(255,255,255,0.45)"}
+          >
+            {repeatMode === 'one' ? <Repeat1 size={17}/> : <Repeat size={17}/>}
+            {repeatMode !== 'off' && (
+              <div style={{
+                position: "absolute",
+                bottom: "0px",
+                width: "3px",
+                height: "3px",
+                borderRadius: "50%",
+                background: "var(--v-accent, #1db954)"
+              }} />
+            )}
           </button>
         </div>
 
         {/* Volume slider */}
         <div style={{width:"100%",display:"flex",alignItems:"center",gap:"8px"}}>
           <button onClick={toggleMute} title={volume===0?"Unmute":"Mute"}
-            style={{background:"none",border:"none",cursor:"pointer",flexShrink:0,padding:"2px",color:"rgba(255,255,255,0.45)",display:"flex",transition:"color .12s"}}
-            onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,0.8)"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.45)"}>
+            style={{background:"none",border:"none",cursor:"pointer",flexShrink:0,padding:"2px",color:volume===0?"#e05555":"rgba(255,255,255,0.45)",display:"flex",transition:"all .12s ease"}}
+            onMouseEnter={e=>e.currentTarget.style.color=volume===0?"#ff7070":"rgba(255,255,255,0.8)"}
+            onMouseLeave={e=>e.currentTarget.style.color=volume===0?"#e05555":"rgba(255,255,255,0.45)"}>
             {volume===0 ? <VolumeX size={14}/> : <Volume2 size={14}/>}
           </button>
           <div style={{flex:1}}>
@@ -189,7 +228,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
               }}>
-              <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${volume}%`,background:"rgba(255,255,255,0.55)",transition:"none"}}>
+              <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${volume}%`,background:volume>0?"var(--v-accent, #1db954)":"rgba(255,255,255,0.18)",transition:"none"}}>
                 <div className="slider-thumb" style={{position:"absolute",right:"-5px",top:"50%",transform:"translateY(-50%)",width:"10px",height:"10px",background:"#fff",borderRadius:"50%",opacity:0,pointerEvents:"none",transition:"opacity .12s"}}/>
               </div>
             </div>

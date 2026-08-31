@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Music, Heart, Download, X, MoreVertical, CheckSquare, Square } from 'lucide-react';
+import { Play, Music, Heart, Download, X, MoreVertical } from 'lucide-react';
 import { Track } from '../types';
 import { cleanArtist, getTrackGradient } from '../utils';
 
@@ -33,7 +33,6 @@ export const TrackRow = React.memo(({
 }: TrackRowProps) => (
   <div
     className={`v-track${isActive ? ' v-track--active' : ''}${isSelected ? ' v-track--selected' : ''}`}
-    style={isSelected ? { background: 'rgba(255, 255, 255, 0.08)', borderColor: 'var(--v-bdr3)' } : undefined}
     onClick={e => {
       if (e.shiftKey || e.ctrlKey || e.metaKey || (isMultiSelectActive && onSelectToggle)) {
         e.preventDefault();
@@ -56,9 +55,30 @@ export const TrackRow = React.memo(({
       }}
     >
       {isSelected ? (
-        <CheckSquare size={13} style={{ color: 'var(--v-accent)', margin: '0 auto' }} />
+        <div style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '4px',
+          background: 'var(--v-accent)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.3)'
+        }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       ) : isMultiSelectActive ? (
-        <Square size={13} style={{ color: '#5c5755', margin: '0 auto' }} />
+        <div style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '4px',
+          border: '1.5px solid rgba(255, 255, 255, 0.25)',
+          background: 'transparent',
+          margin: '0 auto'
+        }} />
       ) : isActive && isLoadingTrack && !isPlaying ? (
         <svg width="14" height="14" viewBox="0 0 24 24" style={{animation:'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite',margin:'0 auto',display:'block'}}>
           <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.15)" strokeWidth="2.5"/>
@@ -96,6 +116,7 @@ export const TrackRow = React.memo(({
           }}
           onError={e => { e.currentTarget.style.display = 'none'; }}
           loading="lazy"
+          decoding="async"
         />
       )}
     </div>
@@ -139,7 +160,25 @@ export const TrackRow = React.memo(({
     </div>
     <span className="v-track__dur">{track.duration && track.duration !== '0:00' ? track.duration : '—'}</span>
   </div>
-));
+), (prev, next) => {
+  return (
+    prev.track.url === next.track.url &&
+    prev.track.title === next.track.title &&
+    prev.track.artist === next.track.artist &&
+    prev.track.cover === next.track.cover &&
+    prev.track.duration === next.track.duration &&
+    prev.index === next.index &&
+    prev.isActive === next.isActive &&
+    prev.isHovered === next.isHovered &&
+    prev.isLoadingTrack === next.isLoadingTrack &&
+    prev.isPlaying === next.isPlaying &&
+    prev.isLiked === next.isLiked &&
+    prev.isDownloading === next.isDownloading &&
+    prev.isSelected === next.isSelected &&
+    prev.isMultiSelectActive === next.isMultiSelectActive &&
+    prev.showRemove === next.showRemove
+  );
+});
 
 export const TrackRowSkeleton = ({ index }: { index: number }) => (
   <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',animation:`fadeUpSm 0.18s cubic-bezier(0.2,0,0,1) ${index*40}ms both`}}>

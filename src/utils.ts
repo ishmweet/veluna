@@ -1,3 +1,37 @@
+import { Track } from './types';
+
+export interface DuplicateTrackInfo {
+  track: Track;
+  originalIndex: number;
+}
+
+export function findDuplicateTracks(tracks?: Track[] | null): DuplicateTrackInfo[] {
+  if (!tracks || tracks.length === 0) return [];
+  const seenUrls = new Set<string>();
+  const seenKeys = new Set<string>();
+  const duplicates: DuplicateTrackInfo[] = [];
+
+  tracks.forEach((t, index) => {
+    const rawTitle = (t.title || '').trim().toLowerCase();
+    const rawArtist = cleanArtist(t.artist).trim().toLowerCase();
+    const normKey = rawTitle ? `${rawArtist}|||${rawTitle}` : '';
+    const rawUrl = (t.url || '').trim();
+    const hasUrl = Boolean(rawUrl);
+
+    const isUrlDupe = hasUrl && seenUrls.has(rawUrl);
+    const isKeyDupe = Boolean(normKey && seenKeys.has(normKey));
+
+    if (isUrlDupe || isKeyDupe) {
+      duplicates.push({ track: t, originalIndex: index });
+    } else {
+      if (hasUrl) seenUrls.add(rawUrl);
+      if (normKey) seenKeys.add(normKey);
+    }
+  });
+
+  return duplicates;
+}
+
 export function parseDurationToSeconds(d: string): number {
   if (!d || typeof d !== 'string') return 0;
   const p = d.split(':').map(Number);

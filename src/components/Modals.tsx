@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlusCircle, ChevronDown, FileOutput, Upload, X, Loader2, CheckCircle2, XCircle, Music, Trash2 } from 'lucide-react';
+import { PlusCircle, ChevronDown, FileOutput, Upload, X, CheckCircle2, Trash2, Minus } from 'lucide-react';
 import { Track } from '../types';
 import { cleanArtist } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
@@ -191,100 +191,226 @@ export function CsvImportModal({
   onProgress,
   visible = true,
   onAbort,
+  registerAbort,
+  droppedBatch,
+  onStartImport,
+  onFinishImport,
 }: {
   onClose: () => void;
   onSavePlaylist: (name: string, desc: string, tracks: Track[]) => void;
   showToast: (m: string) => void;
-  onProgress?: (matched: number, total: number, label: string) => void;
+  onProgress?: (progress: { currentFile: number; totalFiles: number; matchedTracks: number; totalTracks: number; fileName: string } | null) => void;
   visible?: boolean;
   onAbort?: () => void;
+  registerAbort?: (fn: () => void) => void;
+  droppedBatch?: { id: number; items: { name: string; getText: () => Promise<string> }[] } | null;
+  onStartImport?: (info: { currentFile: number; totalFiles: number; matchedTracks: number; totalTracks: number; fileName: string }) => void;
+  onFinishImport?: () => void;
 }) {
   const [phase, setPhase] = useState<'instructions' | 'matching' | 'done'>('instructions');
-  const [results, setResults] = useState<{ title: string; artist: string; status: 'pending' | 'fetching' | 'matched' | 'failed'; url?: string; cover?: string }[]>([]);
-  const [statusMsg, setStatusMsg] = useState('');
+  const [activeImportInfo, setActiveImportInfo] = useState<{
+    fileName: string;
+    fileIndex: number;
+    totalFiles: number;
+    matchedCount: number;
+    failedCount: number;
+    totalTracks: number;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const abortRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  const lastProcessedBatchIdRef = useRef<number>(0);
+  const activeSemaphoreRef = useRef<{ drain: () => void } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const prevVisibleRef = useRef(visible);
   const [isUploadHovered, setIsUploadHovered] = useState(false);
   const [isCloseHovered, setIsCloseHovered] = useState(false);
   const [isMinHovered, setIsMinHovered] = useState(false);
 
   useEffect(() => {
-    if (visible && phase === 'done') {
-      setPhase('instructions');
-      setResults([]);
-      setStatusMsg('');
+    if (registerAbort) {
+      registerAbort(() => {
+        abortRef.current = true;
+        if (activeSemaphoreRef.current) {
+          activeSemaphoreRef.current.drain();
+        }
+        setPhase('instructions');
+        setActiveImportInfo(null);
+        onProgress?.(null);
+      });
     }
+  }, [registerAbort, onProgress]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible, onClose]);
+
+  useEffect(() => {
+    if (!prevVisibleRef.current && visible) {
+      setPhase('instructions');
+      setActiveImportInfo(null);
+    }
+    prevVisibleRef.current = visible;
   }, [visible]);
 
   useEffect(() => {
     return () => {
       abortRef.current = true;
+      if (activeSemaphoreRef.current) {
+        activeSemaphoreRef.current.drain();
+      }
     };
   }, []);
 
-  const handleFiles = async (files: FileList | File[]) => {
-    const fileList = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.csv'));
-    if (fileList.length === 0) {
-      showToast('Please upload valid .csv files from Exportify');
-      return;
+  const cleanQueryTerm = (s: string) => {
+    return s
+      .replace(/\s*[\(\[](official\s*)?(music\s*)?(video|audio|lyric|lyrics|visualizer|hd|4k|remastered|explicit|clean|live)[^\)\]]*[\)\]]/gi, '')
+      .replace(/\s*-\s*(remastered|live|mono|stereo|anniversary).*$/i, '')
+      .trim();
+  };
+
+  const pickBestMatch = (lines: string[], title: string, artist: string): { id: string; duration: string } | null => {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cTitle = cleanQueryTerm(title);
+    const cArtist = cleanQueryTerm(artist);
+    const tNorm = norm(cTitle || title);
+    const aNorm = norm(cArtist || artist);
+
+    let bestId: string | null = null;
+    let bestDuration = '0:00';
+    let bestScore = -999;
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const parts = line.split('====');
+      if (parts.length < 4) continue;
+      const rTitle = norm(parts[0] || '');
+      const rArtist = norm(parts[1] || '');
+      const rDur = parts[2]?.trim() || '0:00';
+      const id = parts[3]?.trim();
+      if (!id || id.length !== 11) continue;
+
+      let score = 0;
+
+      // Title matching
+      if (rTitle === tNorm) {
+        score += 12;
+      } else if (rTitle.includes(tNorm) || tNorm.includes(rTitle)) {
+        score += 6;
+      }
+
+      // Artist matching
+      if (aNorm) {
+        if (rArtist === aNorm || rArtist.includes(aNorm) || aNorm.includes(rArtist)) {
+          score += 6;
+        } else if (rTitle.includes(aNorm)) {
+          score += 4;
+        }
+      }
+
+      // Quality boosters
+      if (rTitle.includes('official audio') || rTitle.includes('official track') || rTitle.includes('provided to youtube')) {
+        score += 4;
+      } else if (rTitle.includes('official video') || rTitle.includes('official music video') || rTitle.includes('lyrics')) {
+        score += 2;
+      }
+      if (rArtist.includes('topic') || rArtist.includes('vevo')) {
+        score += 3;
+      }
+
+      // Penalize unwanted versions if original did not ask for them
+      const tLower = title.toLowerCase();
+      if (!tLower.includes('cover') && (rTitle.includes('cover') || rTitle.includes('acoustic cover') || rTitle.includes('tribute'))) {
+        score -= 8;
+      }
+      if (!tLower.includes('remix') && (rTitle.includes('remix') || rTitle.includes('edit') || rTitle.includes('slowed') || rTitle.includes('reverb') || rTitle.includes('nightcore') || rTitle.includes('sped up'))) {
+        score -= 6;
+      }
+      if (!tLower.includes('instrumental') && (rTitle.includes('instrumental') || rTitle.includes('karaoke'))) {
+        score -= 8;
+      }
+      if (!tLower.includes('live') && (rTitle.includes('live at') || rTitle.includes('live in') || rTitle.includes('live performance') || rTitle.includes('reaction'))) {
+        score -= 6;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestId = id;
+        bestDuration = rDur;
+      }
     }
 
-    setPhase('matching');
-    abortRef.current = false;
-    const CONCURRENCY = 12;
-    const matchCache = new Map<string, string | null>();
+    if (bestId && bestScore >= 4) {
+      return { id: bestId, duration: bestDuration };
+    }
 
-    const pickBestMatch = (lines: string[], title: string, artist: string): string | null => {
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-      const tNorm = norm(title);
-      const aNorm = norm(artist);
-      let bestId: string | null = null;
-      let bestScore = -1;
-      for (const line of lines) {
-        const parts = line.split('====');
-        const rTitle = norm(parts[0] || '');
-        const rArtist = norm(parts[1] || '');
-        const id = parts[3]?.trim();
-        if (!id) continue;
-        let score = 0;
-        if (rTitle.includes(tNorm) || tNorm.includes(rTitle)) score += 3;
-        if (rArtist.includes(aNorm) || aNorm.includes(rArtist)) score += 2;
-        
-        if (rTitle.includes('official') || rTitle.includes('audio') || rTitle.includes('lyric')) score += 1;
-        if (score > bestScore) { bestScore = score; bestId = id; }
-      }
-      
-      if (!bestId) {
-        const id = lines[0]?.split('====')[3]?.trim();
-        bestId = id || null;
-      }
-      return bestId;
-    };
+    return null;
+  };
 
-    let totalSavedPlaylists = 0;
+  const processCsvItems = async (items: { name: string; getText: () => Promise<string> }[]) => {
+    if (items.length === 0) {
+      showToast('Please upload or drop valid .csv files');
+      return;
+    }
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
 
-    for (let fIdx = 0; fIdx < fileList.length; fIdx++) {
+    try {
+      const firstItemName = items[0]?.name.replace(/\.[^/.]+$/, '').trim() || 'Spotify Playlist';
+      onStartImport?.({
+        currentFile: 1,
+        totalFiles: items.length,
+        matchedTracks: 0,
+        totalTracks: 0,
+        fileName: firstItemName,
+      });
+
+      setPhase('matching');
+      abortRef.current = false;
+      const CONCURRENCY = 12;
+      const matchCache = new Map<string, { id: string; duration: string } | null>();
+      const savedInBatch = new Set<string>();
+
+      let totalSavedPlaylists = 0;
+
+    for (let fIdx = 0; fIdx < items.length; fIdx++) {
       if (abortRef.current) break;
-      const file = fileList[fIdx];
-      const fileNameClean = file.name.replace(/\.[^/.]+$/, '').trim() || 'Spotify Playlist';
-      
-      setStatusMsg(`[${fIdx + 1}/${fileList.length}] Parsing ${fileNameClean}...`);
-      const text = await file.text();
+      const item = items[fIdx];
+      const fileNameClean = item.name.replace(/\.[^/.]+$/, '').trim() || 'Spotify Playlist';
+
+      let text = '';
+      try {
+        text = await item.getText();
+      } catch (e) {
+        if (abortRef.current) break;
+        showToast(`Failed to read ${item.name}: ${e}`);
+        continue;
+      }
+      if (abortRef.current) break;
+
       let raw: string;
       try {
         raw = await invoke<string>('import_csv_playlist', { csvContent: text });
       } catch (e) {
-        showToast(`Failed to parse ${file.name}: ${e}`);
+        if (abortRef.current) break;
+        showToast(`Failed to parse ${item.name}: ${e}`);
         continue;
       }
+      if (abortRef.current) break;
 
       const lines = raw.trim().split('\n').filter(Boolean);
       let trackLines = lines;
       let playlistName = fileNameClean;
       if (lines[0]?.startsWith('PLAYLIST:')) {
         const customTitle = lines[0].replace('PLAYLIST:', '').trim();
-        if (customTitle && customTitle !== 'Exportify Playlist') {
+        if (customTitle && customTitle !== 'Spotify Import') {
           playlistName = customTitle;
         }
         trackLines = lines.slice(1);
@@ -296,104 +422,208 @@ export function CsvImportModal({
         return { title: title?.trim() || '', artist: cleanArtist(artist), status: 'pending' as const };
       });
 
-      setResults(initial);
-      onProgress?.(0, initial.length, `[${fIdx + 1}/${fileList.length}] 0/${initial.length} matched`);
+      if (abortRef.current) break;
 
       const total = initial.length;
       let completed = 0;
-      const matched: Track[] = [];
+      const matched: (Track | null)[] = new Array(total).fill(null);
       let failed = 0;
+
+      setActiveImportInfo({
+        fileName: playlistName,
+        fileIndex: fIdx + 1,
+        totalFiles: items.length,
+        matchedCount: 0,
+        failedCount: 0,
+        totalTracks: total,
+      });
+
+      onProgress?.({
+        currentFile: fIdx + 1,
+        totalFiles: items.length,
+        matchedTracks: 0,
+        totalTracks: total,
+        fileName: playlistName,
+      });
 
       const processTrack = async (track: typeof initial[0], i: number): Promise<void> => {
         if (abortRef.current) return;
-        setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'fetching' } : r));
         try {
           const cacheKey = `${track.title}|||${track.artist}`.toLowerCase();
-          let cleanId: string | null | undefined = matchCache.get(cacheKey);
+          let matchResult: { id: string; duration: string } | null | undefined = matchCache.get(cacheKey);
 
-          if (cleanId === undefined) {
-            const q = `${track.title} ${track.artist} audio`;
+          if (matchResult === undefined) {
+            const cleanTitle = cleanQueryTerm(track.title);
+            const cleanArt = cleanArtist(track.artist);
+            const q = cleanArt ? `${cleanTitle} ${cleanArt}` : cleanTitle;
             const res: string = await invoke('search_youtube', { query: q });
             if (abortRef.current) return;
             const resLines = res.trim().split('\n').filter(Boolean).slice(0, 5);
-            cleanId = pickBestMatch(resLines, track.title, track.artist);
-            matchCache.set(cacheKey, cleanId);
+            matchResult = pickBestMatch(resLines, track.title, track.artist);
+            matchCache.set(cacheKey, matchResult);
           }
 
           if (abortRef.current) return;
-          if (cleanId) {
+          if (matchResult && matchResult.id) {
             const t: Track = {
-              id: i, title: track.title, artist: track.artist,
-              duration: '0:00', url: `https://youtube.com/watch?v=${cleanId}`,
-              cover: `https://i.ytimg.com/vi/${cleanId}/mqdefault.jpg`,
+              id: i,
+              title: track.title,
+              artist: track.artist,
+              duration: matchResult.duration || '0:00',
+              url: `https://youtube.com/watch?v=${matchResult.id}`,
+              cover: `https://i.ytimg.com/vi/${matchResult.id}/mqdefault.jpg`,
             };
-            matched.push(t);
-            setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'matched', url: t.url, cover: t.cover } : r));
+            matched[i] = t;
           } else {
             failed++;
-            setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'failed' } : r));
           }
         } catch {
           if (abortRef.current) return;
           failed++;
-          setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'failed' } : r));
         }
         if (abortRef.current) return;
         completed++;
-        setStatusMsg(`[${fIdx + 1}/${fileList.length}] ${playlistName}: ${completed}/${total}...`);
-        onProgress?.(matched.length, total, `[${fIdx + 1}/${fileList.length}] ${completed}/${total}`);
-        if (listRef.current) {
-          const el = listRef.current;
-          const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-          if (isNearBottom) {
-            el.scrollTop = el.scrollHeight;
-          }
+        if (!abortRef.current) {
+          const matchedCount = matched.filter(Boolean).length;
+          setActiveImportInfo({
+            fileName: playlistName,
+            fileIndex: fIdx + 1,
+            totalFiles: items.length,
+            matchedCount,
+            failedCount: failed,
+            totalTracks: total,
+          });
+          onProgress?.({
+            currentFile: fIdx + 1,
+            totalFiles: items.length,
+            matchedTracks: matchedCount,
+            totalTracks: total,
+            fileName: playlistName,
+          });
         }
       };
 
       const semaphore = {
         running: 0,
         queue: [] as (() => void)[],
-        acquire() { return new Promise<void>(r => { if (this.running < CONCURRENCY) { this.running++; r(); } else { this.queue.push(r); } }); },
-        release() { this.running--; const next = this.queue.shift(); if (next) { this.running++; next(); } },
+        acquire() {
+          if (abortRef.current) return Promise.resolve();
+          return new Promise<void>(r => {
+            if (this.running < CONCURRENCY) {
+              this.running++;
+              r();
+            } else {
+              this.queue.push(r);
+            }
+          });
+        },
+        release() {
+          this.running--;
+          const next = this.queue.shift();
+          if (next) {
+            this.running++;
+            next();
+          }
+        },
+        drain() {
+          while (this.queue.length > 0) {
+            const next = this.queue.shift();
+            if (next) next();
+          }
+        },
       };
+      activeSemaphoreRef.current = semaphore;
 
       await Promise.all(initial.map(async (track, i) => {
         await semaphore.acquire();
-        try { await processTrack(track, i); }
+        try {
+          if (abortRef.current) return;
+          await processTrack(track, i);
+        }
         finally { semaphore.release(); }
       }));
 
-      if (abortRef.current) return;
+      activeSemaphoreRef.current = null;
 
-      if (matched.length > 0) {
-        onSavePlaylist(playlistName, 'Imported from Spotify', matched);
+      if (abortRef.current) break;
+
+      const finalMatched = matched.filter((t): t is Track => t !== null);
+      if (finalMatched.length > 0 && !savedInBatch.has(playlistName)) {
+        savedInBatch.add(playlistName);
+        onSavePlaylist(playlistName, 'Imported from Spotify', finalMatched);
         totalSavedPlaylists++;
       }
     }
 
-    if (abortRef.current) return;
+    if (abortRef.current) {
+      onProgress?.(null);
+      return;
+    }
 
     setPhase('done');
-    setStatusMsg('All imports completed');
-    onProgress?.(0, 0, 'Done');
+    onProgress?.(null);
     if (totalSavedPlaylists > 0) {
       showToast(`Imported ${totalSavedPlaylists} playlist${totalSavedPlaylists > 1 ? 's' : ''} from Spotify`);
     }
     setTimeout(() => {
       onClose();
     }, 600);
+    } finally {
+      isProcessingRef.current = false;
+      onFinishImport?.();
+    }
   };
 
-  const matched = results.filter(r => r.status === 'matched');
-  const failed = results.filter(r => r.status === 'failed');
-  const isDone = phase === 'done';
+  const handleFiles = (files: FileList | File[]) => {
+    const fileList = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+    if (fileList.length === 0) {
+      showToast('Please upload valid .csv files');
+      return;
+    }
+    const uniqueFiles: File[] = [];
+    const seen = new Set<string>();
+    for (const f of fileList) {
+      if (!seen.has(f.name)) {
+        seen.add(f.name);
+        uniqueFiles.push(f);
+      }
+    }
+    processCsvItems(uniqueFiles.map(f => ({ name: f.name, getText: () => f.text() })));
+  };
+
+  useEffect(() => {
+    if (droppedBatch && droppedBatch.id !== lastProcessedBatchIdRef.current) {
+      lastProcessedBatchIdRef.current = droppedBatch.id;
+      processCsvItems(droppedBatch.items);
+    }
+  }, [droppedBatch]);
 
   return (
     <>
-    <div className="yt-import-modal-overlay" style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.85)"}} onClick={phase==='matching'?undefined:onClose}>
-      <div className="yt-import-modal-container" style={{width:"640px",maxWidth:"calc(100vw - 32px)",maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",borderRadius:"16px",overflow:"hidden",boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",background:"var(--v-bg2)"}}
-        onClick={e => e.stopPropagation()}>
+    <div
+      className="yt-import-modal-overlay"
+      style={{position:"fixed",inset:0,zIndex:9999,display:visible?"flex":"none",alignItems:"center",justifyContent:"center",padding:"16px",background:"rgba(0,0,0,0.85)"}}
+      onClick={phase==='matching'?undefined:onClose}
+    >
+      <div
+        className="yt-import-modal-container"
+        onDragOver={e => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+        onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
+        style={{
+          width:"640px",
+          maxWidth:"calc(100vw - 32px)",
+          maxHeight:"calc(100vh - 120px)",
+          display:"flex",
+          flexDirection:"column",
+          borderRadius:"16px",
+          overflow:"hidden",
+          boxShadow:"0 16px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06)",
+          background:"var(--v-bg2)",
+          border: isDragging ? '1px dashed #1db954' : '1px solid transparent',
+          transition: 'border-color 0.15s ease'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
 
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -404,7 +634,7 @@ export function CsvImportModal({
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
             {phase === 'matching' && (
-              <button onClick={onClose} title="Minimize — import continues in background"
+              <button onClick={onClose} title="Minimize, import continues in background"
                 onMouseEnter={() => setIsMinHovered(true)}
                 onMouseLeave={() => setIsMinHovered(false)}
                 style={{
@@ -420,12 +650,16 @@ export function CsvImportModal({
                   cursor:"pointer",
                   transition:"all 0.2s ease"
                 }}>
-                —
+                <Minus size={14} />
               </button>
             )}
             <button onClick={() => {
               if (phase === 'matching') {
                 abortRef.current = true;
+                if (activeSemaphoreRef.current) {
+                  activeSemaphoreRef.current.drain();
+                }
+                onProgress?.(null);
                 if (onAbort) {
                   onAbort();
                 } else {
@@ -514,67 +748,180 @@ export function CsvImportModal({
             </div>
             <input ref={fileInputRef} type="file" accept=".csv" multiple style={{display:"none"}}
               onChange={e => { if (e.target.files?.length) { handleFiles(e.target.files); e.target.value = ''; } }} />
-            <button onClick={() => fileInputRef.current?.click()}
+            <div
+              onClick={() => fileInputRef.current?.click()}
               onMouseEnter={() => setIsUploadHovered(true)}
               onMouseLeave={() => setIsUploadHovered(false)}
               style={{
                 marginTop:"12px",
-                width:"100%",
-                padding:"11px",
-                borderRadius:"10px",
-                fontSize:"13px",
-                fontWeight:700,
+                padding:"18px 16px",
+                borderRadius:"12px",
+                border: isDragging ? "2px dashed #1db954" : isUploadHovered ? "1.5px dashed rgba(29, 185, 84, 0.6)" : "1.5px dashed rgba(255,255,255,0.15)",
+                background: isDragging ? "rgba(29, 185, 84, 0.12)" : isUploadHovered ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)",
                 display:"flex",
+                flexDirection:"column",
                 alignItems:"center",
                 justifyContent:"center",
                 gap:"8px",
-                border:"none",
-                background:"linear-gradient(135deg, #1ed760 0%, #1db954 100%)",
-                color:"#fff",
                 cursor:"pointer",
-                boxShadow: isUploadHovered ? "0 6px 20px rgba(29, 185, 84, 0.3)" : "none",
-                transform: isUploadHovered ? "translateY(-1px)" : "none",
                 transition:"all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+              }}
+            >
+              <div style={{
+                width:"38px",
+                height:"38px",
+                borderRadius:"50%",
+                background: isDragging ? "#1db954" : "rgba(29, 185, 84, 0.15)",
+                color: isDragging ? "#000" : "#1db954",
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"center",
+                transition:"all 0.2s ease"
               }}>
-              <Upload size={16} /> Upload Exportify CSV(s)
-            </button>
+                <Upload size={17} />
+              </div>
+              <div style={{textAlign:"center"}}>
+                <p style={{fontSize:"13px",fontWeight:700,color:"#e2ddd9",margin:0}}>
+                  {isDragging ? "Drop your CSV files now" : "Drag & drop multiple .csv files here"}
+                </p>
+                <p style={{fontSize:"11.5px",color:"var(--v-fg3)",margin:"4px 0 0"}}>
+                  or click to select multiple files from your computer
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         {(phase === 'matching' || phase === 'done') && (
-          <>
-            <div style={{padding:"12px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
-                <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  {isDone ? `Done · ${matched.length} matched` : `Matching · ${matched.length + failed.length} / ${results.length}`}
-                  {failed.length>0&&<span style={{color:"#a05050",marginLeft:"6px"}}>· {failed.length} not found</span>}
-                </span>
-                {statusMsg&&<span style={{fontSize:"11px",color:"#1db954",fontFamily:"monospace"}}>{statusMsg}</span>}
-              </div>
-              <div style={{height:"4px",borderRadius:"2px",background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:"2px",transition:"width .3s",width:`${results.length>0?((matched.length+failed.length)/results.length)*100:0}%`,background:"linear-gradient(90deg, #1ed760 0%, #1db954 100%)"}} />
+          <div style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "36px 28px",
+            gap: "20px"
+          }}>
+            <div style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "50%",
+              background: phase === 'done' ? "rgba(29, 185, 84, 0.15)" : "rgba(29, 185, 84, 0.1)",
+              border: "1px solid rgba(29, 185, 84, 0.3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 0 24px rgba(29, 185, 84, 0.2)"
+            }}>
+              {phase === 'done' ? (
+                <CheckCircle2 size={30} style={{ color: "#1ed760" }} />
+              ) : (
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="#1ed760">
+                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                </svg>
+              )}
+            </div>
+
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#e2ddd9", margin: 0 }}>
+                {phase === 'done'
+                  ? "Import Complete"
+                  : `Importing from "${activeImportInfo?.fileName || 'Spotify Playlist'}"`}
+              </h3>
+              <p style={{ fontSize: "13px", color: "var(--v-fg2)", margin: 0 }}>
+                {phase === 'done' ? (
+                  `Saved to your library with ${activeImportInfo?.matchedCount || 0} songs`
+                ) : (
+                  <>
+                    <span>
+                      {activeImportInfo?.matchedCount || 0} of {activeImportInfo?.totalTracks || 0} songs imported
+                    </span>
+                    <span style={{ color: "#1db954", fontWeight: 600, marginLeft: "6px" }}>
+                      ({activeImportInfo && activeImportInfo.totalTracks > 0
+                        ? Math.round(((activeImportInfo.matchedCount + activeImportInfo.failedCount) / activeImportInfo.totalTracks) * 100)
+                        : 0}%)
+                    </span>
+                    {activeImportInfo && activeImportInfo.totalFiles > 1 && (
+                      <span style={{ color: "var(--v-fg3)", marginLeft: "8px" }}>
+                        · File {activeImportInfo.fileIndex} of {activeImportInfo.totalFiles}
+                      </span>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div style={{ width: "100%", maxWidth: "420px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{
+                height: "6px",
+                borderRadius: "3px",
+                background: "rgba(255, 255, 255, 0.08)",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  height: "100%",
+                  borderRadius: "3px",
+                  transition: "width 0.2s ease",
+                  width: `${
+                    phase === 'done'
+                      ? 100
+                      : activeImportInfo && activeImportInfo.totalTracks > 0
+                      ? ((activeImportInfo.matchedCount + activeImportInfo.failedCount) / activeImportInfo.totalTracks) * 100
+                      : 0
+                  }%`,
+                  background: "linear-gradient(90deg, #1db954 0%, #1ed760 100%)",
+                  boxShadow: "0 0 12px rgba(29, 185, 84, 0.4)"
+                }} />
               </div>
             </div>
-            <div ref={listRef} className="flex-1 overflow-y-auto custom-scrollbar" style={{padding:"6px 0"}}>
-              {results.map((r, i) => (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"8px 20px",borderBottom:"1px solid rgba(255,255,255,0.03)"}}>
-                  <div style={{width:"32px",height:"32px",borderRadius:"6px",flexShrink:0,overflow:"hidden",background:"rgba(255,255,255,0.02)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.3)"}}>
-                    {r.cover?<img src={r.cover} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:<Music size={14} style={{color:"#5c5755"}}/>}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:"13px",fontWeight:600,color:"#e2ddd9",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
-                    {cleanArtist(r.artist) && <div style={{fontSize:"11px",color:"#5c5755",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:"1px"}}>{cleanArtist(r.artist)}</div>}
-                  </div>
-                  <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:"5px",width:"80px",justifyContent:"flex-end"}}>
-                    {r.status==='pending'&&<span style={{fontSize:"11px",color:"rgba(255,255,255,0.1)"}}>·</span>}
-                    {r.status === 'fetching' && <Loader2 size={12} style={{animation:"spin 0.8s linear infinite",color:"#1db954"}} />}
-                    {r.status === 'matched'  && <CheckCircle2 size={14} style={{ color: '#1db954' }} />}
-                    {r.status === 'failed'   && <XCircle size={14} style={{color:"#a05050"}} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+
+            {phase === 'matching' && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
+                <button
+                  onClick={onClose}
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    padding: "7px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    color: "#e2ddd9",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)"; }}
+                >
+                  Minimize to Background
+                </button>
+                <button
+                  onClick={() => {
+                    abortRef.current = true;
+                    if (activeSemaphoreRef.current) activeSemaphoreRef.current.drain();
+                    onProgress?.(null);
+                    if (onAbort) onAbort();
+                    else onClose();
+                  }}
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    padding: "7px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 96, 96, 0.2)",
+                    background: "rgba(255, 96, 96, 0.08)",
+                    color: "#ff6060",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease"
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(255, 96, 96, 0.18)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(255, 96, 96, 0.08)"; }}
+                >
+                  Cancel Import
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -776,7 +1123,7 @@ export function YtImportModal({
                   transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
                 }}
               >
-                —
+                <Minus size={14} />
               </button>
             )}
             <button onClick={() => {

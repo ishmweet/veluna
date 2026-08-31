@@ -683,31 +683,40 @@ kbd {
 .shelf-scroll-container::-webkit-scrollbar { display: none !important; }
 .banner-glow { animation: subtlePulse 12s ease-in-out infinite; }
 
-/* 📀 Track Row Styling - Modernized cards */
+/* 📀 Track Row Styling - Clean, flat desktop list */
 .v-track {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.005);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  transition: background 0.12s ease;
   cursor: pointer;
+  contain: layout paint;
+  transform: translateZ(0);
 }
 .v-track:hover {
-  background: rgba(255, 255, 255, 0.025);
-  border-color: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  transform: translateY(-0.5px);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+  transform: translateZ(0);
 }
 .v-track--active {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+  transform: translateZ(0) !important;
+}
+.v-track--selected {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: none !important;
+  border-radius: 6px;
+}
+.v-track--selected:hover {
+  background: rgba(255, 255, 255, 0.11) !important;
 }
 .v-track__num {
-  width: 30px;
+  width: 28px;
   text-align: center;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -716,20 +725,19 @@ kbd {
 }
 .v-track--active .v-track__num { color: var(--v-accent); }
 .v-track__art {
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   overflow: hidden;
   flex-shrink: 0;
   background: var(--v-bg3);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.25s ease;
 }
 .v-track:hover .v-track__art {
-  transform: scale(1.02);
+  transform: none;
 }
-.v-track__art img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.35); transition: transform 0.25s ease; }
-.v-track:hover .v-track__art img { transform: scale(1.42); }
+.v-track__art img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.35); }
+.v-track:hover .v-track__art img { transform: scale(1.35); }
 .v-track__info { flex: 1; min-width: 0; }
 .v-track__title {
   font-size: 14.5px;
@@ -772,6 +780,8 @@ kbd {
   transition: background 0.18s ease, transform 0.18s ease;
   box-shadow: none;
   overflow: hidden;
+  contain: layout paint;
+  transform: translateZ(0);
 }
 .v-pl-card:hover, .v-card:hover {
   background: rgba(255, 255, 255, 0.035);
@@ -1085,45 +1095,66 @@ kbd {
 .v-progress-container {
   position: relative;
   flex: 1 1 0%;
-  height: 16px;
+  height: 20px;
   display: flex;
   align-items: center;
   cursor: pointer;
+  user-select: none;
 }
+
 .v-progress-track {
   position: relative;
   width: 100%;
-  height: 4px;
+  height: 3.5px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-  transition: height 0.15s cubic-bezier(0.2, 0, 0, 1);
+  border-radius: 9999px;
+  transition: height 0.16s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease;
+  overflow: visible;
 }
-.v-progress-container:hover .v-progress-track {
-  height: 6px;
+
+.v-progress-container:hover .v-progress-track,
+.v-progress-container:active .v-progress-track {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.12);
 }
+
+.v-progress-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  pointer-events: none;
+  transition: width 0.05s linear;
+}
+
 .v-progress-fill {
   position: absolute;
   top: 0;
   left: 0;
   height: 100%;
   background: var(--v-accent);
-  border-radius: 2px;
+  border-radius: 9999px;
   pointer-events: none;
+  box-shadow: 0 0 10px rgba(226, 221, 217, 0.15);
 }
+
 .v-progress-thumb {
   position: absolute;
-  right: -6px;
+  right: -5.5px;
   top: 50%;
   transform: translateY(-50%) scale(0);
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   background: #ffffff;
   border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.2);
   opacity: 0;
-  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.16s ease;
   pointer-events: none;
 }
+
 .v-progress-container:hover .v-progress-thumb,
 .v-progress-container:active .v-progress-thumb {
   transform: translateY(-50%) scale(1);
@@ -1132,25 +1163,44 @@ kbd {
 
 .v-progress-tooltip {
   position: absolute;
-  top: -30px;
+  top: -32px;
   left: 0%;
-  transform: translateX(-50%);
-  background: var(--v-bg1);
-  border: 1px solid var(--v-bdr2);
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(18, 16, 16, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   padding: 3px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--v-fg2);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--v-fg);
   pointer-events: none;
   white-space: nowrap;
-  z-index: 10;
+  z-index: 100;
   opacity: 0;
-  transition: opacity 0.15s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
 }
+
 .v-progress-container:hover .v-progress-tooltip {
   opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.v-progress-time {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--v-fg3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  transition: color 0.15s ease;
+}
+
+.v-progress-time-btn:hover {
+  color: var(--v-fg);
 }
 
 
@@ -1516,18 +1566,18 @@ kbd {
 
 /* 5. Flat Crisp Component Styling */
 .v-perf-mode .v-track {
-  border: 1px solid #1c1c1c !important;
-  background: #0d0d0d !important;
+  border: none !important;
+  background: transparent !important;
   border-radius: 6px !important;
 }
 .v-perf-mode .v-track:hover {
-  background: #181818 !important;
-  border-color: #383838 !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: none !important;
   transform: none !important;
 }
 .v-perf-mode .v-track--active {
-  background: #202020 !important;
-  border-color: var(--v-accent) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: none !important;
 }
 .v-perf-mode .v-nav-btn {
   border-radius: 6px !important;

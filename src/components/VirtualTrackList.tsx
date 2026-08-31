@@ -63,22 +63,32 @@ export function VirtualTrackList<T>({
       });
     };
 
+    let rafId: number | null = null;
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        updateScroll();
+        rafId = null;
+      });
+    };
+
     updateScroll();
 
     if (scrollParent) {
-      scrollParent.addEventListener('scroll', updateScroll, { passive: true });
+      scrollParent.addEventListener('scroll', onScroll, { passive: true });
     } else {
-      window.addEventListener('scroll', updateScroll, { passive: true });
+      window.addEventListener('scroll', onScroll, { passive: true });
     }
-    window.addEventListener('resize', updateScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       if (scrollParent) {
-        scrollParent.removeEventListener('scroll', updateScroll);
+        scrollParent.removeEventListener('scroll', onScroll);
       } else {
-        window.removeEventListener('scroll', updateScroll);
+        window.removeEventListener('scroll', onScroll);
       }
-      window.removeEventListener('resize', updateScroll);
+      window.removeEventListener('resize', onScroll);
     };
   }, [items]);
 

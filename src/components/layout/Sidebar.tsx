@@ -37,7 +37,7 @@ interface SidebarProps {
   handleImportPlaylistM3u?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar: React.FC<SidebarProps> = React.memo(({
   activeNav,
   setActiveNav,
   navigateTo: customNavigateTo,
@@ -234,4 +234,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
     </div>
   );
-};
+});

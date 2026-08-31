@@ -51,7 +51,7 @@ export const LocalTrackCover = React.memo(({ path, cover, isActive }: { path: st
   return <FileMusic size={16} style={{ color: isActive ? "#9e9894" : "#363230" }} />;
 });
 
-export function DownloadsPanel({
+export const DownloadsPanel = React.memo(function DownloadsPanel({
   downloadPath, onPlayLocalTrack, onDeleteLocalTrack,
   currentTrackPath, isPlaying, isLoadingTrack,
   onOpenInFileManager, onExportM3u, onChangeFolder,
@@ -462,11 +462,11 @@ export function DownloadsPanel({
           <div className="v-section-head">
             <h2>{searchQ.trim()?`${filtered.length} result${filtered.length!==1?'s':''}`:`${tracks.length} track${tracks.length!==1?'s':''}`}</h2>
             {enriching && <span style={{fontSize:"11px",color:"#5c5755",display:"flex",alignItems:"center",gap:"5px"}}><div style={{width:"10px",height:"10px",border:"1.5px solid #5c5755",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>reading…</span>}
-            {!searchQ && !enriching && <span style={{fontSize:"10px",color:"#363230"}}>drag to reorder</span>}
+            {!searchQ && !enriching && <span style={{fontSize:"10px",color:"var(--v-fg3)"}}>drag to reorder</span>}
           </div>
 
           {filtered.length === 0 && searchQ && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"110px",color:"#363230",gap:"7px"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"110px",color:"var(--v-fg3)",gap:"7px"}}>
               <Search size={28} strokeWidth={1} />
               <p style={{fontSize:"12px",color:"#5c5755"}}>No tracks match "{searchQ}"</p>
             </div>
@@ -560,7 +560,7 @@ export function DownloadsPanel({
                       <button className="v-track__btn" title="Delete" onClick={e=>{e.stopPropagation();onDeleteLocalTrack(track);scan();}}
                         onMouseEnter={e=>(e.currentTarget.style.color="#b05555")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}><Trash2 size={12}/></button>
                     </div>
-                    <span style={{fontSize:"11px",color:"#363230",fontVariantNumeric:"tabular-nums",width:"40px",textAlign:"right",flexShrink:0}}>{track.duration||"—"}</span>
+                    <span style={{fontSize:"11px",color:"var(--v-fg3)",fontVariantNumeric:"tabular-nums",width:"40px",textAlign:"right",flexShrink:0}}>{track.duration||"—"}</span>
                   </div>
                 );
               }}
@@ -714,4 +714,4 @@ export function DownloadsPanel({
       )}
     </div>
   );
-}
+});

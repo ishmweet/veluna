@@ -11,8 +11,8 @@ export const WaveformBar = React.memo(({
   progressPercent,
   isDragging,
 }: WaveformBarProps) => {
+  const max = React.useMemo(() => (waveform.length ? Math.max(...waveform, 0.01) : 0.01), [waveform]);
   if (!waveform.length) return null;
-  const max = Math.max(...waveform, 0.01);
   return (
     <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",gap:"1px",pointerEvents:"none",overflow:"hidden"}}>
       {waveform.map((v, i) => (

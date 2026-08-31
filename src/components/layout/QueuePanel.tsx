@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ListOrdered, ListPlus, Music, Play, X, FileMusic } from 'lucide-react';
 import { Track, Playlist, CtxMenu } from '../../types';
 import { getTrackGradient, cleanArtist } from '../../utils';
@@ -27,7 +27,7 @@ interface QueuePanelProps {
   dragOverQueueIdxRef: React.MutableRefObject<number | null>;
 }
 
-export const QueuePanel: React.FC<QueuePanelProps> = ({
+export const QueuePanel: React.FC<QueuePanelProps> = React.memo(({
   isQueueOpen,
   setIsQueueOpen,
   queue,
@@ -50,13 +50,13 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   setDragOverQueueIdx,
   dragOverQueueIdxRef,
 }) => {
-  const contextualTracks = (() => {
+  const contextualTracks = useMemo(() => {
     if (!playlistContextRef.current || !currentTrack) return [];
     const { tracks, index } = playlistContextRef.current;
     let idx = tracks.findIndex(t => t.url === currentTrack.url);
     if (idx === -1) idx = index;
     return tracks.slice(idx + 1, idx + 11);
-  })();
+  }, [playlistContextRef.current, currentTrack?.url]);
 
   const handleSaveQueueAsPlaylist = () => {
     if (queue.length === 0) return;
@@ -410,4 +410,4 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
       )}
     </div>
   );
-};
+});

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Download, X, FolderOpen, CheckCircle2, AlertCircle, ArrowUpRight, Trash2 } from 'lucide-react';
 import { ActiveDownload } from '../../types';
 
@@ -12,7 +12,7 @@ interface DownloadsFlyoutProps {
   onNavigateToDownloads: () => void;
 }
 
-export const DownloadsFlyout: React.FC<DownloadsFlyoutProps> = ({
+export const DownloadsFlyout: React.FC<DownloadsFlyoutProps> = React.memo(({
   isOpen,
   onClose,
   downloads,
@@ -38,10 +38,10 @@ export const DownloadsFlyout: React.FC<DownloadsFlyoutProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  const activeItems = useMemo(() => downloads.filter(d => d.status === 'downloading'), [downloads]);
+  const completedItems = useMemo(() => downloads.filter(d => d.status === 'completed'), [downloads]);
 
-  const activeItems = downloads.filter(d => d.status === 'downloading');
-  const completedItems = downloads.filter(d => d.status === 'completed');
+  if (!isOpen) return null;
 
   return (
     <div
@@ -412,4 +412,4 @@ export const DownloadsFlyout: React.FC<DownloadsFlyoutProps> = ({
       </div>
     </div>
   );
-};
+});

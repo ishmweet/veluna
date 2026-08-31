@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Heart,
   Download,
@@ -80,7 +80,7 @@ export interface PlayerBarProps {
   showToast?: (msg: string) => void;
 }
 
-export const PlayerBar: React.FC<PlayerBarProps> = ({
+export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
   currentTrack,
   getTrackCover,
   isPlaying,
@@ -135,6 +135,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   trackDurationRef,
   showToast = () => {},
 }) => {
+  const [showRemainingTime, setShowRemainingTime] = useState(false);
+  const [hoverPct, setHoverPct] = useState<number | null>(null);
+
   const calculateProgressPercent = customCalculateProgress || (() => {
     const total = trackDurationSeconds || parseDurationToSeconds(currentTrack?.duration || '0:00');
     return total === 0 ? 0 : Math.min((progressSeconds / total) * 100, 100);
@@ -264,9 +267,36 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             <SpeedSelector speed={playbackSpeed} onChange={setPlaybackSpeed}/>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"16px",flexShrink:0}}>
-            <button onClick={toggleShuffle} title="Shuffle" style={{background:"none",border:"none",cursor:"pointer",color:shuffle?"#e2ddd9":"#363230",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
-              onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.15)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
+            <button
+              onClick={toggleShuffle}
+              title={`Shuffle: ${shuffle ? 'On' : 'Off'}`}
+              style={{
+                position: "relative",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: shuffle ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)",
+                padding: "6px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all .12s ease"
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = shuffle ? "var(--v-accent)" : "rgba(255, 255, 255, 0.9)"; e.currentTarget.style.transform = "scale(1.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = shuffle ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)"; e.currentTarget.style.transform = "scale(1)"; }}
+            >
               <Shuffle size={15}/>
+              {shuffle && (
+                <div style={{
+                  position: "absolute",
+                  bottom: "1px",
+                  width: "3px",
+                  height: "3px",
+                  borderRadius: "50%",
+                  background: "var(--v-accent)"
+                }} />
+              )}
             </button>
             <button onClick={handleSkipBack} title="Previous" style={{background:"none",border:"none",cursor:currentTrack?"pointer":"not-allowed",color:currentTrack?"#9e9894":"#2a2727",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
               onMouseEnter={e=>{if(currentTrack)e.currentTarget.style.transform="scale(1.15)";}} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
@@ -281,13 +311,40 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   </svg>
                 : isPlaying ? <Pause fill="currentColor" size={18}/> : <Play fill="currentColor" size={18} style={{marginLeft:"2px"}}/>}
             </button>
-            <button onClick={handleSkipForward} title="Next" style={{background:"none",border:"none",cursor:(queue.length>0||(playlistContextRef&&playlistContextRef.current!==null))?"pointer":"not-allowed",color:(queue.length>0||(playlistContextRef&&playlistContextRef.current!==null))?"#9e9894":"#2a2727",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
-              onMouseEnter={e=>{if(queue.length>0||(playlistContextRef&&playlistContextRef.current!==null))e.currentTarget.style.transform="scale(1.15)";}} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
+            <button onClick={handleSkipForward} title={queue.length > 0 ? `Next (${queue.length} in queue)` : "Next"} style={{background:"none",border:"none",cursor:(queue.length > 0 || (playlistContextRef && playlistContextRef.current !== null) || currentTrack)?"pointer":"not-allowed",color:(queue.length > 0 || (playlistContextRef && playlistContextRef.current !== null) || currentTrack)?"#9e9894":"#2a2727",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
+              onMouseEnter={e=>{if(queue.length > 0 || (playlistContextRef && playlistContextRef.current !== null) || currentTrack)e.currentTarget.style.transform="scale(1.15)";}} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
               <SkipForward size={17}/>
             </button>
-            <button onClick={cycleRepeat} title={`Repeat: ${repeatMode}`} style={{background:"none",border:"none",cursor:"pointer",color:repeatMode!=='off'?"#e2ddd9":"#363230",padding:"3px",display:"flex",transition:"color .12s,transform .1s"}}
-              onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.15)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
-              {repeatMode==='one' ? <Repeat1 size={15}/> : <Repeat size={15}/>}
+            <button
+              onClick={cycleRepeat}
+              title={`Repeat: ${repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'Repeat One' : 'Repeat All'}`}
+              style={{
+                position: "relative",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: repeatMode !== 'off' ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)",
+                padding: "6px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all .12s ease"
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent)" : "rgba(255, 255, 255, 0.9)"; e.currentTarget.style.transform = "scale(1.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)"; e.currentTarget.style.transform = "scale(1)"; }}
+            >
+              {repeatMode === 'one' ? <Repeat1 size={15}/> : <Repeat size={15}/>}
+              {repeatMode !== 'off' && (
+                <div style={{
+                  position: "absolute",
+                  bottom: "1px",
+                  width: "3px",
+                  height: "3px",
+                  borderRadius: "50%",
+                  background: "var(--v-accent)"
+                }} />
+              )}
             </button>
           </div>
           <div style={{flex:1,display:"flex",justifyContent:"flex-start",alignItems:"center",paddingLeft:"16px",minWidth:0}}>
@@ -327,32 +384,85 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </div>
         </div>
 
-        <div style={{width:"100%",display:"flex",alignItems:"center",gap:"8px"}}>
-          <span style={{fontSize:"10px",color:"#5c5755",flexShrink:0,fontVariantNumeric:"tabular-nums",minWidth:"30px",textAlign:"right"}}>
-            {currentTrack?formatTime(progressSeconds):'0:00'}
-          </span>
-          <div ref={progressRef} className="v-progress-container"
-            onMouseDown={e=>{if(!currentTrack)return;if(isDraggingProgressRef)isDraggingProgressRef.current=true;setIsDraggingProgress(true);updateProgressFromEvent(e.clientX);}}
-            onMouseMove={e=>{
-              if(!progressRef.current||!currentTrack)return;
-              const rect=progressRef.current.getBoundingClientRect();
-              const pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
-              const total=(trackDurationRef?.current)||trackDurationSeconds||parseDurationToSeconds(currentTrack.duration);
-              const el=progressRef.current.querySelector<HTMLElement>('.v-progress-tooltip');
-              if(el){el.textContent=formatTime(total*pct);el.style.left=`${pct*100}%`;}
-            }}>
-            <div className="v-progress-track">
-              {currentTrack&&<div className="v-progress-tooltip">{formatTime(progressSeconds)}</div>}
-              {waveformData.length>0&&<WaveformBar waveform={waveformData} progressPercent={calculateProgressPercent()} isDragging={isDraggingProgress}/>}
-              <div className="v-progress-fill" style={{width:`${calculateProgressPercent()}%`,transition:isDraggingProgress?'none':'width 0.5s linear'}}>
-                <div className="v-progress-thumb"/>
+        {(() => {
+          const totalDuration = (trackDurationRef?.current) || trackDurationSeconds || (currentTrack ? parseDurationToSeconds(currentTrack.duration) : 0);
+          const remainingSeconds = Math.max(0, totalDuration - progressSeconds);
+          return (
+            <div style={{width:"100%",display:"flex",alignItems:"center",gap:"10px"}}>
+              <span className="v-progress-time" style={{textAlign:"right",minWidth:"34px"}}>
+                {currentTrack ? formatTime(progressSeconds) : '0:00'}
+              </span>
+              <div
+                ref={progressRef}
+                className="v-progress-container"
+                onMouseDown={e => {
+                  if (!currentTrack) return;
+                  if (isDraggingProgressRef) isDraggingProgressRef.current = true;
+                  setIsDraggingProgress(true);
+                  updateProgressFromEvent(e.clientX);
+                }}
+                onMouseEnter={e => {
+                  if (!progressRef.current || !currentTrack) return;
+                  const rect = progressRef.current.getBoundingClientRect();
+                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  setHoverPct(pct * 100);
+                }}
+                onMouseMove={e => {
+                  if (!progressRef.current || !currentTrack) return;
+                  const rect = progressRef.current.getBoundingClientRect();
+                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  setHoverPct(pct * 100);
+                  const el = progressRef.current.querySelector<HTMLElement>('.v-progress-tooltip');
+                  if (el) {
+                    el.textContent = formatTime(totalDuration * pct);
+                    el.style.left = `${pct * 100}%`;
+                  }
+                }}
+                onMouseLeave={() => setHoverPct(null)}
+              >
+                <div className="v-progress-track">
+                  {currentTrack && (
+                    <div className="v-progress-tooltip">
+                      {formatTime(progressSeconds)}
+                    </div>
+                  )}
+                  {hoverPct !== null && (
+                    <div
+                      className="v-progress-ghost"
+                      style={{ width: `${hoverPct}%` }}
+                    />
+                  )}
+                  {waveformData.length > 0 && (
+                    <WaveformBar
+                      waveform={waveformData}
+                      progressPercent={calculateProgressPercent()}
+                      isDragging={isDraggingProgress}
+                    />
+                  )}
+                  <div
+                    className="v-progress-fill"
+                    style={{
+                      width: `${calculateProgressPercent()}%`,
+                      transition: isDraggingProgress ? 'none' : 'width 0.2s linear'
+                    }}
+                  >
+                    <div className="v-progress-thumb"/>
+                  </div>
+                </div>
               </div>
+              <button
+                onClick={() => setShowRemainingTime(r => !r)}
+                className="v-progress-time v-progress-time-btn"
+                style={{minWidth:"34px",textAlign:"left",cursor:"pointer",background:"none",border:"none",padding:0}}
+                title={showRemainingTime ? "Click to show total duration" : "Click to show remaining time"}
+              >
+                {currentTrack
+                  ? (showRemainingTime ? `-${formatTime(remainingSeconds)}` : formatTime(totalDuration))
+                  : '0:00'}
+              </button>
             </div>
-          </div>
-          <span style={{fontSize:"10px",color:"#5c5755",flexShrink:0,fontVariantNumeric:"tabular-nums",minWidth:"30px"}}>
-            {currentTrack?formatTime(trackDurationSeconds||parseDurationToSeconds(currentTrack.duration)):'0:00'}
-          </span>
-        </div>
+          );
+        })()}
       </div>
 
       <div style={{width:"240px",maxWidth:"30%",minWidth:"140px",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:"12px",flexShrink:1}}>
@@ -362,15 +472,16 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </span>
         )}
         <button onClick={()=>{if(currentTrack)setShowLyrics(o=>!o);}} disabled={!currentTrack} title="Lyrics"
-          style={{background:"none",border:"none",cursor:currentTrack?"pointer":"not-allowed",color:showLyrics?"#9e9894":"#363230",flexShrink:0,display:"flex",padding:"3px",transition:"color .12s",opacity:currentTrack?1:0.4}}
-          onMouseEnter={e=>{if(currentTrack)e.currentTarget.style.color="#9e9894";}} onMouseLeave={e=>{if(!showLyrics)e.currentTarget.style.color="#363230";}}>
+          style={{background:"none",border:"none",cursor:currentTrack?"pointer":"not-allowed",color:showLyrics?"var(--v-accent)":"rgba(255, 255, 255, 0.4)",flexShrink:0,display:"flex",padding:"3px",transition:"all .12s ease",opacity:currentTrack?1:0.4}}
+          onMouseEnter={e=>{if(currentTrack)e.currentTarget.style.color=showLyrics?"var(--v-accent)":"rgba(255, 255, 255, 0.9)";}}
+          onMouseLeave={e=>{e.currentTarget.style.color=showLyrics?"var(--v-accent)":"rgba(255, 255, 255, 0.4)";}}>
           <Mic2 size={16}/>
         </button>
         <div style={{position:"relative",flexShrink:0}} onClick={e => e.stopPropagation()}>
           <button onClick={() => setShowSleepPopover(o => !o)} title={sleepTimer > 0 ? `Sleep in ${Math.ceil(sleepTimer/60)}m` : 'Sleep Timer'}
-            style={{background:"none",border:"none",cursor:"pointer",color:sleepTimer>0?"var(--v-accent)":showSleepPopover?"#e2ddd9":"#363230",flexShrink:0,display:"flex",padding:"3px",transition:"color .12s,transform .12s",transform:showSleepPopover?"scale(1.15)":"none"}}
-            onMouseEnter={e=>{e.currentTarget.style.color=sleepTimer>0?"var(--v-accent)":"#9e9894";}}
-            onMouseLeave={e=>{if(!showSleepPopover && sleepTimer<=0)e.currentTarget.style.color="#363230";}}>
+            style={{background:"none",border:"none",cursor:"pointer",color:sleepTimer>0?"var(--v-accent)":showSleepPopover?"#e2ddd9":"rgba(255, 255, 255, 0.4)",flexShrink:0,display:"flex",padding:"3px",transition:"all .12s ease",transform:showSleepPopover?"scale(1.15)":"none"}}
+            onMouseEnter={e=>{e.currentTarget.style.color=sleepTimer>0?"var(--v-accent)":"rgba(255, 255, 255, 0.9)";}}
+            onMouseLeave={e=>{if(!showSleepPopover && sleepTimer<=0)e.currentTarget.style.color="rgba(255, 255, 255, 0.4)";}}>
             <Moon size={16} style={sleepTimer > 0 ? {animation:'velunaPulse 2s ease-in-out infinite'} : {}}/>
           </button>
           {showSleepPopover && (
@@ -385,8 +496,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           )}
         </div>
         <button onClick={toggleMute} title={volume===0?"Unmute":"Mute"}
-          style={{background:"none",border:"none",cursor:"pointer",flexShrink:0,padding:"3px",color:"#5c5755",display:"flex",transition:"color .12s"}}
-          onMouseEnter={e=>(e.currentTarget.style.color="#9e9894")} onMouseLeave={e=>(e.currentTarget.style.color="#5c5755")}>
+          style={{background:"none",border:"none",cursor:"pointer",flexShrink:0,padding:"3px",color:volume===0?"#e05555":"rgba(255, 255, 255, 0.4)",display:"flex",transition:"all .12s ease"}}
+          onMouseEnter={e=>(e.currentTarget.style.color=volume===0?"#ff7070":"rgba(255, 255, 255, 0.9)")}
+          onMouseLeave={e=>(e.currentTarget.style.color=volume===0?"#e05555":"rgba(255, 255, 255, 0.4)")}>
           {volume===0 ? <VolumeX size={16}/> : <Volume2 size={16}/>}
         </button>
         <div style={{position:"relative",display:"flex",alignItems:"center",gap:"5px",flexShrink:0}}>
@@ -407,4 +519,4 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
       </div>
     </div>
   );
-};
+});

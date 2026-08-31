@@ -30,7 +30,7 @@ interface StatsViewProps {
   showToast: (msg: string) => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({
+export const StatsView: React.FC<StatsViewProps> = React.memo(({
   listenSecs,
   setListenSecs,
   playCounts,
@@ -58,10 +58,13 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const totalSecs = Object.values(listenSecs).reduce((s: number, n) => s + (n as number), 0);
   const totalPlays = Object.values(playCounts).reduce((s: number, n) => s + (n as number), 0);
 
-  const allKnownTracksMap = new Map<string, Track>();
-  [...quickPicks, ...playHistory, ...playlists.flatMap(p => p?.tracks || [])].forEach(t => {
-    if (t && t.url) allKnownTracksMap.set(t.url, t);
-  });
+  const allKnownTracksMap = useMemo(() => {
+    const map = new Map<string, Track>();
+    [...quickPicks, ...playHistory, ...playlists.flatMap(p => p?.tracks || [])].forEach(t => {
+      if (t && t.url) map.set(t.url, t);
+    });
+    return map;
+  }, [quickPicks, playHistory, playlists]);
 
   let currentPlayCounts = playCounts;
   let currentTotalSecs = totalSecs;
@@ -481,4 +484,4 @@ export const StatsView: React.FC<StatsViewProps> = ({
       )}
     </div>
   );
-};
+});

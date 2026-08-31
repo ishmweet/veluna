@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   AlignLeft,
@@ -26,6 +27,7 @@ import {
   clampMenu,
   getTrackGradient,
   cleanArtist,
+  findDuplicateTracks,
 } from './utils';
 
 // Custom Hooks
@@ -131,6 +133,7 @@ export function App() {
     searchQuery,
     setSearchQuery,
     searchHistory,
+    setSearchHistory,
     showHistory,
     setShowHistory,
     isSearching,
@@ -481,8 +484,18 @@ export function App() {
   const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
+  const [isSpotifyImporting, setIsSpotifyImporting] = useState(false);
+  const [droppedCsvBatch, setDroppedCsvBatch] = useState<{ id: number; items: { name: string; getText: () => Promise<string> }[] } | null>(null);
   const [showYtImportModal, setShowYtImportModal] = useState(false);
-  const [bgImport, setBgImport] = useState<{ matched: number; total: number; label: string } | null>(null);
+  const spotifyAbortRef = useRef<(() => void) | null>(null);
+  const isSpotifyImportActiveRef = useRef(false);
+  const [bgImport, setBgImport] = useState<{
+    currentFile: number;
+    totalFiles: number;
+    matchedTracks: number;
+    totalTracks: number;
+    fileName: string;
+  } | null>(null);
   const [bgYtImport, setBgYtImport] = useState<{ progress: number } | null>(null);
   const [pendingSpotifyImport, setPendingSpotifyImport] = useState<{ tracks: Track[]; matchedCount: number; failedCount: number } | null>(null);
   const [showDuplicatesPlaylist, setShowDuplicatesPlaylist] = useState<Playlist | null>(null);
@@ -769,11 +782,25 @@ export function App() {
       if (e.code === 'ArrowLeft' && !isInput && currentTrackRef.current) { e.preventDefault(); invoke('seek_relative', { seconds: -10 }).catch(() => {}); }
       if (e.code === 'KeyM' && !isInput) toggleMute();
       if (e.key === '?' && !isInput) { e.preventDefault(); setShowShortcuts(s => !s); }
-      if (e.code === 'Escape') { setShowShortcuts(false); setConfirmModal(null); }
+      if (e.code === 'Escape') {
+        if (showLyrics) {
+          setShowLyrics(false);
+          return;
+        }
+        setShowShortcuts(false);
+        setConfirmModal(null);
+        setShowCsvImportModal(false);
+        setShowYtImportModal(false);
+        setShowDuplicatesPlaylist(null);
+        setBulkEditPlaylist(null);
+        setInfoModalTrack(null);
+        setAddToPlaylistTrack(null);
+        setCtxMenu(null);
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast]);
+  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast, showLyrics, setShowLyrics, setConfirmModal, setShowCsvImportModal, setShowYtImportModal, setShowDuplicatesPlaylist, setBulkEditPlaylist, setInfoModalTrack, setAddToPlaylistTrack, setCtxMenu]);
 
   // Global click dismiss
   useEffect(() => {
@@ -785,6 +812,95 @@ export function App() {
     window.addEventListener('click', h);
     return () => window.removeEventListener('click', h);
   }, [setShowHistory, setShowSleepPopover]);
+
+  // Global Drag & Drop for CSV playlists
+  useEffect(() => {
+    let lastDropTime = 0;
+    let unlisten: (() => void) | undefined;
+
+    const handleBatch = (items: { name: string; getText: () => Promise<string> }[]) => {
+      const uniqueItems: { name: string; getText: () => Promise<string> }[] = [];
+      const seen = new Set<string>();
+      for (const it of items) {
+        if (!seen.has(it.name)) {
+          seen.add(it.name);
+          uniqueItems.push(it);
+        }
+      }
+      if (uniqueItems.length > 0) {
+        setDroppedCsvBatch({ id: Date.now(), items: uniqueItems });
+        setShowCsvImportModal(false);
+      }
+    };
+
+    try {
+      getCurrentWebviewWindow().onDragDropEvent((event) => {
+        if (event.payload.type === 'drop') {
+          const now = Date.now();
+          if (now - lastDropTime < 600) return;
+          lastDropTime = now;
+
+          const paths = event.payload.paths;
+          if (paths && paths.length > 0) {
+            const csvs = paths.filter(p => p.toLowerCase().endsWith('.csv'));
+            if (csvs.length > 0) {
+              handleBatch(csvs.map(p => ({
+                name: p.split(/[/\\]/).pop() || 'Spotify Playlist',
+                getText: () => invoke<string>('read_text_file', { path: p }),
+              })));
+            }
+          }
+        }
+      }).then(u => { unlisten = u; }).catch(() => {});
+    } catch {}
+
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const now = Date.now();
+      if (now - lastDropTime < 600) return;
+      lastDropTime = now;
+
+      if (e.dataTransfer?.files?.length) {
+        const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+        if (files.length > 0) {
+          handleBatch(files.map(f => ({
+            name: f.name,
+            getText: () => f.text(),
+          })));
+        }
+      }
+    };
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('drop', onDrop);
+    window.addEventListener('dragover', onDragOver);
+
+    return () => {
+      if (unlisten) unlisten();
+      window.removeEventListener('drop', onDrop);
+      window.removeEventListener('dragover', onDragOver);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showCsvImportModal || droppedCsvBatch || isSpotifyImporting) {
+      isSpotifyImportActiveRef.current = true;
+    }
+  }, [showCsvImportModal, droppedCsvBatch, isSpotifyImporting]);
+
+  const cancelSpotifyImport = useCallback(() => {
+    isSpotifyImportActiveRef.current = false;
+    if (spotifyAbortRef.current) {
+      try { spotifyAbortRef.current(); } catch {}
+    }
+    setIsSpotifyImporting(false);
+    setBgImport(null);
+    setShowCsvImportModal(false);
+    setDroppedCsvBatch(null);
+    showToast('Spotify import cancelled');
+  }, [showToast]);
 
   // Download handlers
   const handleCancelDownload = useCallback(async (url: string) => {
@@ -1448,6 +1564,7 @@ export function App() {
             isTrackLiked={isTrackLiked}
             toggleLikeTrack={toggleLikeTrack}
             clearSearchHistory={clearSearchHistory}
+            setSearchHistory={setSearchHistory}
             removeSearchHistoryItem={removeSearchHistoryItem}
             prefetchOnHover={prefetchOnHover}
             hoveredTrackUrl={hoveredTrackUrl}
@@ -2223,24 +2340,43 @@ export function App() {
       )}
 
       {/* Spotify CSV Import Modal */}
-      {(showCsvImportModal || bgImport) && (
+      {(showCsvImportModal || isSpotifyImporting || bgImport || droppedCsvBatch) && (
         <CsvImportModal
           visible={showCsvImportModal}
-          onClose={() => setShowCsvImportModal(false)}
-          onAbort={() => {
-            setBgImport(null);
-            setShowCsvImportModal(false);
-            showToast('Spotify import cancelled');
+          droppedBatch={droppedCsvBatch}
+          onStartImport={(info) => {
+            setIsSpotifyImporting(true);
+            isSpotifyImportActiveRef.current = true;
+            setBgImport(info);
           }}
-          onSavePlaylist={(name, desc, importedTracks) => {
-            const id = `csv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-            setPlaylists(prev => [...prev, { id, name, description: desc || 'Imported from Spotify', tracks: importedTracks }]);
-            showToast(`"${name}" saved (${importedTracks.length} tracks)`);
+          onFinishImport={() => {
+            setIsSpotifyImporting(false);
             setBgImport(null);
+          }}
+          onClose={() => {
+            setShowCsvImportModal(false);
+            setDroppedCsvBatch(null);
+          }}
+          registerAbort={(fn) => { spotifyAbortRef.current = fn; }}
+          onAbort={cancelSpotifyImport}
+          onSavePlaylist={(name, desc, importedTracks) => {
+            const cleanName = name.trim();
+            setPlaylists(prev => {
+              const existingIndex = prev.findIndex(p => p.name.trim().toLowerCase() === cleanName.toLowerCase());
+              if (existingIndex !== -1) {
+                return prev.map((p, idx) => idx === existingIndex ? { ...p, tracks: importedTracks, description: desc || p.description } : p);
+              }
+              const id = `csv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+              return [...prev, { id, name: cleanName, description: desc || 'Imported from Spotify', tracks: importedTracks }];
+            });
+            showToast(`"${cleanName}" saved (${importedTracks.length} tracks)`);
             setPendingSpotifyImport(null);
           }}
           showToast={showToast}
-          onProgress={(matched, total, label) => setBgImport(total > 0 ? { matched, total, label } : null)}
+          onProgress={(p) => {
+            if (!isSpotifyImportActiveRef.current && p !== null) return;
+            setBgImport(p);
+          }}
         />
       )}
 
@@ -2252,7 +2388,7 @@ export function App() {
           onSave={(name, desc) => {
             const id = `csv_${Date.now()}`;
             setPlaylists(prev => [...prev, { id, name, description: desc || 'Imported from Spotify', tracks: pendingSpotifyImport.tracks }]);
-            showToast(`"${name}" saved — ${pendingSpotifyImport.tracks.length} tracks`);
+            showToast(`"${name}" saved (${pendingSpotifyImport.tracks.length} tracks)`);
             setBgImport(null);
             setPendingSpotifyImport(null);
           }}
@@ -2265,23 +2401,7 @@ export function App() {
 
       {/* Duplicate Finder Modal */}
       {showDuplicatesPlaylist && (() => {
-        const seenUrls = new Set<string>();
-        const seenTrackKeys = new Set<string>();
-        const duplicatesWithIndex: { track: Track; originalIndex: number }[] = [];
-
-        showDuplicatesPlaylist.tracks.forEach((t, index) => {
-          const normKey = `${cleanArtist(t.artist).toLowerCase()}|||${t.title.toLowerCase().trim()}`;
-          const hasUrl = Boolean(t.url && t.url.trim() !== '');
-          const isUrlDupe = hasUrl && seenUrls.has(t.url);
-          const isTitleDupe = seenTrackKeys.has(normKey);
-
-          if (isUrlDupe || isTitleDupe) {
-            duplicatesWithIndex.push({ track: t, originalIndex: index });
-          } else {
-            if (hasUrl) seenUrls.add(t.url);
-            seenTrackKeys.add(normKey);
-          }
-        });
+        const duplicatesWithIndex = findDuplicateTracks(showDuplicatesPlaylist.tracks);
 
         const handleRemoveSingle = (indexToRemove: number) => {
           setPlaylists(prev => prev.map(p => {
@@ -2616,11 +2736,29 @@ export function App() {
       {/* Floating Spotify Background Import Pill */}
       {bgImport && !showCsvImportModal && !pendingSpotifyImport && (
         <div
-          onClick={() => setShowCsvImportModal(true)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowCsvImportModal(true);
+          }}
           style={{
-            position: 'fixed', bottom: '84px', right: '16px', zIndex: 9998, display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(29, 185, 84, 0.15)', background: 'rgba(22, 20, 20, 0.95)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.7)', cursor: 'pointer'
+            position: 'fixed',
+            bottom: '92px',
+            right: '20px',
+            zIndex: 9998,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 14px',
+            borderRadius: '9999px',
+            border: '1px solid rgba(29, 185, 84, 0.25)',
+            background: 'rgba(18, 16, 16, 0.95)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'all 0.2s ease'
           }}
         >
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -2628,21 +2766,59 @@ export function App() {
               <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
             </svg>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '150px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#e2ddd9' }}>Importing Spotify...</span>
-              <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#8a807c', fontVariantNumeric: 'tabular-nums' }}>{bgImport.matched}/{bgImport.total}</span>
-            </div>
-            <div style={{ height: '3px', borderRadius: '1.5px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', borderRadius: '1.5px', background: 'linear-gradient(90deg, #1db954 0%, #1ed760 100%)', width: `${(bgImport.matched / bgImport.total) * 100}%` }} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowCsvImportModal(true)} style={{ color: '#8a807c', background: 'none', border: 'none', cursor: 'pointer' }}>
-              <Maximize2 size={11} />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: '#e2ddd9', whiteSpace: 'nowrap' }}>
+            {bgImport.totalFiles > 1
+              ? `Importing playlists in progress... (${bgImport.currentFile} of ${bgImport.totalFiles})`
+              : 'Importing playlist in progress...'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }} onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowCsvImportModal(true);
+              }}
+              title="Expand import modal"
+              style={{
+                color: '#8a807c',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px',
+                borderRadius: '6px',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#8a807c'; e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Maximize2 size={13} />
             </button>
-            <button onClick={() => { setBgImport(null); setShowCsvImportModal(false); showToast('Spotify import cancelled'); }} style={{ color: '#8a807c', background: 'none', border: 'none', cursor: 'pointer' }}>
-              <X size={12} />
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cancelSpotifyImport();
+              }}
+              title="Cancel import"
+              style={{
+                color: '#8a807c',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px',
+                borderRadius: '6px',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#ff6060'; e.currentTarget.style.background = 'rgba(255,96,96,0.15)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#8a807c'; e.currentTarget.style.background = 'transparent'; }}
+            >
+              <X size={14} />
             </button>
           </div>
         </div>

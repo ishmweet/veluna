@@ -87,7 +87,8 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
   useEffect(() => {
     if (!showLyrics || !lyricsScrollContainerRef.current) return;
     const lines = lyricsData?.lines || [];
-    let currentIdx = lines.length > 0 ? lines.length - 1 : 0;
+    if (lines.length === 0) return;
+    let currentIdx = lines.length - 1;
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].time > progressSeconds) {
         currentIdx = Math.max(0, i - 1);
@@ -95,11 +96,13 @@ export function useLyrics(currentTrack: Track | null, trackDurationSeconds: numb
       }
     }
     const el = lyricsScrollContainerRef.current;
-    const active = el.querySelector('[data-active="true"]') as HTMLElement;
-    if (active && (currentIdx !== lastScrolledLyricIdxRef.current || !el.getAttribute('data-scrolled'))) {
-      active.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      lastScrolledLyricIdxRef.current = currentIdx;
-      el.setAttribute('data-scrolled', 'true');
+    if (currentIdx !== lastScrolledLyricIdxRef.current || !el.getAttribute('data-scrolled')) {
+      const active = el.querySelector('[data-active="true"]') as HTMLElement;
+      if (active) {
+        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        lastScrolledLyricIdxRef.current = currentIdx;
+        el.setAttribute('data-scrolled', 'true');
+      }
     }
   }, [showLyrics, progressSeconds, lyricsData]);
 

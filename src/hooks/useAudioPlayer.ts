@@ -92,9 +92,11 @@ export function useAudioPlayer({
   const progressRef = useRef<HTMLDivElement | null>(null);
   const volumeRef = useRef<HTMLDivElement | null>(null);
   const endDetectedRef = useRef(false);
+  const lastTrackEndTimeRef = useRef<number>(0);
   const isCrossfadingRef = useRef(false);
   const fadeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const codecPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastProgressUpdateRef = useRef<number>(0);
 
   const setIsPlayingSync = useCallback((val: boolean) => {
     isPlayingRef.current = val;
@@ -139,6 +141,7 @@ export function useAudioPlayer({
     setRepeatMode(p => {
       const n: RepeatMode = p === 'off' ? 'all' : p === 'all' ? 'one' : 'off';
       repeatModeRef.current = n;
+      saveLS('vg_repeat', n);
       showToast(n === 'off' ? 'Repeat off' : n === 'all' ? 'Repeat all' : 'Repeat one');
       return n;
     });
@@ -262,6 +265,9 @@ export function useAudioPlayer({
       clearInterval(fadeIntervalRef.current);
       fadeIntervalRef.current = null;
     }
+    playlistContextRef.current = null;
+    setQueue([]);
+    queueRef.current = [];
     setCurrentLocalPath(local.path);
     currentLocalPathRef.current = local.path;
     
@@ -337,9 +343,12 @@ export function useAudioPlayer({
       setIsPlayingSync(false);
       setLoadingTrackUrlSync(null);
     }
-  }, [volume, playbackSpeed, setPlayHistory, setQuickPicks, setIsPlayingSync, setLoadingTrackUrlSync]);
+  }, [volume, playbackSpeed, setPlayHistory, setQuickPicks, setIsPlayingSync, setLoadingTrackUrlSync, setQueue]);
 
   const handlePlayInContext = useCallback((track: Track, contextList: Track[]) => {
+    localTracksListRef.current = [];
+    setCurrentLocalPath(null);
+    currentLocalPathRef.current = null;
     const idx = contextList.findIndex(t => t.url === track.url);
     playlistContextRef.current = { tracks: contextList, index: Math.max(0, idx) };
     setQueue([]);
@@ -379,7 +388,9 @@ export function useAudioPlayer({
   }, [volume, previousVolume, setPreviousVolume, setVolume]);
 
   const handleTrackEnd = useCallback(() => {
-    if (endDetectedRef.current) return;
+    const now = performance.now();
+    if (now - lastTrackEndTimeRef.current < 2500) return;
+    lastTrackEndTimeRef.current = now;
     endDetectedRef.current = true;
     isCrossfadingRef.current = false;
     if (fadeIntervalRef.current) {
@@ -389,128 +400,109 @@ export function useAudioPlayer({
     const track = currentTrackRef.current;
     const repeat = repeatModeRef.current;
 
-    // 1. MANUALLY QUEUED TRACKS ALWAYS TAKE HIGHEST PRIORITY OVER EVERYTHING
-    const q = queueRef.current;
-    if (q.length > 0) {
-      const [next, ...rest] = q;
-      queueRef.current = rest;
-      setQueue(rest);
-      setTimeout(() => handlePlayTrack(next, true), 0);
+    // When Repeat is OFF: Stop playback immediately after the song finishes
+    if (repeat === 'off') {
+      setIsPlayingSync(false);
+      invoke('pause_audio').catch(() => {});
       return;
     }
 
-    if (repeat === 'one' && track) {
-      invoke('seek_to_start').catch(() => {
-        invoke('seek_audio', { time: 0 }).catch(() => {});
-      });
-      invoke('resume_audio').catch(() => {});
-      progressSecondsRef.current = 0;
-      setProgressSeconds(0);
-      setIsPlayingSync(true);
-      setTimeout(() => { endDetectedRef.current = false; }, 1200);
-      return;
-    }
+    const isLocal = track?.url?.startsWith('local://') || currentLocalPathRef.current !== null;
 
-    const isLocal = track?.url?.startsWith('local://');
+    // A. OFFLINE / LOCAL PLAYBACK
     if (isLocal) {
-      const list = localTracksListRef.current;
-      const idx = localTrackIndexRef.current;
-      if (list.length > 1) {
-        let nextIdx: number;
-        if (shuffle) {
-          do { nextIdx = Math.floor(Math.random() * list.length); } while (nextIdx === idx && list.length > 1);
-        } else {
-          nextIdx = idx + 1;
+      if (repeat === 'one' && track) {
+        const list = localTracksListRef.current;
+        const idx = localTrackIndexRef.current;
+        if (list[idx]) {
+          handlePlayLocalTrack(list[idx], list, idx);
+        } else if (list[0]) {
+          handlePlayLocalTrack(list[0], list, 0);
         }
-        if (nextIdx < list.length) {
-          localTrackIndexRef.current = nextIdx;
-          setTimeout(() => handlePlayLocalTrack(list[nextIdx], list, nextIdx), 0);
-          return;
-        } else if (repeat === 'all') {
-          localTrackIndexRef.current = 0;
-          setTimeout(() => handlePlayLocalTrack(list[0], list, 0), 0);
-          return;
-        }
-      } else if (repeat === 'all' && list.length === 1) {
-        invoke('seek_to_start').catch(() => {});
-        progressSecondsRef.current = 0;
-        setProgressSeconds(0);
-        setIsPlayingSync(true);
         setTimeout(() => { endDetectedRef.current = false; }, 1500);
         return;
       }
+
+      if (repeat === 'all') {
+        const list = localTracksListRef.current;
+        const idx = localTrackIndexRef.current;
+        if (list.length > 1) {
+          let nextIdx: number;
+          if (shuffle) {
+            do { nextIdx = Math.floor(Math.random() * list.length); } while (nextIdx === idx && list.length > 1);
+          } else {
+            nextIdx = idx + 1;
+          }
+          if (nextIdx < list.length) {
+            localTrackIndexRef.current = nextIdx;
+            setTimeout(() => handlePlayLocalTrack(list[nextIdx], list, nextIdx), 0);
+            return;
+          } else {
+            localTrackIndexRef.current = 0;
+            setTimeout(() => handlePlayLocalTrack(list[0], list, 0), 0);
+            return;
+          }
+        } else if (list.length === 1) {
+          handlePlayLocalTrack(list[0], list, 0);
+          return;
+        }
+      }
+
       setIsPlayingSync(false);
       return;
     }
 
-    const ctx = playlistContextRef.current;
-    if (ctx && ctx.tracks.length > 1) {
-      let nextIdx: number;
-      if (shuffle) {
-        do { nextIdx = Math.floor(Math.random() * ctx.tracks.length); }
-        while (nextIdx === ctx.index && ctx.tracks.length > 1);
-      } else {
-        nextIdx = ctx.index + 1;
-      }
-      if (nextIdx < ctx.tracks.length) {
-        playlistContextRef.current = { ...ctx, index: nextIdx };
-        setTimeout(() => handlePlayTrack(ctx.tracks[nextIdx], true), 0);
-        return;
-      } else if (repeat === 'all') {
-        playlistContextRef.current = { ...ctx, index: 0 };
-        setTimeout(() => handlePlayTrack(ctx.tracks[0], true), 0);
-        return;
-      }
-    }
-
-    if (repeat === 'all' && track) {
-      setTimeout(() => handlePlayTrack(track, true), 0);
+    // B. ONLINE PLAYBACK
+    // 1. Repeat One
+    if (repeat === 'one' && track) {
+      handlePlayTrack(track, true);
+      setTimeout(() => { endDetectedRef.current = false; }, 1500);
       return;
     }
 
-    if (autoplayEnabled && track && !isLocal) {
-      setIsLoadingTrack(true);
-      fetchAutoplayTracks(track).then(async (recs) => {
-        if (currentTrackRef.current?.url !== track.url) return;
-        if (recs.length > 0) {
-          const filteredRecs = recs.filter(r => r.url !== track.url && !playHistory.some(h => h.url === r.url));
-          const toAdd = (filteredRecs.length > 0 ? filteredRecs : recs).slice(0, 8);
-          if (toAdd.length > 0) {
-            const [next, ...rest] = toAdd;
-            queueRef.current = rest;
-            setQueue(rest);
-            showToast("Song Radio: Playing recommendations");
-            await handlePlayTrack(next, true);
-            return;
-          }
+    // 2. Repeat All
+    if (repeat === 'all') {
+      const q = queueRef.current;
+      if (q.length > 0) {
+        const [next, ...rest] = q;
+        queueRef.current = rest;
+        setQueue(rest);
+        setTimeout(() => handlePlayTrack(next, true), 0);
+        return;
+      }
+
+      const ctx = playlistContextRef.current;
+      if (ctx && ctx.tracks.length > 1) {
+        let nextIdx: number;
+        if (shuffle) {
+          do { nextIdx = Math.floor(Math.random() * ctx.tracks.length); }
+          while (nextIdx === ctx.index && ctx.tracks.length > 1);
+        } else {
+          nextIdx = ctx.index + 1;
         }
-        setIsPlayingSync(false);
-        setIsLoadingTrack(false);
-      }).catch(() => {
-        if (currentTrackRef.current?.url === track.url) {
-          setIsPlayingSync(false);
-          setIsLoadingTrack(false);
+        if (nextIdx < ctx.tracks.length) {
+          playlistContextRef.current = { ...ctx, index: nextIdx };
+          setTimeout(() => handlePlayTrack(ctx.tracks[nextIdx], true), 0);
+          return;
+        } else {
+          playlistContextRef.current = { ...ctx, index: 0 };
+          setTimeout(() => handlePlayTrack(ctx.tracks[0], true), 0);
+          return;
         }
-      });
-      return;
+      }
+
+      if (track) {
+        setTimeout(() => handlePlayTrack(track, true), 0);
+        return;
+      }
     }
 
     setIsPlayingSync(false);
-  }, [handlePlayTrack, handlePlayLocalTrack, setIsPlayingSync, shuffle, autoplayEnabled, fetchAutoplayTracks, playHistory, setQueue, showToast]);
+  }, [handlePlayTrack, handlePlayLocalTrack, setIsPlayingSync, shuffle, setQueue]);
 
   const handleSkipForward = useCallback(async () => {
-    // 1. MANUALLY QUEUED TRACKS ALWAYS TAKE HIGHEST PRIORITY OVER EVERYTHING
-    const q = queueRef.current;
-    if (q.length > 0) {
-      const [next, ...rest] = q;
-      queueRef.current = rest;
-      setQueue(rest);
-      await handlePlayTrack(next, true);
-      return;
-    }
-
     const track = currentTrackRef.current;
-    const isLocal = track?.url?.startsWith('local://');
+    const isLocal = track?.url?.startsWith('local://') || currentLocalPathRef.current !== null;
 
     if (isLocal) {
       const list = localTracksListRef.current;
@@ -528,6 +520,16 @@ export function useAudioPlayer({
         localTrackIndexRef.current = 0;
         handlePlayLocalTrack(list[0], list, 0);
       }
+      return;
+    }
+
+    // 1. Manually Queued Tracks
+    const q = queueRef.current;
+    if (q.length > 0) {
+      const [next, ...rest] = q;
+      queueRef.current = rest;
+      setQueue(rest);
+      await handlePlayTrack(next, true);
       return;
     }
 
@@ -627,6 +629,26 @@ export function useAudioPlayer({
     }
   }, [playHistory, setPlayHistory, handlePlayTrack, handlePlayLocalTrack]);
 
+  const handleTrackEndRef = useRef(handleTrackEnd);
+  useEffect(() => {
+    handleTrackEndRef.current = handleTrackEnd;
+  }, [handleTrackEnd]);
+
+  const crossfadeSecondsRef = useRef(crossfadeSeconds);
+  useEffect(() => {
+    crossfadeSecondsRef.current = crossfadeSeconds;
+  }, [crossfadeSeconds]);
+
+  const currentVolumeRef = useRef(volume);
+  useEffect(() => {
+    currentVolumeRef.current = volume;
+  }, [volume]);
+
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
   useEffect(() => {
     let unlistenState: (() => void) | undefined;
     let unlistenEnd: (() => void) | undefined;
@@ -640,7 +662,11 @@ export function useAudioPlayer({
         if (isDraggingProgressRef.current) return;
 
         progressSecondsRef.current = s.position;
-        setProgressSeconds(s.position);
+        const now = performance.now();
+        if (now - lastProgressUpdateRef.current >= 200 || Math.abs(s.position - (progressSecondsRef.current || 0)) >= 1) {
+          lastProgressUpdateRef.current = now;
+          setProgressSeconds(s.position);
+        }
 
         const ab = abLoopRef.current;
         if (ab.a !== null && ab.b !== null && s.position >= ab.b) {
@@ -669,37 +695,35 @@ export function useAudioPlayer({
           if (playing !== isPlayingRef.current) setIsPlayingSync(playing);
         }
 
+        const curCrossfade = crossfadeSecondsRef.current;
+        const curVol = currentVolumeRef.current;
         if (!s.eof_reached && !endDetectedRef.current && !isCrossfadingRef.current && s.position > 3 && s.duration > 0
-            && crossfadeSeconds > 0 && s.position >= s.duration - crossfadeSeconds - 0.5
+            && curCrossfade > 0 && s.position >= s.duration - curCrossfade - 0.5
             && s.position < s.duration - 0.2) {
           isCrossfadingRef.current = true;
-          const fadeSteps = Math.max(1, Math.round(crossfadeSeconds * 5));
-          const volStep = volume / fadeSteps;
+          const fadeSteps = Math.max(1, Math.round(curCrossfade * 5));
+          const volStep = curVol / fadeSteps;
           let step = 0;
           if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
           fadeIntervalRef.current = setInterval(() => {
             step++;
-            const newVol = Math.max(0, volume - volStep * step);
+            const newVol = Math.max(0, curVol - volStep * step);
             invoke('set_volume', { volume: newVol }).catch(() => {});
             if (step >= fadeSteps) {
               if (fadeIntervalRef.current) {
                 clearInterval(fadeIntervalRef.current);
                 fadeIntervalRef.current = null;
               }
-              invoke('set_volume', { volume }).catch(() => {});
-              if (!endDetectedRef.current) handleTrackEnd();
+              invoke('set_volume', { volume: curVol }).catch(() => {});
+              if (!endDetectedRef.current) handleTrackEndRef.current();
             }
-          }, (crossfadeSeconds * 1000) / fadeSteps);
+          }, (curCrossfade * 1000) / fadeSteps);
           return;
         }
 
-        if (s.eof_reached && !endDetectedRef.current && s.position > 3) {
-          handleTrackEnd();
+        if (s.eof_reached && s.position > 3) {
+          handleTrackEndRef.current();
           return;
-        }
-
-        if (!s.eof_reached && !endDetectedRef.current && s.position > 3 && s.duration > 0 && s.position >= s.duration - 1.0) {
-          handleTrackEnd();
         }
       }
     ).then(fn => { unlistenState = fn; });
@@ -724,7 +748,7 @@ export function useAudioPlayer({
 
     listen('mpv_track_end', () => {
       if (!endDetectedRef.current) {
-        handleTrackEnd();
+        handleTrackEndRef.current();
       }
     }).then(fn => { unlistenEnd = fn; });
 
@@ -747,7 +771,7 @@ export function useAudioPlayer({
       unlistenStarted?.();
       unlistenError?.();
     };
-  }, [handleTrackEnd, setIsPlayingSync, setIsLoadingTrackSync, setLoadingTrackUrlSync, crossfadeSeconds, volume, showToast]);
+  }, []);
 
   const onListeningStepRef = useRef(onListeningStep);
   useEffect(() => {
@@ -855,10 +879,19 @@ export function useAudioPlayer({
     return () => clearInterval(interval);
   }, [sleepTimer, setIsPlayingSync, showToast]);
 
+  const prefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchedSetRef = useRef<Set<string>>(new Set());
+
   const prefetchOnHover = useCallback((url: string) => {
-    if (url && !url.startsWith('local://')) {
+    if (!url || url.startsWith('local://') || prefetchedSetRef.current.has(url)) return;
+    if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+    prefetchTimerRef.current = setTimeout(() => {
+      prefetchedSetRef.current.add(url);
+      if (prefetchedSetRef.current.size > 200) {
+        prefetchedSetRef.current.clear();
+      }
       invoke('prefetch_track', { url }).catch(() => {});
-    }
+    }, 180);
   }, []);
 
   return {

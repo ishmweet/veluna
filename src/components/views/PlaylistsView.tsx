@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   Check,
   CheckCircle,
@@ -19,10 +19,11 @@ import {
   Layers,
 } from 'lucide-react';
 import { Track, Playlist, CtxMenu } from '../../types';
-import { getTrackGradient, saveLS, cleanArtist, parseDurationToSeconds } from '../../utils';
+import { getTrackGradient, saveLS, cleanArtist, parseDurationToSeconds, findDuplicateTracks } from '../../utils';
 import { TrackRow } from '../TrackRow';
 import { ThemedSelect } from '../ThemedSelect';
 import { BatchActionBar } from '../BatchActionBar';
+import { VirtualTrackList } from '../VirtualTrackList';
 import { useMultiSelect } from '../../hooks/useMultiSelect';
 
 interface PlaylistsViewProps {
@@ -88,7 +89,7 @@ interface PlaylistsViewProps {
   addToQueue?: (tracks: Track | Track[]) => void;
 }
 
-export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
+export const PlaylistsView: React.FC<PlaylistsViewProps> = React.memo(({
   openPlaylistId,
   setOpenPlaylistId,
   playlists,
@@ -216,6 +217,31 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
   const [dragPlaylistCardIdxState, setDragPlaylistCardIdxState] = useState<number | null>(null);
 
   const openPlaylist = playlists.find(p => p.id === openPlaylistId) || null;
+
+  const filteredTracks = useMemo(() => {
+    if (!openPlaylist) return [];
+    const q = playlistSearchQ.trim().toLowerCase();
+    let list = q
+      ? openPlaylist.tracks.filter(t => {
+          const title = (t.title || '').toLowerCase();
+          const artist = (t.artist || '').toLowerCase();
+          return title.includes(q) || artist.includes(q);
+        })
+      : [...openPlaylist.tracks];
+
+    if (playlistSortBy === 'title_asc') {
+      list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    } else if (playlistSortBy === 'title_desc') {
+      list.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+    } else if (playlistSortBy === 'artist_asc') {
+      list.sort((a, b) => (a.artist || '').localeCompare(b.artist || ''));
+    } else if (playlistSortBy === 'duration_asc') {
+      list.sort((a, b) => parseDurationToSeconds(a.duration) - parseDurationToSeconds(b.duration));
+    } else if (playlistSortBy === 'duration_desc') {
+      list.sort((a, b) => parseDurationToSeconds(b.duration) - parseDurationToSeconds(a.duration));
+    }
+    return list;
+  }, [openPlaylist?.tracks, playlistSearchQ, playlistSortBy]);
 
   return (
     <>
@@ -360,7 +386,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                     background:"var(--v-accent)",
                     color:"var(--v-bg0)",
                     fontWeight:800,
-                    borderRadius:"10px",
+                    borderRadius:"9999px",
                     border:"none",
                     cursor:"pointer",
                     fontSize:"13px",
@@ -382,30 +408,18 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                 </button>
 
                 {(() => {
-                  const seen = new Set<string>();
-                  let dupes = 0;
-                  for (const t of openPlaylist.tracks) {
-                    const key = `${(t.title || '').toLowerCase().trim()}|${(t.artist || '').toLowerCase().trim()}` || t.url;
-                    if (seen.has(key)) dupes++;
-                    else seen.add(key);
-                  }
+                  const duplicates = findDuplicateTracks(openPlaylist.tracks);
+                  const dupes = duplicates.length;
 
                   if (dupes > 0) {
                     return (
                       <button
                         onClick={() => {
+                          const dupeIndices = new Set(duplicates.map(d => d.originalIndex));
+                          const cleanedTracks = openPlaylist.tracks.filter((_, idx) => !dupeIndices.has(idx));
                           setPlaylists(prev => prev.map(p => {
                             if (p.id !== openPlaylist.id) return p;
-                            const trackSeen = new Set<string>();
-                            const uniqueTracks: Track[] = [];
-                            for (const tr of p.tracks) {
-                              const k = `${(tr.title || '').toLowerCase().trim()}|${(tr.artist || '').toLowerCase().trim()}` || tr.url;
-                              if (!trackSeen.has(k)) {
-                                trackSeen.add(k);
-                                uniqueTracks.push(tr);
-                              }
-                            }
-                            return { ...p, tracks: uniqueTracks };
+                            return { ...p, tracks: cleanedTracks };
                           }));
                           showToast(`Removed ${dupes} duplicate track${dupes > 1 ? 's' : ''}`);
                         }}
@@ -414,9 +428,9 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                           display: "flex",
                           alignItems: "center",
                           gap: "6px",
-                          padding: "9px 14px",
+                          padding: "9px 16px",
                           color: "var(--v-accent)",
-                          borderRadius: "10px",
+                          borderRadius: "9999px",
                           background: "var(--v-bg3)",
                           border: "1px solid var(--v-bdr3)",
                           fontSize: "13px",
@@ -448,9 +462,9 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                       display:"flex",
                       alignItems:"center",
                       gap:"6px",
-                      padding:"9px 14px",
+                      padding:"9px 16px",
                       color:"var(--v-fg)",
-                      borderRadius:"10px",
+                      borderRadius:"9999px",
                       background:"var(--v-bg3)",
                       border:"1px solid var(--v-bdr3)",
                       fontSize:"13px",
@@ -477,9 +491,9 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                       display:"flex",
                       alignItems:"center",
                       gap:"6px",
-                      padding:"9px 14px",
+                      padding:"9px 16px",
                       color:"#ff7070",
-                      borderRadius:"10px",
+                      borderRadius:"9999px",
                       background:"rgba(220,60,60,0.02)",
                       border:"1px solid rgba(220,60,60,0.08)",
                       fontSize:"13px",
@@ -505,31 +519,9 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
           </div>
           {openPlaylist.tracks.length === 0
             ? <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"140px",color:"var(--v-fg3)",gap:"10px",position:"relative",zIndex:1}}><Music size={28} strokeWidth={1}/><p style={{fontSize:"13px",color:"var(--v-fg2)"}}>No tracks yet.</p></div>
-            : (() => {
-                const q = playlistSearchQ.trim().toLowerCase();
-                let filteredTracks = q
-                  ? openPlaylist.tracks.filter(t => {
-                      const title = (t.title || '').toLowerCase();
-                      const artist = (t.artist || '').toLowerCase();
-                      return title.includes(q) || artist.includes(q);
-                    })
-                  : [...openPlaylist.tracks];
-
-                if (playlistSortBy === 'title_asc') {
-                  filteredTracks.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-                } else if (playlistSortBy === 'title_desc') {
-                  filteredTracks.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
-                } else if (playlistSortBy === 'artist_asc') {
-                  filteredTracks.sort((a, b) => (a.artist || '').localeCompare(b.artist || ''));
-                } else if (playlistSortBy === 'duration_asc') {
-                  filteredTracks.sort((a, b) => parseDurationToSeconds(a.duration) - parseDurationToSeconds(b.duration));
-                } else if (playlistSortBy === 'duration_desc') {
-                  filteredTracks.sort((a, b) => parseDurationToSeconds(b.duration) - parseDurationToSeconds(a.duration));
-                }
-
-                return (
-                  <>
-                    <div style={{display:"flex",flexDirection:"column",gap:"4px",position:"relative",zIndex:1}}>
+            : (
+                <>
+                  <div style={{display:"flex",flexDirection:"column",gap:"4px",position:"relative",zIndex:1}}>
                     <div style={{
                       display:"flex",
                       alignItems:"center",
@@ -605,22 +597,38 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                       <div style={{ flex: 1, minWidth: 0, paddingLeft: "14px" }}>Title</div>
                       <div style={{ width: "150px", textAlign: "right", paddingRight: "12px" }}>Duration</div>
                     </div>
-                    {filteredTracks.length === 0
-                      ? <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"110px",color:"var(--v-fg3)",gap:"7px"}}><Search size={24} strokeWidth={1} /><p style={{fontSize:"13px",color:"var(--v-fg2)"}}>No results for "{playlistSearchQ}"</p></div>
-                      : filteredTracks.map((t, i) => {
+                    {filteredTracks.length === 0 ? (
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"110px",color:"var(--v-fg3)",gap:"7px"}}>
+                        <Search size={24} strokeWidth={1} />
+                        <p style={{fontSize:"13px",color:"var(--v-fg2)"}}>No results for "{playlistSearchQ}"</p>
+                      </div>
+                    ) : (
+                      <VirtualTrackList
+                        items={filteredTracks}
+                        itemHeight={56}
+                        keyExtractor={(t, i) => `${t.url}_${i}`}
+                        renderItem={(t, i) => {
                           const origIdx = openPlaylist.tracks.indexOf(t);
                           const enrichedTrack = { ...t, cover: t.cover || '' };
                           return (
-                            <div key={enrichedTrack.url + origIdx}
-                              style={{position:"relative",display:"flex",alignItems:"center",gap:"3px"}}
-                              onMouseEnter={() => { if (dragPlaylistIdx.current !== null) { dragOverPlaylistIdxRef.current = origIdx; setDragOverPlaylistIdx(origIdx); } }}>
+                            <div
+                              key={enrichedTrack.url + origIdx}
+                              style={{position:"relative",display:"flex",alignItems:"center",gap:"3px",height:"56px",boxSizing:"border-box"}}
+                              onMouseEnter={() => {
+                                if (dragPlaylistIdx.current !== null) {
+                                  dragOverPlaylistIdxRef.current = origIdx;
+                                  setDragOverPlaylistIdx(origIdx);
+                                }
+                              }}
+                            >
                               {dragOverPlaylistIdx === origIdx && dragPlaylistIdx.current !== null && dragPlaylistIdx.current !== origIdx && (
                                 <div style={{position:"absolute",top:0,left:"32px",right:0,height:"2px",background:"var(--v-accent)",borderRadius:"1px",zIndex:10,pointerEvents:"none"}}/>
                               )}
                               {!playlistSearchQ && (
                                 <div
                                   style={{padding:"4px 6px",cursor:"grab",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.2,transition:"opacity .12s"}}
-                                  onMouseEnter={e=>(e.currentTarget.style.opacity="0.7")} onMouseLeave={e=>(e.currentTarget.style.opacity="0.2")}
+                                  onMouseEnter={e=>(e.currentTarget.style.opacity="0.7")}
+                                  onMouseLeave={e=>(e.currentTarget.style.opacity="0.2")}
                                   onMouseDown={e => {
                                     e.preventDefault();
                                     dragPlaylistIdx.current = origIdx;
@@ -643,7 +651,8 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                                       }));
                                     };
                                     window.addEventListener('mouseup', onUp);
-                                  }}>
+                                  }}
+                                >
                                   <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" style={{color:"var(--v-fg3)"}}>
                                     <circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/>
                                     <circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/>
@@ -652,22 +661,33 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                                 </div>
                               )}
                               <div style={{flex:1,minWidth:0}}>
-                                <TrackRow track={enrichedTrack} index={i} showRemove onRemove={() => removeFromPlaylist(openPlaylist.id, enrichedTrack.url)}
-                                  isActive={currentTrack?.url === enrichedTrack.url} isHovered={hoveredTrackUrl === enrichedTrack.url}
-                                  isLoadingTrack={(loadingTrackUrl === enrichedTrack.url || (currentTrack?.url === enrichedTrack.url && isLoadingTrack)) && !isPlaying} isPlaying={isPlaying}
-                                  isLiked={isTrackLiked(enrichedTrack.url)} isDownloading={(downloadingTracks[enrichedTrack.url] ?? 0)}
+                                <TrackRow
+                                  track={enrichedTrack}
+                                  index={i}
+                                  showRemove
+                                  onRemove={() => removeFromPlaylist(openPlaylist.id, enrichedTrack.url)}
+                                  isActive={currentTrack?.url === enrichedTrack.url}
+                                  isHovered={hoveredTrackUrl === enrichedTrack.url}
+                                  isLoadingTrack={(loadingTrackUrl === enrichedTrack.url || (currentTrack?.url === enrichedTrack.url && isLoadingTrack)) && !isPlaying}
+                                  isPlaying={isPlaying}
+                                  isLiked={isTrackLiked(enrichedTrack.url)}
+                                  isDownloading={(downloadingTracks[enrichedTrack.url] ?? 0)}
                                   isSelected={selectedTrackUrls.has(enrichedTrack.url)}
                                   isMultiSelectActive={isTrackMultiSelectActive}
                                   onPlay={() => handlePlayInContext(enrichedTrack, openPlaylist.tracks)}
-                                  onHoverEnter={() => { setHoveredTrackUrl(enrichedTrack.url); prefetchOnHover(enrichedTrack.url); }} onHoverLeave={() => setHoveredTrackUrl(null)}
-                                  onLike={() => toggleLikeTrack(enrichedTrack)} onDownload={() => handleDownload(enrichedTrack)}
+                                  onHoverEnter={() => { setHoveredTrackUrl(enrichedTrack.url); prefetchOnHover(enrichedTrack.url); }}
+                                  onHoverLeave={() => setHoveredTrackUrl(null)}
+                                  onLike={() => toggleLikeTrack(enrichedTrack)}
+                                  onDownload={() => handleDownload(enrichedTrack)}
                                   onCtx={e => openCtx(e, { type: 'track', track: enrichedTrack })}
-                                  onSelectToggle={e => toggleTrackSelect(enrichedTrack, i, e, openPlaylist.tracks)} />
+                                  onSelectToggle={e => toggleTrackSelect(enrichedTrack, i, e, openPlaylist.tracks)}
+                                />
                               </div>
                             </div>
                           );
-                        })
-                    }
+                        }}
+                      />
+                    )}
                   </div>
                   {isTrackMultiSelectActive && (
                     <BatchActionBar
@@ -723,10 +743,8 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                       }}
                     />
                   )}
-                  </>
-                );
-              })()
-          }
+                </>
+              )}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar" style={{padding:"24px 30px 140px",zIndex:10}}>
@@ -1001,7 +1019,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                           <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                             {pl.id==='p1'
                               ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,rgba(140,30,30,0.4) 0%,rgba(140,30,30,0.1) 100%)"}}><Heart size={22} style={{color:"#e05555",fill:"rgba(220,60,60,0.25)"}}/></div>
-                              : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)"}}><ListMusic size={24} style={{color:"#363230"}}/></div>}
+                              : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)"}}><ListMusic size={24} style={{color:"var(--v-fg3)"}}/></div>}
                           </div>
                           {cover && (
                             <img src={cover} style={{position: "absolute", inset: 0, width:"100%",height:"100%",objectFit:"cover"}} onError={e => { e.currentTarget.style.display = 'none'; }} alt=""/>
@@ -1161,7 +1179,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                           <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                             {pl.id==='p1'
                               ? <Heart size={14} style={{color:"#e05555",fill:"rgba(220,60,60,0.25)"}}/>
-                              : <ListMusic size={16} style={{color:"#363230"}}/>}
+                              : <ListMusic size={16} style={{color:"var(--v-fg3)"}}/>}
                           </div>
                           {cover && (
                             <img src={cover} style={{position: "absolute", inset: 0, width:"100%",height:"100%",objectFit:"cover"}} onError={e => { e.currentTarget.style.display = 'none'; }} alt=""/>
@@ -1293,4 +1311,4 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
       )}
     </>
   );
-};
+});

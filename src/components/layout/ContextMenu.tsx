@@ -68,7 +68,7 @@ interface ContextMenuProps {
   audioInfo?: AudioInfo | null;
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({
+export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
   ctxMenu,
   setCtxMenu,
   playlists,
@@ -168,14 +168,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       showToast('Offline tracks cannot be added to playlists');
       return;
     }
+    let added = false;
+    let pName = 'playlist';
     setPlaylists(prev => prev.map(p => {
       if (p.id === pid) {
+        pName = p.name;
         if (p.tracks.some(t => t.url === track.url)) return p;
+        added = true;
         return { ...p, tracks: [...p.tracks, track] };
       }
       return p;
     }));
-    showToast('Added to playlist');
+    if (added) {
+      showToast(`Added to ${pName}`);
+    } else {
+      showToast('Already in playlist');
+    }
     setAddToPlaylistTrack(null);
   };
 
@@ -552,4 +560,4 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       })()}
     </>
   );
-};
+});

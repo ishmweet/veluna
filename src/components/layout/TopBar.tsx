@@ -23,7 +23,7 @@ interface TopBarProps {
   onOpenShortcuts?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({
+export const TopBar: React.FC<TopBarProps> = React.memo(({
   activeNav,
   setActiveNav: _setActiveNav,
   navigateTo: customNavigateTo,
@@ -186,4 +186,4 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
     </>
   );
-};
+});

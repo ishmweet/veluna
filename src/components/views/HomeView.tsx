@@ -77,103 +77,145 @@ interface HomeViewProps {
   addToQueue?: (tracks: Track | Track[]) => void;
 }
 
-export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: React.CSSProperties }> = ({ id, size = 16, style }) => {
+export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: React.CSSProperties }> = ({ id, size = 18, style }) => {
   switch (id) {
     case 'kpop':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="currentColor" fillOpacity="0.16" />
-          <circle cx="18.5" cy="5.5" r="1.5" fill="currentColor" />
+          <path d="M14.5 8.5C12.5 6.5 10 7.5 9 9l-1 1.5a4.2 4.2 0 0 0 .5 5.5l3.5 3.5a3 3 0 0 0 4.2 0l3.8-3.8c1.2-1.2 1.2-3.1 0-4.2l-2-2-3.5-1z" />
+          <path d="M9.5 5.5c-.8-.8-2-.8-2.8 0s-.8 2 0 2.8l1.3 1.2" />
+          <path d="M12 2.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" fill="currentColor" stroke="none" />
         </svg>
       );
     case 'pop':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M12 3l2.8 6.2L21 10.1l-5.1 4.5 1.5 6.7L12 17.8l-5.4 3.5 1.5-6.7L3 10.1l6.2-.9L12 3z" fill="currentColor" fillOpacity="0.14" />
+          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+          <line x1="12" y1="18" x2="12" y2="22" />
+          <line x1="8" y1="22" x2="16" y2="22" />
+          <path d="M17.5 3.5c1.2.6 2 1.8 2 3.2" strokeOpacity="0.8" strokeWidth="1.5" />
+          <path d="M6.5 3.5C5.3 4.1 4.5 5.3 4.5 6.7" strokeOpacity="0.8" strokeWidth="1.5" />
+          <circle cx="19.5" cy="3" r="0.8" fill="currentColor" stroke="none" />
         </svg>
       );
     case 'hiphop':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.25" />
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+          <rect x="2" y="7" width="20" height="14" rx="2" />
+          <path d="M6 7V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3" />
+          <circle cx="7" cy="14" r="3" />
+          <circle cx="7" cy="14" r="1" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="14" r="3" />
+          <circle cx="17" cy="14" r="1" fill="currentColor" stroke="none" />
+          <line x1="12" y1="11" x2="12" y2="17" strokeWidth="1.5" />
         </svg>
       );
     case 'synthwave':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M12 3a9 9 0 0 0-9 9h18a9 9 0 0 0-9-9z" fill="currentColor" fillOpacity="0.18" />
-          <path d="M3 15h18M5 18h14M8 21h8" />
+          <path d="M12 3a9 9 0 0 0-9 9h18a9 9 0 0 0-9-9z" />
+          <line x1="4.5" y1="9" x2="19.5" y2="9" strokeWidth="1.2" />
+          <line x1="3.5" y1="6.5" x2="20.5" y2="6.5" strokeWidth="1.2" />
+          <path d="M2 15h20M4 18h16M7 21h10" strokeWidth="1.4" />
+          <line x1="12" y1="12" x2="12" y2="21" strokeWidth="1.2" />
+          <line x1="6" y1="12" x2="3" y2="21" strokeWidth="1.2" />
+          <line x1="18" y1="12" x2="21" y2="21" strokeWidth="1.2" />
         </svg>
       );
     case 'lofi':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" fillOpacity="0.18" />
-          <circle cx="9" cy="12" r="1" fill="currentColor" />
-          <circle cx="15" cy="12" r="1" fill="currentColor" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <circle cx="8" cy="11.5" r="2.5" />
+          <circle cx="8" cy="11.5" r="0.75" fill="currentColor" stroke="none" />
+          <circle cx="16" cy="11.5" r="2.5" />
+          <circle cx="16" cy="11.5" r="0.75" fill="currentColor" stroke="none" />
+          <line x1="8" y1="14" x2="16" y2="14" strokeWidth="1.2" />
+          <polygon points="6,18 18,18 16.5,15.5 7.5,15.5" strokeWidth="1.2" fill="currentColor" fillOpacity="0.12" />
         </svg>
       );
     case 'rock':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" fillOpacity="0.18" />
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" fillOpacity="0.14" />
+          <path d="M18 3l2 2M21 7l-2-2" strokeWidth="1.4" />
         </svg>
       );
     case 'rnb':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor" fillOpacity="0.18" />
+          <circle cx="12" cy="12" r="9.5" />
+          <circle cx="12" cy="12" r="3.5" />
+          <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+          <path d="M12 2.5a9.5 9.5 0 0 1 9.5 9.5" strokeDasharray="2.5 2.5" strokeWidth="1.2" />
+          <path d="M12 21.5a9.5 9.5 0 0 1-9.5-9.5" strokeDasharray="2.5 2.5" strokeWidth="1.2" />
         </svg>
       );
     case 'edm':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 11v2" />
+          <path d="M2 13h2l2.5-6 3 14 3-10 3 6 2-4h4.5" />
+          <circle cx="21" cy="13" r="1" fill="currentColor" stroke="none" />
         </svg>
       );
     case 'jazz':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M9 18V5l12-2v13" />
-          <circle cx="6" cy="18" r="3" fill="currentColor" fillOpacity="0.2" />
-          <circle cx="18" cy="16" r="3" fill="currentColor" fillOpacity="0.2" />
+          <path d="M6 3v11a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V7l4-2" />
+          <circle cx="6" cy="7" r="1" fill="currentColor" stroke="none" />
+          <circle cx="6" cy="10" r="1" fill="currentColor" stroke="none" />
+          <circle cx="6" cy="13" r="1" fill="currentColor" stroke="none" />
+          <path d="M14 7c1.5.5 2.5 1.5 2.5 3" strokeWidth="1.2" />
         </svg>
       );
     case 'classical':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" fillOpacity="0.1" />
-          <path d="M8 4v10M12 4v10M16 4v10" />
-          <path d="M3 14h18" />
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <line x1="6.5" y1="5" x2="6.5" y2="13" strokeWidth="2.2" stroke="currentColor" />
+          <line x1="10.5" y1="5" x2="10.5" y2="13" strokeWidth="2.2" stroke="currentColor" />
+          <line x1="14.5" y1="5" x2="14.5" y2="13" strokeWidth="2.2" stroke="currentColor" />
+          <line x1="18.5" y1="5" x2="18.5" y2="13" strokeWidth="2.2" stroke="currentColor" />
+          <line x1="2" y1="13" x2="22" y2="13" strokeWidth="1.2" />
         </svg>
       );
     case 'afrobeats':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity="0.18" />
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5c0 5 4 8 4 10v5h8v-5c0-2 4-5 4-10" />
+          <path d="M8 8l4 6 4-6M12 14v7" strokeWidth="1.2" />
         </svg>
       );
     case 'latin':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" fill="currentColor" fillOpacity="0.18" />
+          <path d="M9 18a4 4 0 1 0 0-8 3 3 0 0 0-1-2.2V3h2v2h2V3h1v5.8a3 3 0 0 0-1 2.2 4 4 0 1 0 0 8z" />
+          <circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none" />
+          <line x1="16" y1="9" x2="22" y2="9" strokeWidth="1.2" />
+          <line x1="15" y1="13" x2="21" y2="13" strokeWidth="1.2" />
+          <line x1="16" y1="17" x2="22" y2="17" strokeWidth="1.2" />
         </svg>
       );
     case 'slowed':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <circle cx="12" cy="12" r="8" />
-          <path d="M12 4a8 8 0 0 1 0 16 8 8 0 0 0 0-16z" fill="currentColor" fillOpacity="0.25" />
+          <circle cx="12" cy="12" r="9" />
+          <polyline points="12 6 12 12 16 14" />
+          <path d="M3.5 12a8.5 8.5 0 0 0 2.5 6" strokeDasharray="2 2" strokeWidth="1.5" />
+          <path d="M20.5 12a8.5 8.5 0 0 1-2.5 6" strokeDasharray="2 2" strokeWidth="1.5" />
         </svg>
       );
     case 'phonk':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
-          <polygon points="12 2 21 8 21 16 12 22 3 16 3 8 12 2" fill="currentColor" fillOpacity="0.14" />
-          <path d="M12 22V12M12 12L21 8M12 12L3 8" />
+          <polygon points="12 2 22 8.5 18 21 6 21 2 8.5 12 2" />
+          <circle cx="12" cy="13" r="3.5" />
+          <circle cx="12" cy="13" r="1" fill="currentColor" stroke="none" />
+          <line x1="12" y1="2" x2="12" y2="9.5" />
+          <line x1="3.5" y1="17" x2="8.8" y2="14.5" />
+          <line x1="20.5" y1="17" x2="15.2" y2="14.5" />
         </svg>
       );
     default:
@@ -187,7 +229,7 @@ export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: Reac
   }
 };
 
-export const HomeView: React.FC<HomeViewProps> = ({
+export const HomeView: React.FC<HomeViewProps> = React.memo(({
   searchQuery,
   setSearchQuery,
   searchHistory,
@@ -261,6 +303,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
       setYtMusicTracks?.([]);
       setVideoTracks?.([]);
       setSearchError?.(null);
+    }
+  };
+
+  const handleClearRecentSearches = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (_clearSearchHistory) {
+      _clearSearchHistory();
+    } else {
+      setSearchHistory?.([]);
+      setShowHistory(false);
     }
   };
 
@@ -448,13 +501,32 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:'6px',background:'var(--v-bg2)',border:'1px solid var(--v-bdr2)',borderRadius:'12px',overflow:'hidden',boxShadow:'0 12px 32px rgba(0,0,0,0.7)',zIndex:100}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 14px',borderBottom:'1px solid var(--v-bdr2)'}}>
                   <span style={{fontSize:'9.5px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:'#8a807c'}}>Recent Searches</span>
-                  <button onClick={e=>{e.stopPropagation();setSearchHistory?.([]);setShowHistory(false);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:'11px',color:'#8a807c',transition:'color .12s'}} onMouseEnter={e=>(e.currentTarget.style.color='#b05555')} onMouseLeave={e=>(e.currentTarget.style.color='#8a807c')}>Clear</button>
+                  <button
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+                    onClick={handleClearRecentSearches}
+                    style={{background:'none',border:'none',cursor:'pointer',fontSize:'11px',color:'#8a807c',transition:'color .12s'}}
+                    onMouseEnter={e=>(e.currentTarget.style.color='#b05555')}
+                    onMouseLeave={e=>(e.currentTarget.style.color='#8a807c')}
+                  >
+                    Clear
+                  </button>
                 </div>
                 {searchHistory.map((h, i) => (
-                  <button key={i} onClick={e=>{e.stopPropagation();setSearchQuery(h);setShowHistory(false);searchMusic(h);}}
+                  <button
+                    key={i}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSearchQuery(h);
+                      setShowHistory(false);
+                      searchMusic(h);
+                    }}
                     style={{width:'100%',display:'flex',alignItems:'center',gap:'10px',padding:'9px 14px',background:'transparent',border:'none',cursor:'pointer',textAlign:'left',transition:'background .08s'}}
                     onMouseEnter={e=>(e.currentTarget.style.background='rgba(226,221,217,0.04)')}
-                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
                     <Clock size={12} style={{color:'#8a807c',flexShrink:0}} />
                     <span style={{fontSize:'13px',color:'#9e9894',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{h}</span>
                   </button>
@@ -777,21 +849,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     >
                       <div className="v-section-head" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '30px',
-                            height: '30px',
-                            borderRadius: '8px',
-                            background: 'var(--v-bg3)',
-                            border: '1px solid var(--v-bdr2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--v-accent)',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
-                            flexShrink: 0
-                          }}>
-                            <VelunaGenreIcon id={genre.id} size={15} />
-                          </div>
+                          <VelunaGenreIcon id={genre.id} size={20} style={{ color: 'var(--v-accent)', flexShrink: 0 }} />
                           <div>
                             <h2 style={{
                               fontSize: '12.5px',
@@ -1496,9 +1554,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <>
                   <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"0 12px 6px",borderBottom:"1px solid var(--v-bdr2)",marginBottom:"4px"}}>
                     <div style={{width:"26px",flexShrink:0}}/><div style={{width:"38px",flexShrink:0}}/>
-                    <p style={{flex:1,fontSize:"9.5px",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#363230"}}>Title</p>
+                    <p style={{flex:1,fontSize:"9.5px",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"var(--v-fg3)"}}>Title</p>
                     <div style={{width:"60px",flexShrink:0}}/>
-                    <Clock size={12} style={{color:"#363230",width:"36px",flexShrink:0}}/>
+                    <Clock size={12} style={{color:"var(--v-fg3)",width:"36px",flexShrink:0}}/>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:"3px",marginTop:"4px"}}>{Array.from({ length: 8 }).map((_, i) => <TrackRowSkeleton key={i} index={i} />)}</div>
                 </>
@@ -1508,9 +1566,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <>
                   <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"0 12px 6px",borderBottom:"1px solid var(--v-bdr2)",marginBottom:"4px"}}>
                     <div style={{width:"26px",flexShrink:0}}/><div style={{width:"38px",flexShrink:0}}/>
-                    <p style={{flex:1,fontSize:"9.5px",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#363230"}}>Title</p>
+                    <p style={{flex:1,fontSize:"9.5px",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"var(--v-fg3)"}}>Title</p>
                     <div style={{width:"60px",flexShrink:0}}/>
-                    <Clock size={12} style={{color:"#363230",width:"36px",flexShrink:0}}/>
+                    <Clock size={12} style={{color:"var(--v-fg3)",width:"36px",flexShrink:0}}/>
                   </div>
                   <div style={{marginTop:"4px"}}>
                     <VirtualTrackList
@@ -1639,4 +1697,4 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </div>
     </>
   );
-};
+});

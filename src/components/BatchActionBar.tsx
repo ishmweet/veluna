@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, ListPlus, FolderPlus, Download, Trash2, X, CheckSquare, Plus } from 'lucide-react';
+import { Play, ListPlus, FolderPlus, Download, Trash2, X, Plus } from 'lucide-react';
 import { Track, Playlist } from '../types';
 
 export interface BatchActionBarProps {
@@ -16,7 +16,7 @@ export interface BatchActionBarProps {
   isPlaylistView?: boolean;
 }
 
-export const BatchActionBar: React.FC<BatchActionBarProps> = ({
+export const BatchActionBar: React.FC<BatchActionBarProps> = React.memo(({
   selectedTracks,
   playlists,
   onClearSelection,
@@ -71,21 +71,20 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     <div
       style={{
         position: 'fixed',
-        bottom: '84px',
-        right: '24px',
-        left: 'auto',
-        transform: 'none',
+        bottom: '92px',
+        left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: 900,
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        background: 'rgba(20, 18, 17, 0.94)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid var(--v-bdr2)',
-        borderRadius: '16px',
-        padding: '6px 10px 6px 14px',
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255,255,255,0.06)',
+        background: 'rgba(18, 16, 15, 0.95)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '9999px',
+        padding: '5px 8px 5px 14px',
+        boxShadow: '0 20px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.06)',
         animation: 'fadeUpSm 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
         userSelect: 'none',
         maxWidth: 'calc(100vw - 48px)',
@@ -93,14 +92,27 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       }}
     >
       {/* Selected badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '6px' }}>
-        <CheckSquare size={15} style={{ color: 'var(--v-accent)' }} />
-        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--v-fg)', whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginRight: '4px' }}>
+        <div style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '4px',
+          background: 'var(--v-accent)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.3)'
+        }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--v-fg)', whiteSpace: 'nowrap' }}>
           {count} {count === 1 ? 'track' : 'tracks'}
         </span>
       </div>
 
-      <div style={{ width: '1px', height: '20px', background: 'var(--v-bdr2)', margin: '0 2px' }} />
+      <div style={{ width: '1px', height: '18px', background: 'rgba(255, 255, 255, 0.12)', margin: '0 2px' }} />
 
       {/* Play Selected */}
       <button
@@ -109,21 +121,21 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '6px 12px',
+          padding: '5px 13px',
           background: 'var(--v-accent)',
           color: '#000',
           border: 'none',
-          borderRadius: '10px',
-          fontSize: '12.5px',
+          borderRadius: '9999px',
+          fontSize: '12px',
           fontWeight: 600,
           cursor: 'pointer',
           transition: 'all 0.15s ease',
         }}
-        onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; }}
-        onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
+        onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+        onMouseLeave={e => { e.currentTarget.style.filter = 'none'; e.currentTarget.style.transform = 'none'; }}
         title="Play selected tracks"
       >
-        <Play size={13} fill="#000" />
+        <Play size={12} fill="#000" />
         Play
       </button>
 
@@ -134,12 +146,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '6px 11px',
+          padding: '5px 11px',
           background: 'rgba(255,255,255,0.06)',
           color: 'var(--v-fg)',
-          border: '1px solid var(--v-bdr2)',
-          borderRadius: '10px',
-          fontSize: '12.5px',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '9999px',
+          fontSize: '12px',
           fontWeight: 500,
           cursor: 'pointer',
           transition: 'all 0.15s ease',
@@ -148,7 +160,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
         title="Add selected to Play Queue"
       >
-        <ListPlus size={14} />
+        <ListPlus size={13} />
         Queue
       </button>
 
@@ -161,12 +173,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 11px',
+              padding: '5px 11px',
               background: showPlaylistMenu ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)',
               color: 'var(--v-fg)',
-              border: '1px solid var(--v-bdr2)',
-              borderRadius: '10px',
-              fontSize: '12.5px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '9999px',
+              fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
@@ -175,7 +187,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             onMouseLeave={e => { if (!showPlaylistMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
             title="Add selected to Playlist"
           >
-            <FolderPlus size={14} />
+            <FolderPlus size={13} />
             Playlist
           </button>
 
@@ -332,12 +344,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '6px 11px',
+            padding: '5px 11px',
             background: 'rgba(255,255,255,0.06)',
             color: 'var(--v-fg)',
-            border: '1px solid var(--v-bdr2)',
-            borderRadius: '10px',
-            fontSize: '12.5px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '9999px',
+            fontSize: '12px',
             fontWeight: 500,
             cursor: 'pointer',
             transition: 'all 0.15s ease',
@@ -346,7 +358,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
           title="Download selected tracks"
         >
-          <Download size={14} />
+          <Download size={13} />
           Download
         </button>
       )}
@@ -359,12 +371,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '6px 11px',
+            padding: '5px 11px',
             background: 'rgba(224, 85, 85, 0.12)',
             color: '#f87171',
             border: '1px solid rgba(224, 85, 85, 0.25)',
-            borderRadius: '10px',
-            fontSize: '12.5px',
+            borderRadius: '9999px',
+            fontSize: '12px',
             fontWeight: 500,
             cursor: 'pointer',
             transition: 'all 0.15s ease',
@@ -373,36 +385,36 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(224, 85, 85, 0.12)'; }}
           title={isPlaylistView ? 'Remove from playlist' : 'Delete offline files'}
         >
-          <Trash2 size={14} />
+          <Trash2 size={13} />
           {isPlaylistView ? 'Remove' : 'Delete'}
         </button>
       )}
 
-      <div style={{ width: '1px', height: '20px', background: 'var(--v-bdr2)', margin: '0 2px' }} />
+      <div style={{ width: '1px', height: '18px', background: 'rgba(255, 255, 255, 0.12)', margin: '0 2px' }} />
 
       {/* Clear Selection */}
       <button
         onClick={onClearSelection}
         style={{
-          width: '28px',
-          height: '28px',
+          width: '26px',
+          height: '26px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'transparent',
           color: 'var(--v-fg3)',
           border: 'none',
-          borderRadius: '8px',
+          borderRadius: '50%',
           cursor: 'pointer',
           padding: 0,
-          transition: 'all 0.12s ease',
+          transition: 'all 0.15s ease',
         }}
-        onMouseEnter={e => { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
         onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-fg3)'; e.currentTarget.style.background = 'transparent'; }}
         title="Deselect all (Esc)"
       >
-        <X size={15} />
+        <X size={14} />
       </button>
     </div>
   );
-};
+});

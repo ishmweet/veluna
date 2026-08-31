@@ -93,7 +93,7 @@ export type SettingsPanelProps = {
   uiScale?: number; setUiScale?: (v: number) => void;
 };
 
-export function SettingsPanel({
+export const SettingsPanel = React.memo(function SettingsPanel({
   initialTab,
   downloadQuality, setDownloadQuality, downloadPath, handleSelectDirectory,
   downloadFormat, setDownloadFormat,
@@ -2169,4 +2169,4 @@ export function SettingsPanel({
       </div>
     </div>
   );
-}
+});
