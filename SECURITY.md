@@ -4,11 +4,6 @@
 
 We provide security updates and patches for the latest release series of Veluna.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | Yes                |
-| < 0.1.0 | No                 |
-
 Users are encouraged to always update to the latest release to ensure they receive all security fixes and dependency updates.
 
 ## Reporting a Vulnerability
