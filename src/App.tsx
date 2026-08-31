@@ -1461,6 +1461,7 @@ export function App() {
             getTrackCover={getTrackCover}
             localTracks={localTracks}
             addToQueue={addToQueue}
+            resetSearch={resetSearch}
           />
         )}
 
@@ -2232,15 +2233,11 @@ export function App() {
             showToast('Spotify import cancelled');
           }}
           onSavePlaylist={(name, desc, importedTracks) => {
-            const id = `csv_${Date.now()}`;
+            const id = `csv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
             setPlaylists(prev => [...prev, { id, name, description: desc || 'Imported from Spotify', tracks: importedTracks }]);
-            showToast(`"${name}" saved — ${importedTracks.length} tracks`);
+            showToast(`"${name}" saved (${importedTracks.length} tracks)`);
             setBgImport(null);
             setPendingSpotifyImport(null);
-          }}
-          onMatchingDone={(importedTracks, matched, failed) => {
-            setPendingSpotifyImport({ tracks: importedTracks, matchedCount: matched, failedCount: failed });
-            setShowCsvImportModal(false);
           }}
           showToast={showToast}
           onProgress={(matched, total, label) => setBgImport(total > 0 ? { matched, total, label } : null)}

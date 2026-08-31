@@ -189,7 +189,6 @@ export function CsvImportModal({
   onSavePlaylist,
   showToast,
   onProgress,
-  onMatchingDone,
   visible = true,
   onAbort,
 }: {
@@ -197,15 +196,12 @@ export function CsvImportModal({
   onSavePlaylist: (name: string, desc: string, tracks: Track[]) => void;
   showToast: (m: string) => void;
   onProgress?: (matched: number, total: number, label: string) => void;
-  onMatchingDone?: (tracks: Track[], matched: number, failed: number) => void;
   visible?: boolean;
   onAbort?: () => void;
 }) {
-  const [phase, setPhase] = useState<'instructions' | 'matching' | 'saving' | 'done'>('instructions');
+  const [phase, setPhase] = useState<'instructions' | 'matching' | 'done'>('instructions');
   const [results, setResults] = useState<{ title: string; artist: string; status: 'pending' | 'fetching' | 'matched' | 'failed'; url?: string; cover?: string }[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
-  const [matchedTracks, setMatchedTracks] = useState<Track[]>([]);
-  const [failedCount, setFailedCount] = useState(0);
   const abortRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -214,46 +210,29 @@ export function CsvImportModal({
   const [isMinHovered, setIsMinHovered] = useState(false);
 
   useEffect(() => {
+    if (visible && phase === 'done') {
+      setPhase('instructions');
+      setResults([]);
+      setStatusMsg('');
+    }
+  }, [visible]);
+
+  useEffect(() => {
     return () => {
       abortRef.current = true;
     };
   }, []);
 
-  const handleFile = async (file: File) => {
-    if (!file.name.endsWith('.csv')) { showToast('Please upload a .csv file from Exportify'); return; }
-    const text = await file.text();
-
-    setStatusMsg('Parsing CSV...');
-    let raw: string;
-    try {
-      raw = await invoke<string>('import_csv_playlist', { csvContent: text });
-    } catch (e) {
-      showToast(`Failed to parse CSV: ${e}`);
-      setStatusMsg('');
+  const handleFiles = async (files: FileList | File[]) => {
+    const fileList = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.csv'));
+    if (fileList.length === 0) {
+      showToast('Please upload valid .csv files from Exportify');
       return;
     }
 
-    const lines = raw.trim().split('\n').filter(Boolean);
-    let trackLines = lines;
-    if (lines[0]?.startsWith('PLAYLIST:')) trackLines = lines.slice(1);
-    if (trackLines.length === 0) { showToast('No tracks found in CSV'); return; }
-
-    const initial = trackLines.map(l => {
-      const [title, artist] = l.split('====');
-      return { title: title?.trim() || '', artist: cleanArtist(artist), status: 'pending' as const };
-    });
-
-    setResults(initial);
     setPhase('matching');
     abortRef.current = false;
-    onProgress?.(0, initial.length, `0/${initial.length} matched`);
-
     const CONCURRENCY = 12;
-    const total = initial.length;
-    let completed = 0;
-    const matched: Track[] = [];
-    let failed = 0;
-
     const matchCache = new Map<string, string | null>();
 
     const pickBestMatch = (lines: string[], title: string, artist: string): string | null => {
@@ -283,82 +262,132 @@ export function CsvImportModal({
       return bestId;
     };
 
-    const processTrack = async (track: typeof initial[0], i: number): Promise<void> => {
-      if (abortRef.current) return;
-      setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'fetching' } : r));
+    let totalSavedPlaylists = 0;
+
+    for (let fIdx = 0; fIdx < fileList.length; fIdx++) {
+      if (abortRef.current) break;
+      const file = fileList[fIdx];
+      const fileNameClean = file.name.replace(/\.[^/.]+$/, '').trim() || 'Spotify Playlist';
+      
+      setStatusMsg(`[${fIdx + 1}/${fileList.length}] Parsing ${fileNameClean}...`);
+      const text = await file.text();
+      let raw: string;
       try {
-        const cacheKey = `${track.title}|||${track.artist}`.toLowerCase();
-        let cleanId: string | null | undefined = matchCache.get(cacheKey);
+        raw = await invoke<string>('import_csv_playlist', { csvContent: text });
+      } catch (e) {
+        showToast(`Failed to parse ${file.name}: ${e}`);
+        continue;
+      }
 
-        if (cleanId === undefined) {
-          const q = `${track.title} ${track.artist} audio`;
-          const res: string = await invoke('search_youtube', { query: q });
-          if (abortRef.current) return;
-          const lines = res.trim().split('\n').filter(Boolean).slice(0, 5);
-          cleanId = pickBestMatch(lines, track.title, track.artist);
-          matchCache.set(cacheKey, cleanId);
+      const lines = raw.trim().split('\n').filter(Boolean);
+      let trackLines = lines;
+      let playlistName = fileNameClean;
+      if (lines[0]?.startsWith('PLAYLIST:')) {
+        const customTitle = lines[0].replace('PLAYLIST:', '').trim();
+        if (customTitle && customTitle !== 'Exportify Playlist') {
+          playlistName = customTitle;
         }
+        trackLines = lines.slice(1);
+      }
+      if (trackLines.length === 0) continue;
 
+      const initial = trackLines.map(l => {
+        const [title, artist] = l.split('====');
+        return { title: title?.trim() || '', artist: cleanArtist(artist), status: 'pending' as const };
+      });
+
+      setResults(initial);
+      onProgress?.(0, initial.length, `[${fIdx + 1}/${fileList.length}] 0/${initial.length} matched`);
+
+      const total = initial.length;
+      let completed = 0;
+      const matched: Track[] = [];
+      let failed = 0;
+
+      const processTrack = async (track: typeof initial[0], i: number): Promise<void> => {
         if (abortRef.current) return;
-        if (cleanId) {
-          const t: Track = {
-            id: i, title: track.title, artist: track.artist,
-            duration: '0:00', url: `https://youtube.com/watch?v=${cleanId}`,
-            cover: `https://i.ytimg.com/vi/${cleanId}/mqdefault.jpg`,
-          };
-          matched.push(t);
-          setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'matched', url: t.url, cover: t.cover } : r));
-        } else {
+        setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'fetching' } : r));
+        try {
+          const cacheKey = `${track.title}|||${track.artist}`.toLowerCase();
+          let cleanId: string | null | undefined = matchCache.get(cacheKey);
+
+          if (cleanId === undefined) {
+            const q = `${track.title} ${track.artist} audio`;
+            const res: string = await invoke('search_youtube', { query: q });
+            if (abortRef.current) return;
+            const resLines = res.trim().split('\n').filter(Boolean).slice(0, 5);
+            cleanId = pickBestMatch(resLines, track.title, track.artist);
+            matchCache.set(cacheKey, cleanId);
+          }
+
+          if (abortRef.current) return;
+          if (cleanId) {
+            const t: Track = {
+              id: i, title: track.title, artist: track.artist,
+              duration: '0:00', url: `https://youtube.com/watch?v=${cleanId}`,
+              cover: `https://i.ytimg.com/vi/${cleanId}/mqdefault.jpg`,
+            };
+            matched.push(t);
+            setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'matched', url: t.url, cover: t.cover } : r));
+          } else {
+            failed++;
+            setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'failed' } : r));
+          }
+        } catch {
+          if (abortRef.current) return;
           failed++;
           setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'failed' } : r));
         }
-      } catch {
         if (abortRef.current) return;
-        failed++;
-        setResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'failed' } : r));
-      }
-      if (abortRef.current) return;
-      completed++;
-      setStatusMsg(`Matching ${completed} / ${total}...`);
-      onProgress?.(matched.length, total, `${completed}/${total} matched`);
-      if (listRef.current) {
-        const el = listRef.current;
-        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-        if (isNearBottom) {
-          el.scrollTop = el.scrollHeight;
+        completed++;
+        setStatusMsg(`[${fIdx + 1}/${fileList.length}] ${playlistName}: ${completed}/${total}...`);
+        onProgress?.(matched.length, total, `[${fIdx + 1}/${fileList.length}] ${completed}/${total}`);
+        if (listRef.current) {
+          const el = listRef.current;
+          const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+          if (isNearBottom) {
+            el.scrollTop = el.scrollHeight;
+          }
         }
+      };
+
+      const semaphore = {
+        running: 0,
+        queue: [] as (() => void)[],
+        acquire() { return new Promise<void>(r => { if (this.running < CONCURRENCY) { this.running++; r(); } else { this.queue.push(r); } }); },
+        release() { this.running--; const next = this.queue.shift(); if (next) { this.running++; next(); } },
+      };
+
+      await Promise.all(initial.map(async (track, i) => {
+        await semaphore.acquire();
+        try { await processTrack(track, i); }
+        finally { semaphore.release(); }
+      }));
+
+      if (abortRef.current) return;
+
+      if (matched.length > 0) {
+        onSavePlaylist(playlistName, 'Imported from Spotify', matched);
+        totalSavedPlaylists++;
       }
-    };
-
-    const semaphore = {
-      running: 0,
-      queue: [] as (() => void)[],
-      acquire() { return new Promise<void>(r => { if (this.running < CONCURRENCY) { this.running++; r(); } else { this.queue.push(r); } }); },
-      release() { this.running--; const next = this.queue.shift(); if (next) { this.running++; next(); } },
-    };
-
-    await Promise.all(initial.map(async (track, i) => {
-      await semaphore.acquire();
-      try { await processTrack(track, i); }
-      finally { semaphore.release(); }
-    }));
+    }
 
     if (abortRef.current) return;
 
-    setMatchedTracks(matched);
-    setFailedCount(failed);
-    onProgress?.(matched.length, total, 'Done!');
-    if (onMatchingDone) {
-      onMatchingDone(matched, matched.length, failed);
-    } else {
-      setPhase('saving');
+    setPhase('done');
+    setStatusMsg('All imports completed');
+    onProgress?.(0, 0, 'Done');
+    if (totalSavedPlaylists > 0) {
+      showToast(`Imported ${totalSavedPlaylists} playlist${totalSavedPlaylists > 1 ? 's' : ''} from Spotify`);
     }
-    setStatusMsg('');
+    setTimeout(() => {
+      onClose();
+    }, 600);
   };
 
   const matched = results.filter(r => r.status === 'matched');
   const failed = results.filter(r => r.status === 'failed');
-  const isDone = phase === 'done' || phase === 'saving';
+  const isDone = phase === 'done';
 
   return (
     <>
@@ -437,7 +466,7 @@ export function CsvImportModal({
                 { n: '1', title: 'Go to Exportify', desc: 'Open exportify.net in your browser', link: 'https://exportify.net', linkLabel: 'exportify.net →' },
                 { n: '2', title: 'Log in with Spotify', desc: 'Click "Log in with Spotify" and authorise Exportify to read your playlists.' },
                 { n: '3', title: 'Export your playlist', desc: 'Find the playlist and click the green Export button. A .csv file will download.' },
-                { n: '4', title: 'Upload the CSV here', desc: 'Click the button below and select the downloaded .csv file.' },
+                { n: '4', title: 'Upload the CSV here', desc: 'Click the button below and select the downloaded .csv file(s).' },
               ].map(step => (
                 <div key={step.n} style={{display:"flex",gap:"14px",alignItems:"flex-start"}}>
                   <div style={{
@@ -483,8 +512,8 @@ export function CsvImportModal({
                 </div>
               ))}
             </div>
-            <input ref={fileInputRef} type="file" accept=".csv" style={{display:"none"}}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+            <input ref={fileInputRef} type="file" accept=".csv" multiple style={{display:"none"}}
+              onChange={e => { if (e.target.files?.length) { handleFiles(e.target.files); e.target.value = ''; } }} />
             <button onClick={() => fileInputRef.current?.click()}
               onMouseEnter={() => setIsUploadHovered(true)}
               onMouseLeave={() => setIsUploadHovered(false)}
@@ -507,12 +536,12 @@ export function CsvImportModal({
                 transform: isUploadHovered ? "translateY(-1px)" : "none",
                 transition:"all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
               }}>
-              <Upload size={16} /> Upload Exportify CSV
+              <Upload size={16} /> Upload Exportify CSV(s)
             </button>
           </div>
         )}
 
-        {(phase === 'matching' || phase === 'saving' || phase === 'done') && (
+        {(phase === 'matching' || phase === 'done') && (
           <>
             <div style={{padding:"12px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)",flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"8px"}}>
@@ -549,18 +578,6 @@ export function CsvImportModal({
         )}
       </div>
     </div>
-    {phase === 'saving' && (
-      <ImportResultModal
-        matchedCount={matchedTracks.length}
-        failedCount={failedCount}
-        onSave={(name, desc) => {
-          onSavePlaylist(name, desc, matchedTracks);
-          setPhase('done');
-          onClose();
-        }}
-        onClose={() => { setPhase('done'); onClose(); }}
-      />
-    )}
     </>
   );
 }

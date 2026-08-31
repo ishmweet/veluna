@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart2, Clock, ListMusic, Music, Play } from 'lucide-react';
 import { Track, Playlist } from '../../types';
-import { GENRES } from '../../constants';
+import { GENRES, matchGenreTrack } from '../../constants';
 import { getTrackGradient, cleanArtist, saveLS } from '../../utils';
 
 interface StatsViewProps {
@@ -129,11 +129,10 @@ export const StatsView: React.FC<StatsViewProps> = ({
   const genreCounts: Record<string, number> = {};
   GENRES.forEach(g => { genreCounts[g.id] = 0; });
   allKnownTracksMap.forEach(track => {
-    const text = (track.title + ' ' + track.artist).toLowerCase();
     const playCount = currentPlayCounts[track.url] || 0;
     if (playCount > 0) {
       GENRES.forEach(g => {
-        if (g.keywords.some(kw => text.includes(kw))) {
+        if (matchGenreTrack(track, g)) {
           genreCounts[g.id] += playCount;
         }
       });

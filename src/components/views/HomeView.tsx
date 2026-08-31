@@ -13,7 +13,7 @@ import {
   X
 } from 'lucide-react';
 import { Track, Playlist, LocalTrack, CtxMenu, SettingsTab } from '../../types';
-import { GENRES } from '../../constants';
+import { GENRES, matchGenreTrack } from '../../constants';
 import { getTrackGradient, cleanArtist } from '../../utils';
 import { TrackRow, TrackRowSkeleton } from '../TrackRow';
 import { VirtualTrackList } from '../VirtualTrackList';
@@ -76,6 +76,116 @@ interface HomeViewProps {
   showToast?: (msg: string) => void;
   addToQueue?: (tracks: Track | Track[]) => void;
 }
+
+export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: React.CSSProperties }> = ({ id, size = 16, style }) => {
+  switch (id) {
+    case 'kpop':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="currentColor" fillOpacity="0.16" />
+          <circle cx="18.5" cy="5.5" r="1.5" fill="currentColor" />
+        </svg>
+      );
+    case 'pop':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 3l2.8 6.2L21 10.1l-5.1 4.5 1.5 6.7L12 17.8l-5.4 3.5 1.5-6.7L3 10.1l6.2-.9L12 3z" fill="currentColor" fillOpacity="0.14" />
+        </svg>
+      );
+    case 'hiphop':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.25" />
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        </svg>
+      );
+    case 'synthwave':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 3a9 9 0 0 0-9 9h18a9 9 0 0 0-9-9z" fill="currentColor" fillOpacity="0.18" />
+          <path d="M3 15h18M5 18h14M8 21h8" />
+        </svg>
+      );
+    case 'lofi':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" fillOpacity="0.18" />
+          <circle cx="9" cy="12" r="1" fill="currentColor" />
+          <circle cx="15" cy="12" r="1" fill="currentColor" />
+        </svg>
+      );
+    case 'rock':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" fillOpacity="0.18" />
+        </svg>
+      );
+    case 'rnb':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor" fillOpacity="0.18" />
+        </svg>
+      );
+    case 'edm':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M3 10v4M7 6v12M11 3v18M15 7v10M19 5v14M23 11v2" />
+        </svg>
+      );
+    case 'jazz':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" fill="currentColor" fillOpacity="0.2" />
+          <circle cx="18" cy="16" r="3" fill="currentColor" fillOpacity="0.2" />
+        </svg>
+      );
+    case 'classical':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" fillOpacity="0.1" />
+          <path d="M8 4v10M12 4v10M16 4v10" />
+          <path d="M3 14h18" />
+        </svg>
+      );
+    case 'afrobeats':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity="0.18" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        </svg>
+      );
+    case 'latin':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" fill="currentColor" fillOpacity="0.18" />
+        </svg>
+      );
+    case 'slowed':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 4a8 8 0 0 1 0 16 8 8 0 0 0 0-16z" fill="currentColor" fillOpacity="0.25" />
+        </svg>
+      );
+    case 'phonk':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <polygon points="12 2 21 8 21 16 12 22 3 16 3 8 12 2" fill="currentColor" fillOpacity="0.14" />
+          <path d="M12 22V12M12 12L21 8M12 12L3 8" />
+        </svg>
+      );
+    default:
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" fill="currentColor" fillOpacity="0.2" />
+          <circle cx="18" cy="16" r="3" fill="currentColor" fillOpacity="0.2" />
+        </svg>
+      );
+  }
+};
 
 export const HomeView: React.FC<HomeViewProps> = ({
   searchQuery,
@@ -140,6 +250,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const setHoveredTrackUrl = customSetHoveredTrackUrl || setInternalHoveredTrackUrl;
   const prefetchOnHover = customPrefetchOnHover || (() => {});
 
+  const handleClearSearch = () => {
+    setShowHistory(false);
+    if (_resetSearch) {
+      _resetSearch();
+    } else {
+      setSearchQuery('');
+      setHasSearched?.(false);
+      setTracks?.([]);
+      setYtMusicTracks?.([]);
+      setVideoTracks?.([]);
+      setSearchError?.(null);
+    }
+  };
+
   const { selectedUrls, isMultiSelectActive, toggleSelect, clearSelection } = useMultiSelect();
 
   React.useEffect(() => {
@@ -179,10 +303,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
   });
 
   allTracksForGenre.forEach(track => {
-    const text = (track.title + ' ' + track.artist).toLowerCase();
     const playCount = playCounts[track.url] || 1;
     GENRES.forEach(g => {
-      if (g.keywords.some(kw => text.includes(kw))) {
+      if (matchGenreTrack(track, g)) {
         genreScores[g.id].score += playCount;
         if (!genreScores[g.id].tracks.find(t => t.url === track.url)) {
           genreScores[g.id].tracks.push(track);
@@ -277,7 +400,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               style={{width:'100%',height:'42px',background:'var(--v-bg2)',color:'#e2ddd9',border:`1px solid ${isSearching?'rgba(226,221,217,0.15)':'var(--v-bdr2)'}`,borderRadius:'21px',paddingTop:0,paddingBottom:0,paddingLeft:'44px',paddingRight:searchQuery?'38px':'16px',fontSize:'13.5px',outline:'none',opacity:isSearching?0.5:1,cursor:isSearching?'not-allowed':'text',transition:'border-color .15s',boxSizing:'border-box'}}
             />
             {searchQuery && !isSearching && (
-              <button onClick={() => setSearchQuery('')}
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                title="Clear search"
                 style={{position:"absolute",right:"12px",top:0,bottom:0,margin:"auto",background:"none",border:"none",color:"#8a807c",cursor:"pointer",display:"flex",alignItems:"center",padding:0}}
                 onMouseEnter={e=>(e.currentTarget.style.color="#e2ddd9")}
                 onMouseLeave={e=>(e.currentTarget.style.color="#8a807c")}>
@@ -615,23 +741,42 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         animation: `fadeUp 0.22s cubic-bezier(0.2,0,0,1) ${gIdx * 60 + 100}ms both`
                       }}
                     >
-                      <div className="v-section-head" style={{ marginBottom: '12px' }}>
-                        <h2 style={{
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          letterSpacing: '0.08em',
-                          textTransform: 'uppercase',
-                          color: 'var(--v-fg3)',
-                          margin: 0
-                        }}>{genre.label}</h2>
-                        <span style={{
-                          fontSize: '10px',
-                          color: 'var(--v-fg2)',
-                          background: 'rgba(255,255,255,0.03)',
-                          padding: '2px 6px',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(255,255,255,0.04)'
-                        }}>{genreTracks.length}</span>
+                      <div className="v-section-head" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '8px',
+                            background: 'var(--v-bg3)',
+                            border: '1px solid var(--v-bdr2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--v-accent)',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+                            flexShrink: 0
+                          }}>
+                            <VelunaGenreIcon id={genre.id} size={15} />
+                          </div>
+                          <div>
+                            <h2 style={{
+                              fontSize: '12.5px',
+                              fontWeight: 800,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: 'var(--v-fg)',
+                              margin: 0
+                            }}>{genre.label}</h2>
+                            {genre.tagline && (
+                              <p style={{
+                                fontSize: '11px',
+                                color: 'var(--v-fg3)',
+                                margin: '2px 0 0 0',
+                                fontWeight: 500
+                              }}>{genre.tagline}</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <button
                         onClick={(e) => scrollShelf(e, 'left')}
@@ -723,7 +868,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                                 justifyContent: 'center',
                                 marginBottom: '8px'
                               }} className="v-card__art-container">
-                                <Music size={24} style={{ position: 'absolute', color: 'rgba(255,255,255,0.15)' }} />
+                                <div style={{ position: 'absolute', color: 'rgba(255,255,255,0.22)' }}>
+                                  <VelunaGenreIcon id={genre.id} size={24} />
+                                </div>
                                 {getTrackCover(track) && (
                                   <img
                                     src={getTrackCover(track)}
@@ -1147,12 +1294,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         const percent = Math.min((score / maxScore) * 100, 100);
                         return (
                           <div key={genre.id}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                              <span style={{ color: 'var(--v-fg)', fontWeight: 600 }}>{genre.label}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', marginBottom: '5px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ color: 'var(--v-accent)', display: 'flex', alignItems: 'center' }}>
+                                  <VelunaGenreIcon id={genre.id} size={13} />
+                                </span>
+                                <span style={{ color: 'var(--v-fg)', fontWeight: 600 }}>{genre.label}</span>
+                              </div>
                               <span style={{ color: 'var(--v-fg2)', fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>{score} pts</span>
                             </div>
-                            <div style={{ height: '2px', background: 'var(--v-bdr2)', borderRadius: '1px', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', background: 'var(--v-accent)', width: `${percent}%`, borderRadius: '1px' }} />
+                            <div style={{ height: '3px', background: 'var(--v-bdr2)', borderRadius: '2px', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', background: 'var(--v-accent)', width: `${percent}%`, borderRadius: '2px' }} />
                             </div>
                           </div>
                         );
