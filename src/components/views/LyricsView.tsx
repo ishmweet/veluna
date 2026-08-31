@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Loader2,
@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Track, RepeatMode, LyricsData } from '../../types';
-import { formatTime } from '../../utils';
+import { formatTime, extractDominantColor } from '../../utils';
 
 interface LyricsViewProps {
   showLyrics: boolean;
@@ -65,6 +65,18 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
   lyricsData,
   lyricsScrollContainerRef,
 }) => {
+  const [coverColor, setCoverColor] = useState<string>('#ffffff');
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    const coverUrl = getTrackCover(currentTrack);
+    let active = true;
+    extractDominantColor(coverUrl).then(c => {
+      if (active) setCoverColor(c);
+    });
+    return () => { active = false; };
+  }, [currentTrack, getTrackCover]);
+
   React.useEffect(() => {
     if (!showLyrics) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -95,14 +107,21 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
       {/* Background layers */}
       {getTrackCover(currentTrack) && (
         <div style={{
-          position: 'absolute', pointerEvents: 'none', inset: '-80px',
+          position: 'absolute', pointerEvents: 'none', inset: '-40px',
           backgroundImage: `url(${getTrackCover(currentTrack)})`,
           backgroundSize: 'cover', backgroundPosition: 'center',
-          filter: 'blur(90px) saturate(1.8) brightness(0.65)',
-          opacity: 0.9,
+          filter: 'blur(45px) saturate(1.6) brightness(0.65)',
+          transform: 'translateZ(0)',
+          willChange: 'transform',
+          opacity: 0.88,
         }} />
       )}
-      <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"rgba(0,0,0,0.18)"}}/>
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        pointerEvents: "none",
+        background: `radial-gradient(circle at 70% 50%, ${coverColor}22 0%, rgba(0,0,0,0.3) 70%)`
+      }}/>
 
       {/* Left panel — centered & responsive */}
       <div className="custom-scrollbar" style={{position:"relative",zIndex:10,width:"clamp(260px, 30vw, 360px)",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:"12px",maxHeight:"100vh",overflowY:"auto",boxSizing:"border-box"}}>
@@ -116,10 +135,10 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
         </button>
 
         {/* Album art */}
-        <div style={{width:"clamp(130px, 24vh, 220px)",height:"clamp(130px, 24vh, 220px)",borderRadius:"12px",overflow:"hidden",flexShrink:0,boxShadow:"0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)",position:"relative",marginTop:"12px"}}>
+        <div style={{width:"clamp(130px, 24vh, 220px)",height:"clamp(130px, 24vh, 220px)",borderRadius:"12px",overflow:"hidden",flexShrink:0,boxShadow:`0 24px 64px rgba(0,0,0,0.6), 0 0 20px ${coverColor}33`,position:"relative",marginTop:"12px"}}>
           {getTrackCover(currentTrack)
             ? <img src={getTrackCover(currentTrack)} alt={currentTrack.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            : <div style={{width:"100%",height:"100%",background:"var(--v-bdr2)",display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={32} style={{color:"#363230"}}/></div>}
+            : <div style={{width:"100%",height:"100%",background:"var(--v-bdr2)",display:"flex",alignItems:"center",justifyContent:"center"}}><Music size={32} style={{color:"var(--v-fg3)"}}/></div>}
         </div>
 
         {/* Track info */}
@@ -136,7 +155,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
               const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * (trackDurationSeconds || 0);
               invoke('seek_audio', { time: t }).catch(() => {});
             }}>
-            <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${pct}%`,background:"#fff",transition:"width 0.5s linear"}}>
+            <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${pct}%`,background:coverColor,transition:"width 0.5s linear"}}>
               <div className="slider-thumb" style={{position:"absolute",right:"-5px",top:"50%",transform:"translateY(-50%)",width:"11px",height:"11px",background:"#fff",borderRadius:"50%",opacity:0,pointerEvents:"none",transition:"opacity .12s"}}/>
             </div>
           </div>
@@ -149,9 +168,19 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
         {/* Playback controls */}
         <div style={{display:"flex",alignItems:"center",gap:"20px"}}>
           <button onClick={toggleShuffle} title="Shuffle"
-            style={{color:shuffle?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)",background:"none",border:"none",cursor:"pointer",display:"flex",padding:"3px",transition:"color .12s"}}
-            onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color=shuffle?"rgba(255,255,255,0.85)":"rgba(255,255,255,0.35)"}>
+            style={{position:"relative",color:shuffle?coverColor:"rgba(255,255,255,0.35)",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",padding:"3px",transition:"color .12s"}}
+            onMouseEnter={e=>e.currentTarget.style.color=shuffle?coverColor:"#fff"} onMouseLeave={e=>e.currentTarget.style.color=shuffle?coverColor:"rgba(255,255,255,0.35)"}>
             <Shuffle size={16}/>
+            {shuffle && (
+              <div style={{
+                position: "absolute",
+                bottom: "-2px",
+                width: "3px",
+                height: "3px",
+                borderRadius: "50%",
+                background: coverColor
+              }} />
+            )}
           </button>
           <button onClick={handleSkipBack} style={{color:"rgba(255,255,255,0.6)",background:"none",border:"none",cursor:"pointer",display:"flex",transition:"color .12s"}}
             onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.6)"}>
@@ -176,7 +205,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
             title={`Repeat: ${repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'Repeat One' : 'Repeat All'}`}
             style={{
               position: "relative",
-              color: repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "rgba(255,255,255,0.45)",
+              color: repeatMode !== 'off' ? coverColor : "rgba(255,255,255,0.45)",
               background: "none",
               border: "none",
               cursor: "pointer",
@@ -187,8 +216,8 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
               padding: "4px",
               transition: "all .12s ease"
             }}
-            onMouseEnter={e => e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "#fff"}
-            onMouseLeave={e => e.currentTarget.style.color = repeatMode !== 'off' ? "var(--v-accent, #1db954)" : "rgba(255,255,255,0.45)"}
+            onMouseEnter={e => e.currentTarget.style.color = repeatMode !== 'off' ? coverColor : "#fff"}
+            onMouseLeave={e => e.currentTarget.style.color = repeatMode !== 'off' ? coverColor : "rgba(255,255,255,0.45)"}
           >
             {repeatMode === 'one' ? <Repeat1 size={17}/> : <Repeat size={17}/>}
             {repeatMode !== 'off' && (
@@ -198,7 +227,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                 width: "3px",
                 height: "3px",
                 borderRadius: "50%",
-                background: "var(--v-accent, #1db954)"
+                background: coverColor
               }} />
             )}
           </button>
@@ -228,14 +257,14 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
               }}>
-              <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${volume}%`,background:volume>0?"var(--v-accent, #1db954)":"rgba(255,255,255,0.18)",transition:"none"}}>
+              <div style={{position:"absolute",top:0,left:0,height:"100%",borderRadius:"2px",pointerEvents:"none",width:`${volume}%`,background:volume>0?coverColor:"rgba(255,255,255,0.18)",transition:"none"}}>
                 <div className="slider-thumb" style={{position:"absolute",right:"-5px",top:"50%",transform:"translateY(-50%)",width:"10px",height:"10px",background:"#fff",borderRadius:"50%",opacity:0,pointerEvents:"none",transition:"opacity .12s"}}/>
               </div>
             </div>
           </div>
           <button onClick={() => { setVolume(100); invoke('set_volume', { volume: 100 }).catch(() => {}); }} title="Max Volume"
             style={{background:"none",border:"none",cursor:"pointer",flexShrink:0,padding:"2px",color:"rgba(255,255,255,0.45)",display:"flex",transition:"color .12s"}}
-            onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,0.8)"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.45)"}>
+            onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.45)"}>
             <Volume2 size={14}/>
           </button>
         </div>
@@ -245,8 +274,8 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
       <div style={{position:"relative",zIndex:10,flex:1,overflow:"hidden"}}>
         {lyricsLoading ? (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"16px",height:"100%"}}>
-            <Loader2 size={26} style={{color:"rgba(255,255,255,0.35)",animation:"spin 1s linear infinite"}}/>
-            <p style={{fontSize:"13.5px",color:"rgba(255,255,255,0.4)",fontWeight:500}}>Fetching lyrics…</p>
+            <Loader2 size={26} style={{color:coverColor,animation:"spin 1s linear infinite"}}/>
+            <p style={{fontSize:"13.5px",color:"rgba(255,255,255,0.5)",fontWeight:500}}>Fetching lyrics…</p>
           </div>
         ) : lines.length > 0 ? (
           <div style={{position:"relative",height:"100%"}}>
@@ -275,7 +304,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                       fontStyle: 'normal',
                       color: isCurrent ? '#ffffff' : isPast ? `rgba(255,255,255,${pastOpacity})` : `rgba(255,255,255,${futureOpacity})`,
                       transition: 'color 0.3s ease, font-size 0.3s ease, font-weight 0.3s ease',
-                      textShadow: isCurrent ? '0 0 32px rgba(255,255,255,0.18)' : 'none',
+                      textShadow: isCurrent ? `0 0 28px ${coverColor}88, 0 0 54px ${coverColor}44` : 'none',
                     }}>
                     {line.text || '\u00A0'}
                   </p>

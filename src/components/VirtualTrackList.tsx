@@ -25,7 +25,7 @@ function getOffsetRelativeToScrollParent(el: HTMLElement, parent: HTMLElement | 
 export function VirtualTrackList<T>({
   items,
   itemHeight = 56,
-  overscan = 24,
+  overscan = 8,
   className,
   style,
   renderItem,
@@ -108,6 +108,7 @@ export function VirtualTrackList<T>({
         position: 'relative',
         minHeight: totalHeight > 0 ? `${totalHeight}px` : 'auto',
         boxSizing: 'border-box',
+        contain: 'layout style',
         ...style,
       }}
     >
