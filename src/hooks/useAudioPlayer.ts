@@ -400,7 +400,6 @@ export function useAudioPlayer({
     const track = currentTrackRef.current;
     const repeat = repeatModeRef.current;
 
-    // When Repeat is OFF: Stop playback immediately after the song finishes
     if (repeat === 'off') {
       setIsPlayingSync(false);
       invoke('pause_audio').catch(() => {});
@@ -409,7 +408,6 @@ export function useAudioPlayer({
 
     const isLocal = track?.url?.startsWith('local://') || currentLocalPathRef.current !== null;
 
-    // A. OFFLINE / LOCAL PLAYBACK
     if (isLocal) {
       if (repeat === 'one' && track) {
         const list = localTracksListRef.current;
@@ -452,15 +450,12 @@ export function useAudioPlayer({
       return;
     }
 
-    // B. ONLINE PLAYBACK
-    // 1. Repeat One
     if (repeat === 'one' && track) {
       handlePlayTrack(track, true);
       setTimeout(() => { endDetectedRef.current = false; }, 1500);
       return;
     }
 
-    // 2. Repeat All
     if (repeat === 'all') {
       const q = queueRef.current;
       if (q.length > 0) {
@@ -523,7 +518,6 @@ export function useAudioPlayer({
       return;
     }
 
-    // 1. Manually Queued Tracks
     const q = queueRef.current;
     if (q.length > 0) {
       const [next, ...rest] = q;

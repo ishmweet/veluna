@@ -123,9 +123,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* -------------------------------------------------------------
-   THEME SELECTOR / TAILWIND OVERRIDES (MUST BE KEPT INTACT)
-   ------------------------------------------------------------- */
 [class*="bg-neutral-950"] { background-color: var(--v-bg0) !important; }
 [class*="bg-neutral-900"] { background-color: var(--v-bg2) !important; }
 [class*="bg-neutral-800"] { background-color: var(--v-bg3) !important; }
@@ -227,9 +224,6 @@
 [class*="divide-neutral-800"] > * + * { border-color: var(--v-bdr) !important; }
 [class*="hover:border-neutral-700"]:hover { border-color: var(--v-bdr2) !important; }
 
-/* -------------------------------------------------------------
-   GLOBAL STYLES & INTERFACE REDESIGN
-   ------------------------------------------------------------- */
 html, body, #root {
   background: var(--v-bg0) !important;
   color: var(--v-fg) !important;
@@ -241,7 +235,6 @@ html, body, #root {
   height: 100%;
 }
 
-/* Custom Auto-Hiding Floating Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -276,7 +269,6 @@ html, body, #root {
   background: rgba(226, 221, 217, 0.25);
 }
 
-/* 🚀 Performance: Layout Containment for Off-Screen Shelves & Cards */
 .v-shelf-container,
 .v-shelf-item,
 .v-category-shelf,
@@ -286,7 +278,6 @@ html, body, #root {
   contain: layout style;
 }
 
-/* ⚡ Performance: Hardware Acceleration for Backdrops & Glowing Layers */
 .v-backdrop,
 .v-bg-blur,
 .v-glow,
@@ -302,7 +293,6 @@ html, body, #root {
   backface-visibility: hidden;
 }
 
-/* ✨ Skeleton Pulse Loading Shimmer */
 @keyframes skeletonPulse {
   0% {
     background-position: -200% 0;
@@ -317,7 +307,6 @@ html, body, #root {
   }
 }
 
-/* ⚡ Speed Popover Drop-In Animation (Keeps Centered Alignment) */
 @keyframes speedPopoverDropIn {
   0% {
     opacity: 0;
@@ -336,7 +325,6 @@ html, body, #root {
   animation: skeletonPulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
 }
 
-/* 🌊 Liquid Micro Page Transitions */
 .v-page-container {
   animation: liquidPageEnter 0.12s cubic-bezier(0.2, 0, 0, 1) both;
   will-change: transform, opacity;
@@ -444,9 +432,6 @@ kbd {
 
 [class*="bg-\[#d4cfcf\]\/80"] { background-color: rgba(255, 255, 255, 0.8) !important; }
 
-/* -------------------------------------------------------------
-   STRUCTURE & LAYOUT STYLING
-   ------------------------------------------------------------- */
 .flex-1 { flex: 1 1 0%; min-height: 0; min-width: 0; }
 .overflow-y-auto { overflow-y: auto; }
 .overflow-x-auto { overflow-x: auto; }
@@ -458,7 +443,6 @@ kbd {
 .w-full { width: 100%; }
 .h-full { height: 100%; }
 
-/* Animations */
 @keyframes loadbar {
   0% { transform: translateX(-100%) }
   60% { transform: translateX(200%) }
@@ -615,7 +599,6 @@ kbd {
   to { opacity: 1; transform: scale(1); }
 }
 
-/* Playlist Card hover overlays */
 .v-pl-card:hover .pl-hover-overlay {
   opacity: 1 !important;
 }
@@ -623,7 +606,6 @@ kbd {
   opacity: 1 !important;
 }
 
-/* 📊 Premium Stats Cards */
 .v-stat-card {
   position: relative;
   overflow: hidden;
@@ -661,7 +643,6 @@ kbd {
   margin-top: 4px;
 }
 
-/* Home Layout Items */
 .home-card { animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .shelf-group:hover .shelf-nav-btn { opacity: 1 !important; }
 .shelf-nav-btn:hover {
@@ -672,7 +653,6 @@ kbd {
 .shelf-scroll-container::-webkit-scrollbar { display: none !important; }
 .banner-glow { animation: subtlePulse 12s ease-in-out infinite; }
 
-/* 📀 Track Row Styling - Clean, flat desktop list */
 .v-track {
   display: flex;
   align-items: center;
@@ -758,7 +738,6 @@ kbd {
 }
 .v-track__btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; transform: scale(1.08); }
 
-/* 🎴 Modern Glassmorphic Playlist/Album Cards */
 .v-pl-card, .v-card {
   position: relative;
   background: transparent;
@@ -828,14 +807,12 @@ kbd {
 .v-pl-card__name, .v-card__title { font-size: 14px; font-weight: 700; color: var(--v-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v-pl-card__count, .v-card__artist { font-size: 12px; color: var(--v-fg2); margin-top: 2px; }
 
-/* Section Headings */
 .v-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .v-section-head h2 { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--v-fg2); flex: 1; margin: 0; opacity: 0.85; }
 .v-home-search-results .v-section-head h2 { text-transform: none !important; letter-spacing: normal !important; }
 .v-section-head__action { font-size: 11.5px; color: var(--v-fg2); cursor: pointer; background: none; border: none; padding: 0; transition: color .15s; }
 .v-section-head__action:hover { color: #fff; }
 
-/* 📱 Sleek Navigation Sidebar */
 .v-nav-btn {
   display: flex;
   align-items: center;
@@ -967,7 +944,6 @@ kbd {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-/* 🏔️ Sleek Topbar Header */
 .v-topbar {
   display: flex;
   align-items: center;
@@ -1009,7 +985,6 @@ kbd {
   color: var(--v-fg3);
 }
 
-/* 🌴 Bottom Edge Player Bar */
 .v-player-dock {
   position: fixed;
   bottom: 0;
@@ -1080,7 +1055,6 @@ kbd {
   opacity: 0.8;
 }
 
-/* Seek Progress Controls */
 .v-progress-container {
   position: relative;
   flex: 1 1 0%;
@@ -1192,9 +1166,6 @@ kbd {
   color: var(--v-fg);
 }
 
-
-
-/* 🎛️ Premium Context Menu & Popover Glass Design System Surface */
 .v-ctx,
 .v-glass-popover,
 .v-popover-glass {
@@ -1260,7 +1231,6 @@ kbd {
   margin: 6px 4px;
 }
 
-/* 📂 Modern 2-Column Library Page Layout */
 .v-library-container {
   display: flex;
   gap: 32px;
@@ -1289,7 +1259,6 @@ kbd {
   }
 }
 
-/* Offline Downloads Panel Card */
 .v-library-sidebar-card {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.04);
@@ -1382,7 +1351,6 @@ kbd {
   transform: translateX(2px);
 }
 
-/* Queue items */
 .v-queue-item {
   display: flex;
   align-items: center;
@@ -1394,12 +1362,10 @@ kbd {
 .v-queue-item:hover { background: rgba(255,255,255,0.025); }
 .v-queue-item--active { background: rgba(255, 255, 255, 0.045); }
 
-/* Import button adjustments */
 .exportify-btn {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* YouTube Import Modal Specific Styles */
 .yt-import-modal-overlay {
   animation: ytModalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -1503,12 +1469,6 @@ kbd {
   width: 100%;
 }
 
-/* ==========================================================================
-   Low-Spec / Extreme Performance Mode Overrides
-   Ultra-low GPU profile, zero animations/transitions, instant response
-   ========================================================================== */
-
-/* 1. Global Complete GPU Disabling */
 .v-perf-mode *,
 .v-perf-mode *::before,
 .v-perf-mode *::after {
@@ -1520,7 +1480,6 @@ kbd {
   -webkit-backdrop-filter: none !important;
 }
 
-/* 2. Ultra-Sharp Solid Contrast Palette */
 .v-perf-mode {
   --v-bg0: #060606 !important;
   --v-bg1: #060606 !important;
@@ -1533,7 +1492,6 @@ kbd {
   --v-bdr3: #444444 !important;
 }
 
-/* 3. Flat Opaque Fast Surfaces */
 .v-perf-mode .v-ctx,
 .v-perf-mode .v-glass-popover,
 .v-perf-mode .v-popover-glass,
@@ -1543,7 +1501,6 @@ kbd {
   border-color: #333333 !important;
 }
 
-/* 4. Instant Containment & Zero-Layout Thrashing */
 .v-perf-mode .v-track,
 .v-perf-mode .v-pl-card,
 .v-perf-mode .v-nav-btn,
@@ -1553,7 +1510,6 @@ kbd {
   will-change: auto !important;
 }
 
-/* 5. Flat Crisp Component Styling */
 .v-perf-mode .v-track {
   border: none !important;
   background: transparent !important;
@@ -1620,7 +1576,6 @@ kbd {
   image-rendering: crisp-edges;
 }
 
-/* 6. Background Tab Optimization: Pause animations when window is minimized */
 .v-app-hidden * {
   animation-play-state: paused !important;
 }
@@ -1645,7 +1600,6 @@ kbd {
   color: var(--v-accent);
 }
 
-/* 📁 Settings Path Capsule Glowing Hover */
 .v-settings-path-capsule {
   display: inline-flex;
   align-items: center;

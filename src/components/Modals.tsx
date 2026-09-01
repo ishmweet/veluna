@@ -299,14 +299,12 @@ export function CsvImportModal({
 
       let score = 0;
 
-      // Title matching
       if (rTitle === tNorm) {
         score += 12;
       } else if (rTitle.includes(tNorm) || tNorm.includes(rTitle)) {
         score += 6;
       }
 
-      // Artist matching
       if (aNorm) {
         if (rArtist === aNorm || rArtist.includes(aNorm) || aNorm.includes(rArtist)) {
           score += 6;
@@ -315,7 +313,6 @@ export function CsvImportModal({
         }
       }
 
-      // Quality boosters
       if (rTitle.includes('official audio') || rTitle.includes('official track') || rTitle.includes('provided to youtube')) {
         score += 4;
       } else if (rTitle.includes('official video') || rTitle.includes('official music video') || rTitle.includes('lyrics')) {
@@ -325,7 +322,6 @@ export function CsvImportModal({
         score += 3;
       }
 
-      // Penalize unwanted versions if original did not ask for them
       const tLower = title.toLowerCase();
       if (!tLower.includes('cover') && (rTitle.includes('cover') || rTitle.includes('acoustic cover') || rTitle.includes('tribute'))) {
         score -= 8;
@@ -1025,7 +1021,6 @@ export function YtImportModal({
           artistStr = artistStr.slice(0, -4).trim();
         }
 
-        // Smart Artist - Title extraction
         if (titleStr.includes(' - ')) {
           const dashIdx = titleStr.indexOf(' - ');
           const left = titleStr.slice(0, dashIdx).trim();
@@ -1036,7 +1031,6 @@ export function YtImportModal({
           }
         }
 
-        // Clean title clutter like (Official Music Video), [Lyric Video], etc.
         titleStr = titleStr
           .replace(/\s*[\(\[](official\s*)?(music\s*)?(video|audio|lyric|lyrics|visualizer|hd|4k)?[\)\]]/gi, '')
           .replace(/\s*[\(\[]from\s+the\s+.*[\)\]]/gi, '')

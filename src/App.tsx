@@ -30,7 +30,6 @@ import {
   findDuplicateTracks,
 } from './utils';
 
-// Custom Hooks
 import { useToast } from './hooks/useToast';
 import { useTheme } from './hooks/useTheme';
 import { useListeningStats } from './hooks/useListeningStats';
@@ -41,7 +40,6 @@ import { usePlaylists } from './hooks/usePlaylists';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useScrobbler } from './hooks/useScrobbler';
 
-// Layout Components
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
 import { DownloadsFlyout } from './components/layout/DownloadsFlyout';
@@ -49,7 +47,6 @@ import { QueuePanel } from './components/layout/QueuePanel';
 import { PlayerBar } from './components/layout/PlayerBar';
 import { ContextMenu } from './components/layout/ContextMenu';
 
-// View Components
 import { HomeView } from './components/views/HomeView';
 import { PlaylistsView } from './components/views/PlaylistsView';
 import { StatsView } from './components/views/StatsView';
@@ -57,7 +54,6 @@ import { LyricsView } from './components/views/LyricsView';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 
-// Modal Components
 import {
   ImportResultModal,
   CsvImportModal,
@@ -67,10 +63,9 @@ import {
 } from './components/Modals';
 
 export function App() {
-  // 1. Toast hook
+  
   const { toast, showToast } = useToast();
 
-  // 2. Theme & performance hook
   const {
     theme,
     setTheme,
@@ -82,7 +77,6 @@ export function App() {
     setPerformanceMode,
   } = useTheme();
 
-  // 3. Listening stats hook
   const {
     playCounts,
     setPlayCounts,
@@ -103,7 +97,6 @@ export function App() {
     recordListeningStep,
   } = useListeningStats();
 
-  // 4. Queue hook
   const {
     queue,
     setQueue,
@@ -124,11 +117,9 @@ export function App() {
     addToQueue,
   } = useQueue(showToast);
 
-  // Settings & Storage State
   const [cacheEnabled, setCacheEnabledState] = useState<boolean>(() => loadLS('vg_cacheEnabled', true));
   const [uiScale, setUiScaleState] = useState<number>(() => loadLS('vg_uiScale', 0));
 
-  // 5. Search hook
   const {
     searchQuery,
     setSearchQuery,
@@ -241,7 +232,6 @@ export function App() {
     invoke('set_skip_silence', { enabled: skipSilence }).catch(() => {});
   }, [skipSilence]);
 
-  // 6. Audio Player Hook
   const {
     currentTrack,
     currentTrackRef,
@@ -310,7 +300,6 @@ export function App() {
     showToast,
   });
 
-  // 7. Lyrics hook
   const {
     showLyrics,
     setShowLyrics,
@@ -340,7 +329,6 @@ export function App() {
     showToast,
   });
 
-  // Local tracks & downloads state
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
   const [localRefreshNonce, setLocalRefreshNonce] = useState(0);
   const [downloadingTracks, setDownloadingTracks] = useState<Record<string, number>>({});
@@ -350,7 +338,6 @@ export function App() {
   const flyoutAutoCloseTimerRef = useRef<any>(null);
   const [metadataEditingTrack, setMetadataEditingTrack] = useState<Track | null>(null);
 
-  // Listen to live download progress events from Rust
   useEffect(() => {
     const unlistenPromise = listen<{ url: string; percent: number; status: string; error?: string }>('download_progress', (event) => {
       const { url, percent, status, error } = event.payload;
@@ -383,7 +370,6 @@ export function App() {
     return '';
   }, [localTracks]);
 
-  // 8. Playlists hook
   const {
     playlists,
     setPlaylists,
@@ -421,7 +407,6 @@ export function App() {
 
   const getPlaylistCover = useCallback((p: Playlist) => p.id === 'p1' ? null : (p.customCover || (p.tracks.find(t => t.cover)?.cover || null)), []);
 
-  // Navigation state
   const [startupNav, setStartupNavState] = useState<string>(() => loadLS('vg_startupNav', 'home'));
   const setStartupNav = useCallback((nav: string) => {
     setStartupNavState(nav);
@@ -476,7 +461,6 @@ export function App() {
     }
   }, [activeNav, searchQuery, hasSearched, resetSearch, openPlaylistId, navHistory, setActiveNav, setOpenPlaylistId]);
 
-  // Context menu & UI state
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
   const [infoModalTrack, setInfoModalTrack] = useState<Track | null>(null);
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
@@ -508,7 +492,6 @@ export function App() {
     setCtxMenu({ x, y, ...menu });
   }, []);
 
-  // MPRIS refs
   const mprisToggleRef = useRef<() => void>(() => {});
   const mprisNextRef = useRef<() => void>(() => {});
   const mprisPrevRef = useRef<() => void>(() => {});
@@ -542,7 +525,6 @@ export function App() {
     }
   }, [currentTrack?.title, currentTrack?.artist, isPlaying, trayEnabled]);
 
-  // Background Cache Auto-Pruning
   useEffect(() => {
     if (!cacheEnabled) return;
     const limit = loadLS<string>('vg_cacheLimit', '1gb');
@@ -557,7 +539,6 @@ export function App() {
     invoke('prune_cache_if_needed', { maxBytes }).catch(() => {});
   }, [currentTrack?.url, cacheEnabled]);
 
-  // MPRIS metadata sync
   useEffect(() => {
     if (!currentTrack) return;
     const parseDuration = (d: string): number => {
@@ -575,7 +556,6 @@ export function App() {
     }).catch(() => {});
   }, [currentTrack, isPlaying]);
 
-  // Discord RPC presence synchronization
   const lastRpcProgressRef = useRef<number>(0);
   const lastRpcStateRef = useRef<string>('');
 
@@ -585,7 +565,6 @@ export function App() {
       const stateSig = `${currentTrack.id}-${discordShowCover}-${discordTimeDisplay}-${discordCustomBtn}-${discordBtnLabel}-${discordBtnUrl}`;
       const stateChanged = stateSig !== lastRpcStateRef.current;
 
-      // Update RPC on initial play, track switch, seeking (> 2s jump), or setting change
       if (delta > 2 || lastRpcProgressRef.current === 0 || stateChanged) {
         lastRpcProgressRef.current = progressSeconds;
         lastRpcStateRef.current = stateSig;
@@ -630,7 +609,6 @@ export function App() {
     discordBtnUrl
   ]);
 
-  // App version & Update check
   useEffect(() => {
     invoke<string>('get_app_version').then(setAppVersion).catch(() => {});
     const autoCheck = loadLS('vg_autoCheckUpdates', true);
@@ -639,7 +617,6 @@ export function App() {
     }
   }, []);
 
-  // Sync Network / Proxy config on boot
   useEffect(() => {
     const p = loadLS<string>('vg_networkProxy', '');
     const inst = loadLS<string>('vg_customInstance', '');
@@ -665,7 +642,6 @@ export function App() {
     }
   }, [showToast]);
 
-  // Global Keybindings
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -802,7 +778,6 @@ export function App() {
     return () => window.removeEventListener('keydown', h);
   }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast, showLyrics, setShowLyrics, setConfirmModal, setShowCsvImportModal, setShowYtImportModal, setShowDuplicatesPlaylist, setBulkEditPlaylist, setInfoModalTrack, setAddToPlaylistTrack, setCtxMenu]);
 
-  // Global click dismiss
   useEffect(() => {
     const h = () => {
       setCtxMenu(null);
@@ -813,7 +788,6 @@ export function App() {
     return () => window.removeEventListener('click', h);
   }, [setShowHistory, setShowSleepPopover]);
 
-  // Global Drag & Drop for CSV playlists
   useEffect(() => {
     let lastDropTime = 0;
     let unlisten: (() => void) | undefined;
@@ -902,7 +876,6 @@ export function App() {
     showToast('Spotify import cancelled');
   }, [showToast]);
 
-  // Download handlers
   const handleCancelDownload = useCallback(async (url: string) => {
     try { await invoke('cancel_download', { url }); } catch {}
     setDownloadingTracks(p => { const n = { ...p }; delete n[url]; return n; });
@@ -939,7 +912,6 @@ export function App() {
       ...prev.filter(d => d.url !== track.url),
     ]);
 
-    // Animate TopBar downloads icon and pop the flyout window to grab user's attention
     setDownloadPulseKey(k => k + 1);
     setIsDownloadsFlyoutOpen(true);
     if (flyoutAutoCloseTimerRef.current) clearTimeout(flyoutAutoCloseTimerRef.current);
@@ -1115,22 +1087,19 @@ export function App() {
     input.click();
   }, [showToast, setPlaylists]);
 
-  // Backup & Restore (All settings, playlists, stats, integrations — excluding offline audio files/paths)
   const handleBackup = useCallback(async () => {
     try {
-      // 1. Clean playlists: filter out any local disk tracks (local://)
+      
       const cleanPlaylists = (playlists || []).map(p => ({
         ...p,
         tracks: (p.tracks || []).filter(t => t && t.url && !t.url.startsWith('local://')),
       }));
 
-      // 2. Clean queue, play history, quick picks, and current track
       const cleanQueue = (queue || []).filter(t => t && t.url && !t.url.startsWith('local://'));
       const cleanPlayHistory = (playHistory || []).filter(t => t && t.url && !t.url.startsWith('local://'));
       const cleanQuickPicks = (quickPicks || []).filter(t => t && t.url && !t.url.startsWith('local://'));
       const cleanCurrentTrack = currentTrack && !currentTrack.url?.startsWith('local://') ? currentTrack : null;
 
-      // 3. Clean listening stats: strip local:// keys and events
       const cleanPlayCounts: Record<string, number> = {};
       Object.entries(playCounts || {}).forEach(([k, v]) => {
         if (!k.startsWith('local://')) cleanPlayCounts[k] = v;
@@ -1156,7 +1125,7 @@ export function App() {
       const data = {
         version: 2,
         exportedAt: new Date().toISOString(),
-        // Playlists & Queue
+        
         playlists: cleanPlaylists,
         playlistViewMode,
         queue: cleanQueue,
@@ -1164,7 +1133,6 @@ export function App() {
         quickPicks: cleanQuickPicks,
         searchHistory: searchHistory || [],
 
-        // Stats & History
         playHistory: cleanPlayHistory,
         playCounts: cleanPlayCounts,
         listenSecs: cleanListenSecs,
@@ -1174,7 +1142,6 @@ export function App() {
         statsTimeRange,
         artistThumbs: loadLS('vg_artistThumbs', {}),
 
-        // Playback & Audio Processing Settings
         volume,
         playbackSpeed,
         crossfadeSeconds,
@@ -1185,7 +1152,6 @@ export function App() {
         skipSilence,
         autoplayEnabled,
 
-        // Appearance & Customization Settings
         theme,
         customBgColor,
         accentColor,
@@ -1194,7 +1160,6 @@ export function App() {
         startupNav,
         trayEnabled,
 
-        // Downloads & Storage Preferences
         downloadQuality,
         downloadFormat,
         downloadPath,
@@ -1205,7 +1170,6 @@ export function App() {
         cacheLimit: loadLS('vg_cacheLimit', '1gb'),
         autoCheckUpdates,
 
-        // Discord Rich Presence Settings
         discordRpcEnabled,
         discordShowCover,
         discordTimeDisplay,
@@ -1213,11 +1177,9 @@ export function App() {
         discordBtnLabel,
         discordBtnUrl,
 
-        // Network & Audio Proxy Settings
         networkProxy: loadLS('vg_networkProxy', ''),
         customInstance: loadLS('vg_customInstance', ''),
 
-        // Lyrics & Scrobblers Settings
         lyricsSource,
         lastfmEnabled,
         lastfmUsername,
@@ -1274,12 +1236,10 @@ export function App() {
           return;
         }
 
-        // Support raw array of playlists, wrapped { data: ... }, or flat backup objects
         const data: any = Array.isArray(parsed) ? { playlists: parsed } : (parsed.data || parsed);
 
         const ls = <T,>(key: string, val: T): T => { saveLS(key, val); return val; };
 
-        // 1. Playlists & Queue (Support both modern and legacy playlist structures)
         if (Array.isArray(data.playlists)) {
           let plList = data.playlists;
           if (!plList.some((p: any) => p.id === 'p1')) {
@@ -1293,7 +1253,6 @@ export function App() {
         if (Array.isArray(data.searchHistory)) ls('vg_searchHistory', data.searchHistory);
         if (data.currentTrack !== undefined) setCurrentTrack(data.currentTrack ? ls('vg_lastTrack', data.currentTrack) : null);
 
-        // 2. Stats & History
         if (Array.isArray(data.playHistory)) setPlayHistory(ls('vg_playHistory', data.playHistory));
         if (data.playCounts && typeof data.playCounts === 'object') setPlayCounts(ls('vg_playCounts', data.playCounts));
         if (data.listenSecs && typeof data.listenSecs === 'object') setListenSecs(ls('vg_listenSecs', data.listenSecs));
@@ -1303,7 +1262,6 @@ export function App() {
         if (data.statsTimeRange) setStatsTimeRange(ls('vg_statsTimeRange', data.statsTimeRange));
         if (data.artistThumbs && typeof data.artistThumbs === 'object') ls('vg_artistThumbs', data.artistThumbs);
 
-        // 3. Audio & Playback Settings (Support legacy property aliases)
         const vol = data.volume !== undefined ? data.volume : data.vg_volume;
         if (vol !== undefined) {
           setVolume(ls('vg_volume', Number(vol)));
@@ -1337,7 +1295,6 @@ export function App() {
         const autoplayVal = data.autoplayEnabled !== undefined ? data.autoplayEnabled : (data.autoplay !== undefined ? data.autoplay : data.vg_autoplay);
         if (autoplayVal !== undefined) setAutoplayEnabled(ls('vg_autoplay', Boolean(autoplayVal)));
 
-        // 4. Appearance & Customization Settings
         const themeVal = data.theme || data.vg_theme;
         if (themeVal) setTheme(ls('vg_theme', themeVal));
 
@@ -1359,7 +1316,6 @@ export function App() {
         const tray = data.trayEnabled !== undefined ? data.trayEnabled : data.vg_trayEnabled;
         if (tray !== undefined) setTrayEnabled(ls('vg_trayEnabled', Boolean(tray)));
 
-        // 5. Downloads & Storage Preferences
         const dlQuality = data.downloadQuality || data.dlQuality || data.vg_dlQuality;
         if (dlQuality) setDownloadQuality(ls('vg_dlQuality', dlQuality));
 
@@ -1387,7 +1343,6 @@ export function App() {
         const autoUpdates = data.autoCheckUpdates !== undefined ? data.autoCheckUpdates : data.vg_autoCheckUpdates;
         if (autoUpdates !== undefined) setAutoCheckUpdates(ls('vg_autoCheckUpdates', Boolean(autoUpdates)));
 
-        // 6. Discord Rich Presence Settings
         const discordRpc = data.discordRpcEnabled !== undefined ? data.discordRpcEnabled : data.vg_discordRpcEnabled;
         if (discordRpc !== undefined) setDiscordRpcEnabled(ls('vg_discordRpcEnabled', Boolean(discordRpc)));
 
@@ -1406,7 +1361,6 @@ export function App() {
         const btnUrl = data.discordBtnUrl !== undefined ? data.discordBtnUrl : data.vg_discordBtnUrl;
         if (btnUrl !== undefined) setDiscordBtnUrl(ls('vg_discordBtnUrl', btnUrl));
 
-        // 7. Network & Audio Proxy Settings
         const proxyVal = data.networkProxy !== undefined ? data.networkProxy : data.vg_networkProxy;
         if (proxyVal !== undefined) ls('vg_networkProxy', proxyVal);
 
@@ -1420,7 +1374,6 @@ export function App() {
           }).catch(() => {});
         }
 
-        // 8. Lyrics & Scrobblers Settings
         const lyrics = data.lyricsSource || data.vg_lyricsSource;
         if (lyrics) setLyricsSource(ls('vg_lyricsSource', lyrics));
 

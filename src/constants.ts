@@ -321,7 +321,6 @@ function buildRegex(items?: string[]): RegExp | null {
   return new RegExp(`(^|[^\\p{L}\\p{N}])(?:${escaped})($|[^\\p{L}\\p{N}])`, 'ui');
 }
 
-// Pre-compile regexes on startup for sub-millisecond classification
 GENRES.forEach(g => {
   g.keywords = Array.from(new Set([...g.artists, ...g.genreTerms]));
   g.compiledExclusions = buildRegex(g.exclusions);
@@ -329,9 +328,6 @@ GENRES.forEach(g => {
   g.compiledTerms = buildRegex(g.genreTerms);
 });
 
-/**
- * Strict token / word boundary test for all Unicode alphabets (Latin, Korean, accents, numeric)
- */
 function testBoundaryMatch(source: string, target: string): boolean {
   if (!source || !target) return false;
   const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -339,9 +335,6 @@ function testBoundaryMatch(source: string, target: string): boolean {
   return regex.test(source);
 }
 
-/**
- * High-performance genre classifier ensuring zero false positives
- */
 export function matchGenreTrack(
   track: { title?: string; artist?: string },
   genre: GenreInfo
@@ -352,17 +345,14 @@ export function matchGenreTrack(
   if (!title && !artist) return false;
   const fullText = `${title} ${artist}`.trim();
 
-  // 1. Check exclusions first (1 fast regex test)
   if (genre.compiledExclusions && genre.compiledExclusions.test(fullText)) {
     return false;
   }
 
-  // 2. Exact or boundary match on artist list (1 fast regex test)
   if (artist && genre.compiledArtists && genre.compiledArtists.test(artist)) {
     return true;
   }
 
-  // 3. Match artist mentioned in title (e.g. "Artist - Title", "Title (feat. Artist)")
   if (
     title &&
     genre.compiledArtists &&
@@ -372,7 +362,6 @@ export function matchGenreTrack(
     return true;
   }
 
-  // 4. Exact match on specific unambiguous genre terms in title
   if (title && genre.compiledTerms && genre.compiledTerms.test(title)) {
     return true;
   }
@@ -380,9 +369,6 @@ export function matchGenreTrack(
   return false;
 }
 
-/**
- * Enhanced fallback word-boundary keyword matcher
- */
 export function matchGenreKeywords(text: string, keywords: string[]): boolean {
   if (!text || !keywords || keywords.length === 0) return false;
   const lower = text.toLowerCase();

@@ -202,7 +202,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
         const vw = document.documentElement.clientWidth || window.innerWidth;
         const vh = document.documentElement.clientHeight || window.innerHeight;
 
-        // 1. Local Track Context Menu
         if (ctxMenu.type === 'local' && track) {
           const menuWidth = 220;
           const localTrack: LocalTrack = {
@@ -242,7 +241,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
           );
         }
 
-        // 2. Track Context Menu (Online & Local in Queue/PlayerBar/Library)
         if ((ctxMenu.type === 'track' || ctxMenu.type === 'quickpick' || ctxMenu.type === 'queue-track') && track) {
           const isLocal = track.url.startsWith('local://');
           const menuWidth = 220;
@@ -337,7 +335,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
           );
         }
 
-        // 3. Playlist Context Menu
         if ((ctxMenu.type === 'playlist' || ctxMenu.type === 'sidebar-playlist') && playlist) {
           const menuWidth = 200;
           const menuHeight = playlist.id === 'p1' ? 340 : 430;

@@ -38,7 +38,6 @@ export function VirtualTrackList<T>({
     const el = containerRef.current;
     if (!el) return;
 
-    // Find scroll parent
     let scrollParent: HTMLElement | null = el.parentElement;
     while (scrollParent && scrollParent !== document.body) {
       const overflow = window.getComputedStyle(scrollParent).overflowY;

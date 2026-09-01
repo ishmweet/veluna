@@ -1244,7 +1244,6 @@ export const SettingsPanel = React.memo(function SettingsPanel({
           </div>
         )}
 
-
         {matchesIntegrations && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
             {!searchQuery.trim() && (
@@ -1589,7 +1588,6 @@ export const SettingsPanel = React.memo(function SettingsPanel({
             )}
           </div>
         )}
-
 
         {matchesNetwork && (
           <div style={{display:"flex",flexDirection:"column",gap:"20px"}}>
