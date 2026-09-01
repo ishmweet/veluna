@@ -38,7 +38,7 @@ Stream from YouTube. Download for offline use. Own your library. No account, eve
 
 ## What is Veluna?
 
-Veluna is a native desktop music application built with Tauri (Rust + React 19). It's primarily a local library manager, playlist tool, and playback engine, with an optional streaming/search feature powered by `yt-dlp` and `mpv` for finding and previewing tracks from YouTube.
+Veluna is an open-source, resource-efficient desktop music player application. It combines local audio file management, YouTube streaming, synchronized lyrics, and Spotify/YouTube playlist imports into a fast, privacy-first desktop application.
 
 There's no account system, no telemetry, and no ads. It runs identically on Linux and Windows, and it's designed to stay light on system resources.
 
