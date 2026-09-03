@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { Track } from './types';
 
 export interface DuplicateTrackInfo {
@@ -215,4 +216,44 @@ export function validateSettingsChange(
     }
   }
   return null; 
+}
+
+export async function fetchArtistYouTubeTracks(artists: string[]): Promise<Track[]> {
+  if (!artists || artists.length === 0) return [];
+  const tracks: Track[] = [];
+  const seenUrls = new Set<string>();
+
+  for (const rawArtist of artists.slice(0, 8)) {
+    const artist = rawArtist.trim();
+    if (!artist) continue;
+    try {
+      const res = await invoke<string>('search_youtube', { query: `${artist} top songs` });
+      const lines = res.trim().split('\n').filter(Boolean);
+      for (let i = 0; i < lines.length && i < 3; i++) {
+        const parts = lines[i].split('====');
+        const title = parts[0]?.trim() || '';
+        const fetchedArtist = cleanArtist(parts[1]) || artist;
+        const duration = parts[2]?.trim() || '0:00';
+        const id = parts[3]?.trim() || '';
+        if (!id || id === 'NA') continue;
+        const url = `https://youtube.com/watch?v=${id}`;
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
+          tracks.push({
+            id: Date.now() + Math.floor(Math.random() * 1000000) + tracks.length,
+            title: title || 'Unknown Track',
+            artist: fetchedArtist,
+            duration: duration || '0:00',
+            url,
+            cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+            mediaType: 'music'
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return tracks;
 }

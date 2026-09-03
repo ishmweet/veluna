@@ -379,3 +379,374 @@ export function matchGenreKeywords(text: string, keywords: string[]): boolean {
   }
   return false;
 }
+
+export interface OnboardingCategory {
+  id: string;
+  label: string;
+  subtitle: string;
+  artists: string[];
+}
+
+export const ONBOARDING_MUSIC_CATEGORIES: OnboardingCategory[] = [
+  {
+    id: 'hindi',
+    label: 'Hindi / Bollywood',
+    subtitle: 'Melodies, romance & contemporary film hits',
+    artists: ['Arijit Singh', 'Shreya Ghoshal', 'A.R. Rahman', 'Pritam', 'Atif Aslam', 'KK', 'Anuv Jain', 'Sonu Nigam', 'Darshan Raval', 'Mohit Chauhan']
+  },
+  {
+    id: 'punjabi',
+    label: 'Punjabi',
+    subtitle: 'High energy beats, bhangra & modern wave',
+    artists: ['Diljit Dosanjh', 'AP Dhillon', 'Sidhu Moose Wala', 'Karan Aujla', 'Shubh', 'Gurinder Gill', 'B Praak', 'PropheC', 'Amrinder Gill']
+  },
+  {
+    id: 'pop',
+    label: 'English / Global Pop',
+    subtitle: 'Chart-topping hits, viral anthems & pop icons',
+    artists: ['The Weeknd', 'Taylor Swift', 'Billie Eilish', 'Bruno Mars', 'Dua Lipa', 'Olivia Rodrigo', 'Ariana Grande', 'Ed Sheeran', 'Sabrina Carpenter', 'Justin Bieber']
+  },
+  {
+    id: 'hiphop',
+    label: 'Hip-Hop / Rap',
+    subtitle: 'Heavy 808s, lyrical bars & street anthems',
+    artists: ['Kendrick Lamar', 'Drake', 'Travis Scott', 'Eminem', 'Kanye West', '21 Savage', 'J. Cole', 'Juice WRLD', 'Future', 'Metro Boomin']
+  },
+  {
+    id: 'kpop',
+    label: 'K-Pop',
+    subtitle: 'Korean idol hits, choreography & synths',
+    artists: ['BTS', 'BLACKPINK', 'NewJeans', 'TWICE', 'Stray Kids', 'LE SSERAFIM', 'ENHYPEN', 'aespa', 'SEVENTEEN', 'IVE']
+  },
+  {
+    id: 'jpop',
+    label: 'J-Pop & Anime',
+    subtitle: 'Anime themes, city pop & Tokyo electronic',
+    artists: ['YOASOBI', 'Kenshi Yonezu', 'Ado', 'LiSA', 'Eve', 'Radwimps', 'Fujii Kaze', 'Aimer', 'Miki Matsubara']
+  },
+  {
+    id: 'edm',
+    label: 'EDM / Dance',
+    subtitle: 'Club anthems, house drops & festival bass',
+    artists: ['Martin Garrix', 'Avicii', 'Calvin Harris', 'Alan Walker', 'Marshmello', 'David Guetta', 'Skrillex', 'Kygo', 'Fred again..', 'Zedd']
+  },
+  {
+    id: 'rock',
+    label: 'Rock & Alternative',
+    subtitle: 'Electric guitars, hard riffs & stadium anthems',
+    artists: ['Linkin Park', 'Queen', 'Nirvana', 'Metallica', 'Green Day', 'Arctic Monkeys', 'Imagine Dragons', 'Coldplay', 'Foo Fighters', 'AC/DC']
+  },
+  {
+    id: 'indie',
+    label: 'Indie & Folk',
+    subtitle: 'Acoustic vibes, bedroom pop & singer-songwriters',
+    artists: ['Phoebe Bridgers', 'Lorde', 'Hozier', 'Clairo', 'Bon Iver', 'Mac DeMarco', 'Boygenius', 'Mitski', 'Cigarettes After Sex']
+  },
+  {
+    id: 'lofi',
+    label: 'Lo-Fi & Chillhop',
+    subtitle: 'Cozy study beats, tape hiss & mellow keys',
+    artists: ['Lofi Girl', 'Potsu', 'Jinsang', 'Nujabes', 'Idealism', 'Kupla', 'Saib', 'Elijah Who', 'Tomppabeats']
+  },
+  {
+    id: 'rnb',
+    label: 'R&B & Soul',
+    subtitle: 'Smooth harmonies, neo-soul & late night grooves',
+    artists: ['SZA', 'Frank Ocean', 'Daniel Caesar', 'Khalid', 'Brent Faiyaz', 'Giveon', 'H.E.R.', 'Bryson Tiller', 'Summer Walker']
+  },
+  {
+    id: 'latin',
+    label: 'Latin & Reggaeton',
+    subtitle: 'Tropical rhythms, dembow & urban heat',
+    artists: ['Bad Bunny', 'J Balvin', 'Peso Pluma', 'Rosalía', 'Karol G', 'Daddy Yankee', 'Rauw Alejandro', 'Feid', 'Maluma']
+  },
+  {
+    id: 'classical',
+    label: 'Classical & Piano',
+    subtitle: 'Piano concertos, cinematic scores & symphonies',
+    artists: ['Ludovico Einaudi', 'Hans Zimmer', 'Yiruma', 'Max Richter', 'Beethoven', 'Mozart', 'Chopin', 'Yo-Yo Ma']
+  },
+  {
+    id: 'phonk',
+    label: 'Phonk & Drift',
+    subtitle: 'Memphis cowbells, bass distortions & drift sound',
+    artists: ['Kordhell', 'DVRST', 'Dxrk', 'Hensonn', 'Ghostemane', 'Interworld', 'Pharmacist', 'SXMPRA']
+  },
+  {
+    id: 'afrobeats',
+    label: 'Afrobeats & Amapiano',
+    subtitle: 'West African rhythms & log-drum grooves',
+    artists: ['Burna Boy', 'Rema', 'Wizkid', 'Tems', 'Asake', 'Ayra Starr', 'Davido', 'CKay', 'Tyla']
+  },
+  {
+    id: 'tamil',
+    label: 'Tamil / Kollywood',
+    subtitle: 'South Indian film magic, mass beats & melodies',
+    artists: ['Anirudh Ravichander', 'A.R. Rahman', 'Sid Sriram', 'Yuvan Shankar Raja', 'Harris Jayaraj', 'Santhosh Narayanan', 'Pradeep Kumar']
+  },
+  {
+    id: 'telugu',
+    label: 'Telugu / Tollywood',
+    subtitle: 'Energetic melodies, mass anthems & lyrical classics',
+    artists: ['Thaman S', 'Devi Sri Prasad', 'Sid Sriram', 'Ram Miriyala', 'Anurag Kulkarni', 'Armaan Malik', 'Shreya Ghoshal']
+  },
+  {
+    id: 'bengali',
+    label: 'Bengali / Bangla Hits',
+    subtitle: 'Soulful melodies, Rabindra Sangeet & modern pop',
+    artists: ['Arijit Singh', 'Anupam Roy', 'Shreya Ghoshal', 'Shaan', 'Rupankar Bagchi', 'Somlata Acharyya', 'Lagnajita Chakraborty']
+  },
+  {
+    id: 'sufi',
+    label: 'Ghazals & Sufi',
+    subtitle: 'Qawwali, spiritual transcendence & poetic ghazals',
+    artists: ['Nusrat Fateh Ali Khan', 'Rahat Fateh Ali Khan', 'Jagjit Singh', 'Abida Parveen', 'Satinder Sartaaj', 'Kailash Kher', 'Wadali Brothers']
+  },
+  {
+    id: 'reggae',
+    label: 'Reggae & Dancehall',
+    subtitle: 'Island grooves, positive vibrations & roots reggae',
+    artists: ['Bob Marley', 'Damian Marley', 'Sean Paul', 'Chronixx', 'Popcaan', 'Koffee', 'Shaggy', 'Shenseea', 'Buju Banton']
+  },
+  {
+    id: 'country',
+    label: 'Country & Americana',
+    subtitle: 'Storytelling, acoustic guitars & Southern roots',
+    artists: ['Morgan Wallen', 'Luke Combs', 'Zach Bryan', 'Chris Stapleton', 'Kacey Musgraves', 'Post Malone', 'Dolly Parton', 'Taylor Swift']
+  },
+  {
+    id: 'synthwave',
+    label: 'Synthwave & Retrowave',
+    subtitle: '80s analog nostalgia, neon driving & outrun',
+    artists: ['The Midnight', 'GUNSHIP', 'Kavinsky', 'Carpenter Brut', 'Timecop1983', 'FM-84', 'Perturbator', 'Trevor Something']
+  },
+  {
+    id: 'metal',
+    label: 'Heavy Metal & Metalcore',
+    subtitle: 'Heavy distortion, double-kick drums & screams',
+    artists: ['Metallica', 'Iron Maiden', 'Slipknot', 'Avenged Sevenfold', 'Bring Me The Horizon', 'Architects', 'Rammstein', 'System of a Down']
+  },
+  {
+    id: 'jazz',
+    label: 'Jazz & Blues',
+    subtitle: 'Improvisations, brass swing & smoky blues',
+    artists: ['Miles Davis', 'John Coltrane', 'Bill Evans', 'Norah Jones', 'Chet Baker', 'Louis Armstrong', 'Ella Fitzgerald', 'Robert Glasper']
+  }
+];
+
+export const CURATED_STARTER_TRACKS: Record<string, Array<{ title: string; artist: string; duration: string; url: string; cover: string }>> = {
+  hindi: [
+    { title: 'Tum Hi Ho', artist: 'Arijit Singh', duration: '4:22', url: 'https://www.youtube.com/watch?v=Umqb9KENgmk', cover: 'https://i.ytimg.com/vi/Umqb9KENgmk/mqdefault.jpg' },
+    { title: 'Kesariya', artist: 'Arijit Singh & Pritam', duration: '4:28', url: 'https://www.youtube.com/watch?v=BddP6PYo2gs', cover: 'https://i.ytimg.com/vi/BddP6PYo2gs/mqdefault.jpg' },
+    { title: 'Apna Bana Le', artist: 'Arijit Singh & Sachin-Jigar', duration: '4:21', url: 'https://www.youtube.com/watch?v=ElZfdU54Cp8', cover: 'https://i.ytimg.com/vi/ElZfdU54Cp8/mqdefault.jpg' },
+    { title: 'Channa Mereya', artist: 'Arijit Singh & Pritam', duration: '4:49', url: 'https://www.youtube.com/watch?v=284Ov7ysmfA', cover: 'https://i.ytimg.com/vi/284Ov7ysmfA/mqdefault.jpg' },
+    { title: 'Raataan Lambiyan', artist: 'Tanishk Bagchi & Jubin Nautiyal', duration: '3:50', url: 'https://www.youtube.com/watch?v=gvyUuxdRdR4', cover: 'https://i.ytimg.com/vi/gvyUuxdRdR4/mqdefault.jpg' },
+    { title: 'Agar Tum Saath Ho', artist: 'Alka Yagnik & Arijit Singh', duration: '5:41', url: 'https://www.youtube.com/watch?v=sK7riqg2mr4', cover: 'https://i.ytimg.com/vi/sK7riqg2mr4/mqdefault.jpg' },
+    { title: 'Husn', artist: 'Anuv Jain', duration: '3:38', url: 'https://www.youtube.com/watch?v=gJLVTKhTnog', cover: 'https://i.ytimg.com/vi/gJLVTKhTnog/mqdefault.jpg' },
+    { title: 'Kun Faya Kun', artist: 'A.R. Rahman, Javed Ali & Mohit Chauhan', duration: '7:53', url: 'https://www.youtube.com/watch?v=T94PHkuydcw', cover: 'https://i.ytimg.com/vi/T94PHkuydcw/mqdefault.jpg' },
+  ],
+  punjabi: [
+    { title: 'Brown Munde', artist: 'AP Dhillon, Gurinder Gill & Shinda Kahlon', duration: '4:07', url: 'https://www.youtube.com/watch?v=VNs_cCtdbPc', cover: 'https://i.ytimg.com/vi/VNs_cCtdbPc/mqdefault.jpg' },
+    { title: 'Excuses', artist: 'AP Dhillon & Gurinder Gill', duration: '2:56', url: 'https://www.youtube.com/watch?v=vX2cDW8LUWk', cover: 'https://i.ytimg.com/vi/vX2cDW8LUWk/mqdefault.jpg' },
+    { title: 'Softly', artist: 'Karan Aujla & Ikky', duration: '2:35', url: 'https://www.youtube.com/watch?v=cWMxCE2HTag', cover: 'https://i.ytimg.com/vi/cWMxCE2HTag/mqdefault.jpg' },
+    { title: 'Lover', artist: 'Diljit Dosanjh', duration: '3:05', url: 'https://www.youtube.com/watch?v=mH_LFkWxpI0', cover: 'https://i.ytimg.com/vi/mH_LFkWxpI0/mqdefault.jpg' },
+    { title: 'No Love', artist: 'Shubh', duration: '2:50', url: 'https://www.youtube.com/watch?v=xR3V5Ow2dTI', cover: 'https://i.ytimg.com/vi/xR3V5Ow2dTI/mqdefault.jpg' },
+    { title: 'Winning Speech', artist: 'Karan Aujla & Mxrci', duration: '3:22', url: 'https://www.youtube.com/watch?v=hB9T5p9wU9A', cover: 'https://i.ytimg.com/vi/hB9T5p9wU9A/mqdefault.jpg' },
+  ],
+  pop: [
+    { title: 'Blinding Lights', artist: 'The Weeknd', duration: '3:20', url: 'https://www.youtube.com/watch?v=4NRXx6U8ABQ', cover: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/mqdefault.jpg' },
+    { title: 'Cruel Summer', artist: 'Taylor Swift', duration: '2:58', url: 'https://www.youtube.com/watch?v=ic8j13piAhQ', cover: 'https://i.ytimg.com/vi/ic8j13piAhQ/mqdefault.jpg' },
+    { title: 'Birds of a Feather', artist: 'Billie Eilish', duration: '3:30', url: 'https://www.youtube.com/watch?v=V9PVRfjEBTI', cover: 'https://i.ytimg.com/vi/V9PVRfjEBTI/mqdefault.jpg' },
+    { title: 'Die With A Smile', artist: 'Lady Gaga & Bruno Mars', duration: '4:11', url: 'https://www.youtube.com/watch?v=kPa7bsKwL-c', cover: 'https://i.ytimg.com/vi/kPa7bsKwL-c/mqdefault.jpg' },
+    { title: 'Starboy', artist: 'The Weeknd ft. Daft Punk', duration: '3:50', url: 'https://www.youtube.com/watch?v=34Na4j8AVgA', cover: 'https://i.ytimg.com/vi/34Na4j8AVgA/mqdefault.jpg' },
+    { title: 'Espresso', artist: 'Sabrina Carpenter', duration: '2:55', url: 'https://www.youtube.com/watch?v=eVli-tstM5E', cover: 'https://i.ytimg.com/vi/eVli-tstM5E/mqdefault.jpg' },
+  ],
+  hiphop: [
+    { title: 'Not Like Us', artist: 'Kendrick Lamar', duration: '4:34', url: 'https://www.youtube.com/watch?v=H58vbez_m4E', cover: 'https://i.ytimg.com/vi/H58vbez_m4E/mqdefault.jpg' },
+    { title: 'FE!N', artist: 'Travis Scott ft. Playboi Carti', duration: '3:11', url: 'https://www.youtube.com/watch?v=B9synWjqBn8', cover: 'https://i.ytimg.com/vi/B9synWjqBn8/mqdefault.jpg' },
+    { title: "God's Plan", artist: 'Drake', duration: '3:18', url: 'https://www.youtube.com/watch?v=xpVfcZ0ZcFM', cover: 'https://i.ytimg.com/vi/xpVfcZ0ZcFM/mqdefault.jpg' },
+    { title: 'HUMBLE.', artist: 'Kendrick Lamar', duration: '2:57', url: 'https://www.youtube.com/watch?v=tvTRZJ-4EyI', cover: 'https://i.ytimg.com/vi/tvTRZJ-4EyI/mqdefault.jpg' },
+    { title: 'Lucid Dreams', artist: 'Juice WRLD', duration: '3:59', url: 'https://www.youtube.com/watch?v=mzB1VGEGcSU', cover: 'https://i.ytimg.com/vi/mzB1VGEGcSU/mqdefault.jpg' },
+  ],
+  kpop: [
+    { title: 'Dynamite', artist: 'BTS', duration: '3:19', url: 'https://www.youtube.com/watch?v=gdZLi9oWNZg', cover: 'https://i.ytimg.com/vi/gdZLi9oWNZg/mqdefault.jpg' },
+    { title: 'How You Like That', artist: 'BLACKPINK', duration: '3:01', url: 'https://www.youtube.com/watch?v=ioNng23DkIM', cover: 'https://i.ytimg.com/vi/ioNng23DkIM/mqdefault.jpg' },
+    { title: 'Super Shy', artist: 'NewJeans', duration: '2:34', url: 'https://www.youtube.com/watch?v=ArmDp-zijuc', cover: 'https://i.ytimg.com/vi/ArmDp-zijuc/mqdefault.jpg' },
+    { title: 'Seven', artist: 'Jung Kook ft. Latto', duration: '3:04', url: 'https://www.youtube.com/watch?v=QU9c0053UAU', cover: 'https://i.ytimg.com/vi/QU9c0053UAU/mqdefault.jpg' },
+  ],
+  jpop: [
+    { title: 'Idol (アイドル)', artist: 'YOASOBI', duration: '3:33', url: 'https://www.youtube.com/watch?v=ZRtdQ81jPUQ', cover: 'https://i.ytimg.com/vi/ZRtdQ81jPUQ/mqdefault.jpg' },
+    { title: 'Racing into the Night (夜に駆ける)', artist: 'YOASOBI', duration: '4:21', url: 'https://www.youtube.com/watch?v=x8VYWazR5mE', cover: 'https://i.ytimg.com/vi/x8VYWazR5mE/mqdefault.jpg' },
+    { title: 'Stay With Me', artist: 'Miki Matsubara', duration: '4:59', url: 'https://www.youtube.com/watch?v=VEe_yIbW64w', cover: 'https://i.ytimg.com/vi/VEe_yIbW64w/mqdefault.jpg' },
+    { title: 'Shinunoga E-Wa', artist: 'Fujii Kaze', duration: '3:05', url: 'https://www.youtube.com/watch?v=dFf4AgBNR1E', cover: 'https://i.ytimg.com/vi/dFf4AgBNR1E/mqdefault.jpg' },
+  ],
+  edm: [
+    { title: 'Animals', artist: 'Martin Garrix', duration: '2:56', url: 'https://www.youtube.com/watch?v=gCYcTmT9wx4', cover: 'https://i.ytimg.com/vi/gCYcTmT9wx4/mqdefault.jpg' },
+    { title: 'Levels', artist: 'Avicii', duration: '3:19', url: 'https://www.youtube.com/watch?v=_ovdm2yX4MA', cover: 'https://i.ytimg.com/vi/_ovdm2yX4MA/mqdefault.jpg' },
+    { title: 'Faded', artist: 'Alan Walker', duration: '3:32', url: 'https://www.youtube.com/watch?v=60ItHLz5WEA', cover: 'https://i.ytimg.com/vi/60ItHLz5WEA/mqdefault.jpg' },
+    { title: 'Wake Me Up', artist: 'Avicii', duration: '4:07', url: 'https://www.youtube.com/watch?v=IcrbM1l_BoI', cover: 'https://i.ytimg.com/vi/IcrbM1l_BoI/mqdefault.jpg' },
+  ],
+  rock: [
+    { title: 'In the End', artist: 'Linkin Park', duration: '3:36', url: 'https://www.youtube.com/watch?v=eVTXPUF4Oz4', cover: 'https://i.ytimg.com/vi/eVTXPUF4Oz4/mqdefault.jpg' },
+    { title: 'Numb', artist: 'Linkin Park', duration: '3:07', url: 'https://www.youtube.com/watch?v=kXYiU_JCYtU', cover: 'https://i.ytimg.com/vi/kXYiU_JCYtU/mqdefault.jpg' },
+    { title: 'Bohemian Rhapsody', artist: 'Queen', duration: '5:55', url: 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ', cover: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/mqdefault.jpg' },
+    { title: 'Smells Like Teen Spirit', artist: 'Nirvana', duration: '5:01', url: 'https://www.youtube.com/watch?v=hTWKbfoikeg', cover: 'https://i.ytimg.com/vi/hTWKbfoikeg/mqdefault.jpg' },
+  ],
+  indie: [
+    { title: 'Take Me to Church', artist: 'Hozier', duration: '4:02', url: 'https://www.youtube.com/watch?v=PVjiKRfKpPI', cover: 'https://i.ytimg.com/vi/PVjiKRfKpPI/mqdefault.jpg' },
+    { title: 'Motion Sickness', artist: 'Phoebe Bridgers', duration: '3:50', url: 'https://www.youtube.com/watch?v=9sfYpolGCu8', cover: 'https://i.ytimg.com/vi/9sfYpolGCu8/mqdefault.jpg' },
+    { title: 'Apocalypse', artist: 'Cigarettes After Sex', duration: '4:50', url: 'https://www.youtube.com/watch?v=sElE_BfQ67s', cover: 'https://i.ytimg.com/vi/sElE_BfQ67s/mqdefault.jpg' },
+  ],
+  lofi: [
+    { title: 'Aruarian Dance', artist: 'Nujabes', duration: '4:10', url: 'https://www.youtube.com/watch?v=g9hwjQBQFIo', cover: 'https://i.ytimg.com/vi/g9hwjQBQFIo/mqdefault.jpg' },
+    { title: 'Feather', artist: 'Nujabes', duration: '2:55', url: 'https://www.youtube.com/watch?v=P5-2--445AM', cover: 'https://i.ytimg.com/vi/P5-2--445AM/mqdefault.jpg' },
+    { title: 'Affection', artist: 'Jinsang', duration: '2:15', url: 'https://www.youtube.com/watch?v=p4vW7B4jXbQ', cover: 'https://i.ytimg.com/vi/p4vW7B4jXbQ/mqdefault.jpg' },
+  ],
+  rnb: [
+    { title: 'Kill Bill', artist: 'SZA', duration: '2:33', url: 'https://www.youtube.com/watch?v=MSRcC626prw', cover: 'https://i.ytimg.com/vi/MSRcC626prw/mqdefault.jpg' },
+    { title: 'Snooze', artist: 'SZA', duration: '3:21', url: 'https://www.youtube.com/watch?v=LDY_Xa77HwE', cover: 'https://i.ytimg.com/vi/LDY_Xa77HwE/mqdefault.jpg' },
+    { title: 'Best Part', artist: 'Daniel Caesar ft. H.E.R.', duration: '3:29', url: 'https://www.youtube.com/watch?v=vBy7FaapGRo', cover: 'https://i.ytimg.com/vi/vBy7FaapGRo/mqdefault.jpg' },
+  ],
+  latin: [
+    { title: 'Monaco', artist: 'Bad Bunny', duration: '4:27', url: 'https://www.youtube.com/watch?v=gT_u_fO_QhU', cover: 'https://i.ytimg.com/vi/gT_u_fO_QhU/mqdefault.jpg' },
+    { title: 'Ella Baila Sola', artist: 'Eslabon Armado & Peso Pluma', duration: '2:45', url: 'https://www.youtube.com/watch?v=lZiaYpNdC60', cover: 'https://i.ytimg.com/vi/lZiaYpNdC60/mqdefault.jpg' },
+  ],
+  classical: [
+    { title: 'Nuvole Bianche', artist: 'Ludovico Einaudi', duration: '5:57', url: 'https://www.youtube.com/watch?v=4VR-6AS0-l4', cover: 'https://i.ytimg.com/vi/4VR-6AS0-l4/mqdefault.jpg' },
+    { title: 'River Flows in You', artist: 'Yiruma', duration: '3:08', url: 'https://www.youtube.com/watch?v=7maJOI3QMu0', cover: 'https://i.ytimg.com/vi/7maJOI3QMu0/mqdefault.jpg' },
+    { title: 'Experience', artist: 'Ludovico Einaudi', duration: '5:15', url: 'https://www.youtube.com/watch?v=hN_q-_nGv4U', cover: 'https://i.ytimg.com/vi/hN_q-_nGv4U/mqdefault.jpg' },
+  ],
+  phonk: [
+    { title: 'Murder in My Mind', artist: 'KORDHELL', duration: '2:25', url: 'https://www.youtube.com/watch?v=w-sQRS-MT9k', cover: 'https://i.ytimg.com/vi/w-sQRS-MT9k/mqdefault.jpg' },
+    { title: 'Close Eyes', artist: 'DVRST', duration: '2:12', url: 'https://www.youtube.com/watch?v=ytQ5CYE1VZw', cover: 'https://i.ytimg.com/vi/ytQ5CYE1VZw/mqdefault.jpg' },
+  ],
+  afrobeats: [
+    { title: 'Calm Down', artist: 'Rema', duration: '3:39', url: 'https://www.youtube.com/watch?v=CQLsdm1ZYAw', cover: 'https://i.ytimg.com/vi/CQLsdm1ZYAw/mqdefault.jpg' },
+    { title: 'Last Last', artist: 'Burna Boy', duration: '2:52', url: 'https://www.youtube.com/watch?v=421w1j87fEM', cover: 'https://i.ytimg.com/vi/421w1j87fEM/mqdefault.jpg' },
+    { title: 'Water', artist: 'Tyla', duration: '3:20', url: 'https://www.youtube.com/watch?v=XoiOOiuH8iI', cover: 'https://i.ytimg.com/vi/XoiOOiuH8iI/mqdefault.jpg' },
+  ],
+  tamil: [
+    { title: 'Hukum - Thalaivar Alappara', artist: 'Anirudh Ravichander', duration: '3:27', url: 'https://www.youtube.com/watch?v=1F3hm6MrsuY', cover: 'https://i.ytimg.com/vi/1F3hm6MrsuY/mqdefault.jpg' },
+    { title: 'Arabic Kuthu', artist: 'Anirudh Ravichander & Jonita Gandhi', duration: '4:40', url: 'https://www.youtube.com/watch?v=KUN5Uf9mObQ', cover: 'https://i.ytimg.com/vi/KUN5Uf9mObQ/mqdefault.jpg' },
+    { title: 'Enjoy Enjaami', artist: 'Dhee ft. Arivu & Santhosh Narayanan', duration: '4:53', url: 'https://www.youtube.com/watch?v=eYq7WapuDLU', cover: 'https://i.ytimg.com/vi/eYq7WapuDLU/mqdefault.jpg' },
+  ],
+  telugu: [
+    { title: 'Oo Antava Mava Oo Oo Antava', artist: 'Indravathi Chauhan & Devi Sri Prasad', duration: '3:48', url: 'https://www.youtube.com/watch?v=uK8f26q6b30', cover: 'https://i.ytimg.com/vi/uK8f26q6b30/mqdefault.jpg' },
+    { title: 'Ramuloo Ramulaa', artist: 'Anurag Kulkarni & Thaman S', duration: '4:18', url: 'https://www.youtube.com/watch?v=gT_SjS2q_C8', cover: 'https://i.ytimg.com/vi/gT_SjS2q_C8/mqdefault.jpg' },
+    { title: 'Inkem Inkem Inkem Kaavaale', artist: 'Sid Sriram & Gopi Sundar', duration: '4:28', url: 'https://www.youtube.com/watch?v=mQcsoXhX_Qo', cover: 'https://i.ytimg.com/vi/mQcsoXhX_Qo/mqdefault.jpg' },
+  ],
+  bengali: [
+    { title: 'Tumi Robe Nirobe', artist: 'Arijit Singh', duration: '4:15', url: 'https://www.youtube.com/watch?v=hOEv7q6x9n8', cover: 'https://i.ytimg.com/vi/hOEv7q6x9n8/mqdefault.jpg' },
+    { title: 'Amake Amar Moto Thakte Dao', artist: 'Anupam Roy', duration: '4:49', url: 'https://www.youtube.com/watch?v=6P3h1Ckgv08', cover: 'https://i.ytimg.com/vi/6P3h1Ckgv08/mqdefault.jpg' },
+  ],
+  sufi: [
+    { title: 'Afreen Afreen', artist: 'Rahat Fateh Ali Khan & Momina Mustehsan', duration: '6:45', url: 'https://www.youtube.com/watch?v=kw4tT7SCmaY', cover: 'https://i.ytimg.com/vi/kw4tT7SCmaY/mqdefault.jpg' },
+    { title: 'Tajdar-e-Haram', artist: 'Atif Aslam', duration: '10:28', url: 'https://www.youtube.com/watch?v=a18py61ZWg4', cover: 'https://i.ytimg.com/vi/a18py61ZWg4/mqdefault.jpg' },
+    { title: 'Chaap Tilak', artist: 'Abida Parveen & Rahat Fateh Ali Khan', duration: '7:56', url: 'https://www.youtube.com/watch?v=H3Hl3Yf5_8M', cover: 'https://i.ytimg.com/vi/H3Hl3Yf5_8M/mqdefault.jpg' },
+  ],
+  reggae: [
+    { title: 'Three Little Birds', artist: 'Bob Marley & The Wailers', duration: '3:00', url: 'https://www.youtube.com/watch?v=LanCLS_hIo4', cover: 'https://i.ytimg.com/vi/LanCLS_hIo4/mqdefault.jpg' },
+    { title: 'Toast', artist: 'Koffee', duration: '3:11', url: 'https://www.youtube.com/watch?v=p8HoEvDh70Y', cover: 'https://i.ytimg.com/vi/p8HoEvDh70Y/mqdefault.jpg' },
+  ],
+  country: [
+    { title: 'Last Night', artist: 'Morgan Wallen', duration: '2:44', url: 'https://www.youtube.com/watch?v=yPkWbV84mEE', cover: 'https://i.ytimg.com/vi/yPkWbV84mEE/mqdefault.jpg' },
+    { title: 'Fast Car', artist: 'Luke Combs', duration: '4:25', url: 'https://www.youtube.com/watch?v=4Gz53wH6c_k', cover: 'https://i.ytimg.com/vi/4Gz53wH6c_k/mqdefault.jpg' },
+  ],
+  synthwave: [
+    { title: 'Sunset', artist: 'The Midnight', duration: '5:26', url: 'https://www.youtube.com/watch?v=rdbS0j0wN68', cover: 'https://i.ytimg.com/vi/rdbS0j0wN68/mqdefault.jpg' },
+    { title: 'Nightcall', artist: 'Kavinsky', duration: '4:19', url: 'https://www.youtube.com/watch?v=MV_3Dpw-BRY', cover: 'https://i.ytimg.com/vi/MV_3Dpw-BRY/mqdefault.jpg' },
+  ],
+  metal: [
+    { title: 'Master of Puppets', artist: 'Metallica', duration: '8:35', url: 'https://www.youtube.com/watch?v=E0ozmU9cJDg', cover: 'https://i.ytimg.com/vi/E0ozmU9cJDg/mqdefault.jpg' },
+    { title: 'Duality', artist: 'Slipknot', duration: '4:12', url: 'https://www.youtube.com/watch?v=6fVE8kSM43I', cover: 'https://i.ytimg.com/vi/6fVE8kSM43I/mqdefault.jpg' },
+  ],
+  jazz: [
+    { title: 'So What', artist: 'Miles Davis', duration: '9:22', url: 'https://www.youtube.com/watch?v=zqNTltOGh5c', cover: 'https://i.ytimg.com/vi/zqNTltOGh5c/mqdefault.jpg' },
+    { title: "Don't Know Why", artist: 'Norah Jones', duration: '3:05', url: 'https://www.youtube.com/watch?v=tO4dxvguQDk', cover: 'https://i.ytimg.com/vi/tO4dxvguQDk/mqdefault.jpg' },
+  ]
+};
+
+export function getStarterRecommendations(preferences?: { languages?: string[]; genres?: string[]; artists?: string[] }): Array<{ id: number; title: string; artist: string; duration: string; url: string; cover: string }> {
+  const chosenCategories = new Set<string>();
+  
+  if (preferences?.languages?.length) {
+    preferences.languages.forEach(l => chosenCategories.add(l.toLowerCase()));
+  }
+  if (preferences?.genres?.length) {
+    preferences.genres.forEach(g => chosenCategories.add(g.toLowerCase()));
+  }
+
+  let pool: Array<{ title: string; artist: string; duration: string; url: string; cover: string }> = [];
+
+  if (chosenCategories.size > 0) {
+    chosenCategories.forEach(cat => {
+      const tracks = CURATED_STARTER_TRACKS[cat];
+      if (tracks) {
+        pool.push(...tracks);
+      }
+    });
+  }
+
+  if (pool.length === 0) {
+    pool = [
+      ...(CURATED_STARTER_TRACKS['pop'] || []),
+      ...(CURATED_STARTER_TRACKS['hindi'] || []),
+      ...(CURATED_STARTER_TRACKS['hiphop'] || []),
+      ...(CURATED_STARTER_TRACKS['punjabi'] || [])
+    ];
+  }
+
+  // Shuffle pool
+  const shuffled = [...pool].sort(() => 0.5 - Math.random());
+  
+  // Prioritize tracks matching chosen favorite artists
+  const favoriteArtists = (preferences?.artists || []).map(a => a.toLowerCase().trim()).filter(Boolean);
+  if (favoriteArtists.length > 0) {
+    shuffled.sort((a, b) => {
+      const aMatches = favoriteArtists.some(fa => a.artist.toLowerCase().includes(fa) || a.title.toLowerCase().includes(fa));
+      const bMatches = favoriteArtists.some(fa => b.artist.toLowerCase().includes(fa) || b.title.toLowerCase().includes(fa));
+      if (aMatches && !bMatches) return -1;
+      if (!aMatches && bMatches) return 1;
+      return 0;
+    });
+  }
+
+  const uniqueUrls = new Set<string>();
+  const finalTracks: Array<{ id: number; title: string; artist: string; duration: string; url: string; cover: string }> = [];
+
+  for (let i = 0; i < shuffled.length && finalTracks.length < 15; i++) {
+    const t = shuffled[i];
+    if (!uniqueUrls.has(t.url)) {
+      uniqueUrls.add(t.url);
+      finalTracks.push({
+        id: Date.now() + Math.floor(Math.random() * 1000000) + finalTracks.length,
+        title: t.title,
+        artist: t.artist,
+        duration: t.duration,
+        url: t.url,
+        cover: t.cover
+      });
+    }
+  }
+
+  if (finalTracks.length < 15) {
+    const fallbackAll = Object.values(CURATED_STARTER_TRACKS).flat().sort(() => 0.5 - Math.random());
+    for (const t of fallbackAll) {
+      if (finalTracks.length >= 15) break;
+      if (!uniqueUrls.has(t.url)) {
+        uniqueUrls.add(t.url);
+        finalTracks.push({
+          id: Date.now() + Math.floor(Math.random() * 1000000) + finalTracks.length,
+          title: t.title,
+          artist: t.artist,
+          duration: t.duration,
+          url: t.url,
+          cover: t.cover
+        });
+      }
+    }
+  }
+
+  return finalTracks.slice(0, 15);
+}
+

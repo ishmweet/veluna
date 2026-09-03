@@ -20,6 +20,7 @@ import {
   NavView,
   SettingsTab,
   ActiveDownload,
+  UserPreferences,
 } from './types';
 import {
   loadLS,
@@ -28,7 +29,9 @@ import {
   getTrackGradient,
   cleanArtist,
   findDuplicateTracks,
+  fetchArtistYouTubeTracks,
 } from './utils';
+import { getStarterRecommendations } from './constants';
 
 import { useToast } from './hooks/useToast';
 import { useTheme } from './hooks/useTheme';
@@ -53,6 +56,7 @@ import { StatsView } from './components/views/StatsView';
 import { LyricsView } from './components/views/LyricsView';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { OnboardingModal } from './components/OnboardingModal';
 
 import {
   ImportResultModal,
@@ -337,6 +341,61 @@ export function App() {
   const [downloadPulseKey, setDownloadPulseKey] = useState(0);
   const flyoutAutoCloseTimerRef = useRef<any>(null);
   const [metadataEditingTrack, setMetadataEditingTrack] = useState<Track | null>(null);
+
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>(() =>
+    loadLS('vg_userPreferences', { languages: [], genres: [], artists: [] })
+  );
+  const [recommendedTracks, setRecommendedTracks] = useState<Track[]>(() => {
+    const cached = loadLS('vg_recommendedTracks', []);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+    return getStarterRecommendations(loadLS('vg_userPreferences', undefined)) as Track[];
+  });
+  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(() =>
+    !loadLS('vg_onboardingCompleted', false)
+  );
+
+  const handleCompleteOnboarding = useCallback((prefs: UserPreferences, tracks: Track[]) => {
+    setUserPreferences(prefs);
+    setRecommendedTracks(tracks);
+    saveLS('vg_userPreferences', prefs);
+    saveLS('vg_recommendedTracks', tracks);
+    saveLS('vg_onboardingCompleted', true);
+    setShowOnboardingModal(false);
+    showToast('Personalized recommendations updated');
+
+    if (prefs.artists && prefs.artists.length > 0) {
+      fetchArtistYouTubeTracks(prefs.artists).then(ytTracks => {
+        if (ytTracks.length > 0) {
+          setRecommendedTracks(prev => {
+            const seen = new Set(ytTracks.map(t => t.url));
+            const merged = [...ytTracks, ...prev.filter(t => !seen.has(t.url))].slice(0, 15);
+            saveLS('vg_recommendedTracks', merged);
+            return merged;
+          });
+        }
+      });
+    }
+  }, [showToast]);
+
+  const handleRefreshRecommendations = useCallback(() => {
+    const base = getStarterRecommendations(userPreferences) as Track[];
+    setRecommendedTracks(base);
+    saveLS('vg_recommendedTracks', base);
+    showToast('Recommendations refreshed');
+
+    if (userPreferences.artists && userPreferences.artists.length > 0) {
+      fetchArtistYouTubeTracks(userPreferences.artists).then(ytTracks => {
+        if (ytTracks.length > 0) {
+          setRecommendedTracks(prev => {
+            const seen = new Set(ytTracks.map(t => t.url));
+            const merged = [...ytTracks, ...prev.filter(t => !seen.has(t.url))].slice(0, 15);
+            saveLS('vg_recommendedTracks', merged);
+            return merged;
+          });
+        }
+      });
+    }
+  }, [userPreferences, showToast]);
 
   useEffect(() => {
     const unlistenPromise = listen<{ url: string; percent: number; status: string; error?: string }>('download_progress', (event) => {
@@ -1182,10 +1241,10 @@ export function App() {
 
         lyricsSource,
         lastfmEnabled,
-        lastfmUsername,
-        lastfmSessionKey,
-        lastfmApiKey,
-        lastfmApiSecret,
+
+        onboardingCompleted: loadLS('vg_onboardingCompleted', false),
+        userPreferences,
+        recommendedTracks,
       };
 
       const json = JSON.stringify(data, null, 2);
@@ -1380,17 +1439,17 @@ export function App() {
         const lfmEn = data.lastfmEnabled !== undefined ? data.lastfmEnabled : (data.vg_lastfmEnabled !== undefined ? data.vg_lastfmEnabled : data.vg_lfm_enabled);
         if (lfmEn !== undefined) setLastfmEnabled(Boolean(lfmEn));
 
-        const lfmUser = data.lastfmUsername !== undefined ? data.lastfmUsername : (data.vg_lastfmUsername || data.vg_lfm_username);
-        if (lfmUser !== undefined) setLastfmUsername(lfmUser);
-
-        const lfmKey = data.lastfmSessionKey !== undefined ? data.lastfmSessionKey : (data.vg_lastfmSessionKey || data.vg_lfm_session);
-        if (lfmKey !== undefined) setLastfmSessionKey(lfmKey);
-
-        const lfmApi = data.lastfmApiKey !== undefined ? data.lastfmApiKey : (data.vg_lastfmApiKey || data.vg_lfm_apikey);
-        if (lfmApi !== undefined) setLastfmApiKey(lfmApi);
-
-        const lfmSecret = data.lastfmApiSecret !== undefined ? data.lastfmApiSecret : (data.vg_lastfmApiSecret || data.vg_lfm_secret);
-        if (lfmSecret !== undefined) setLastfmApiSecret(lfmSecret);
+        if (data.userPreferences) {
+          setUserPreferences(data.userPreferences);
+          ls('vg_userPreferences', data.userPreferences);
+        }
+        if (Array.isArray(data.recommendedTracks)) {
+          setRecommendedTracks(data.recommendedTracks);
+          ls('vg_recommendedTracks', data.recommendedTracks);
+        }
+        if (data.onboardingCompleted !== undefined) {
+          ls('vg_onboardingCompleted', data.onboardingCompleted);
+        }
 
         showToast('Backup restored successfully');
       } catch (err) {
@@ -1532,6 +1591,9 @@ export function App() {
             localTracks={localTracks}
             addToQueue={addToQueue}
             resetSearch={resetSearch}
+            recommendedTracks={recommendedTracks}
+            onRefreshRecommendations={handleRefreshRecommendations}
+            onOpenPersonalization={() => setShowOnboardingModal(true)}
           />
         )}
 
@@ -2811,6 +2873,14 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Onboarding & Taste Personalization Modal */}
+      <OnboardingModal
+        isOpen={showOnboardingModal}
+        initialPreferences={userPreferences}
+        onComplete={handleCompleteOnboarding}
+        onClose={() => setShowOnboardingModal(false)}
+      />
 
       {/* Toast Notification */}
       {toast && (

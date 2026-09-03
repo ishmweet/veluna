@@ -10,7 +10,10 @@ import {
   Play,
   Search,
   Shuffle,
-  X
+  X,
+  Sparkles,
+  RefreshCw,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Track, Playlist, LocalTrack, CtxMenu, SettingsTab } from '../../types';
 import { GENRES, matchGenreTrack } from '../../constants';
@@ -75,6 +78,9 @@ interface HomeViewProps {
   setOpenPlaylistId?: (id: string | null) => void;
   showToast?: (msg: string) => void;
   addToQueue?: (tracks: Track | Track[]) => void;
+  recommendedTracks?: Track[];
+  onRefreshRecommendations?: () => void;
+  onOpenPersonalization?: () => void;
 }
 
 export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: React.CSSProperties }> = ({ id, size = 18, style }) => {
@@ -284,6 +290,9 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
   setOpenPlaylistId,
   showToast: _showToast,
   addToQueue,
+  recommendedTracks = [],
+  onRefreshRecommendations,
+  onOpenPersonalization,
 }) => {
   const defaultSearchRef = useRef<HTMLInputElement>(null);
   const searchRef = customSearchRef || defaultSearchRef;
@@ -663,6 +672,230 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
               </div>
             </div>
 
+            {/* Recommended for You Shelf (Tailored Starter & Discoveries) */}
+            {recommendedTracks && recommendedTracks.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '14px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={14} style={{ color: 'var(--v-accent)' }} />
+                    <h2 style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'var(--v-fg3)',
+                      margin: 0
+                    }}>Recommended For You</h2>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {onOpenPersonalization && (
+                      <button
+                        onClick={onOpenPersonalization}
+                        title="Tune Music Preferences"
+                        style={{
+                          background: 'transparent',
+                          color: 'var(--v-fg3)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          transition: 'color .12s, border-color .12s'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.color = 'var(--v-fg)';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.color = 'var(--v-fg3)';
+                          e.currentTarget.style.borderColor = 'transparent';
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <SlidersHorizontal size={12} />
+                        <span>Tune Taste</span>
+                      </button>
+                    )}
+
+                    {onRefreshRecommendations && (
+                      <button
+                        onClick={onRefreshRecommendations}
+                        title="Refresh Suggestions"
+                        style={{
+                          background: 'transparent',
+                          color: 'var(--v-fg3)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'color .12s, border-color .12s'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.color = 'var(--v-fg)';
+                          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.color = 'var(--v-fg3)';
+                          e.currentTarget.style.borderColor = 'transparent';
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <RefreshCw size={12} />
+                        <span>Refresh</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="v-home-quickpicks-grid">
+                  {recommendedTracks.slice(0, 15).map((track, cardIdx) => {
+                    const isActive = currentTrack?.url === track.url;
+                    const isCardLoading = (loadingTrackUrl === track.url || (isActive && isLoadingTrack)) && !isPlaying;
+                    return (
+                      <div
+                        key={track.url}
+                        onClick={() => handlePlayInContext(track, recommendedTracks.slice(0, 15))}
+                        onContextMenu={e => openCtx(e, { type: 'quickpick', track })}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: isActive ? 'rgba(255, 255, 255, 0.04)' : 'transparent',
+                          border: '1px solid transparent',
+                          transition: 'background .15s ease, transform .15s ease',
+                          animation: `fadeUpSm .18s cubic-bezier(0.2,0,0,1) ${cardIdx * 25}ms both`,
+                        }}
+                        onMouseEnter={e => {
+                          prefetchOnHover(track.url);
+                          e.currentTarget.style.background = isActive ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.035)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = isActive ? 'rgba(255, 255, 255, 0.04)' : 'transparent';
+                        }}
+                      >
+                        <div style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          position: 'relative',
+                          background: getTrackGradient(track.title, track.artist),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid rgba(255, 255, 255, 0.04)'
+                        }}>
+                          <Music size={14} style={{ position: 'absolute', color: 'rgba(255,255,255,0.2)' }} />
+                          {getTrackCover(track) && (
+                            <img
+                              src={getTrackCover(track)}
+                              alt={track.title}
+                              style={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                              onError={e => { e.currentTarget.style.display = 'none'; }}
+                              loading="lazy"
+                            />
+                          )}
+                          {isCardLoading ? (
+                            <div style={{
+                              position: 'absolute',
+                              inset: 0,
+                              background: 'rgba(0,0,0,0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" style={{ animation: 'spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite' }}>
+                                <circle cx="12" cy="12" r="8.5" fill="none" stroke="rgba(226,221,217,0.2)" strokeWidth="2.5" />
+                                <circle cx="12" cy="12" r="8.5" fill="none" stroke="#e2ddd9" strokeWidth="2.5" strokeDasharray="53.4" strokeDashoffset="36" strokeLinecap="round" />
+                              </svg>
+                            </div>
+                          ) : isActive && isPlaying ? (
+                            <div style={{
+                              position: 'absolute',
+                              inset: 0,
+                              background: 'rgba(0,0,0,0.5)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <div style={{
+                                display: 'flex',
+                                gap: '2px',
+                                alignItems: 'flex-end',
+                                height: '10px'
+                              }}>
+                                {[100, 65, 80].map((h, i) => (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      width: '2px',
+                                      background: 'var(--v-accent)',
+                                      borderRadius: '1px',
+                                      height: `${h}%`,
+                                      animation: `barBounce ${0.7 + i * 0.12}s ease-in-out ${i * 110}ms infinite`,
+                                      transformOrigin: 'bottom'
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13.5px',
+                            fontWeight: 600,
+                            color: isActive ? 'var(--v-accent)' : 'var(--v-fg)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            lineHeight: 1.3
+                          }}>{track.title}</div>
+                          {cleanArtist(track.artist) && (
+                            <div style={{
+                              fontSize: '11.5px',
+                              color: 'var(--v-fg2)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              marginTop: '2px'
+                            }}>{cleanArtist(track.artist)}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
               <div style={{
                 display: 'flex',
@@ -670,14 +903,17 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 justifyContent: 'space-between',
                 marginBottom: '14px'
               }}>
-                <h2 style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: 'var(--v-fg3)',
-                  margin: 0
-                }}>Recently Played</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={14} style={{ color: 'var(--v-accent)' }} />
+                  <h2 style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--v-fg3)',
+                    margin: 0
+                  }}>Recently Played</h2>
+                </div>
                 <button
                   onClick={() => setQuickPicks?.([])}
                   style={{
@@ -704,13 +940,13 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 >Clear</button>
               </div>
               <div className="v-home-quickpicks-grid">
-                {quickPicks.slice(0, 12).map((track, cardIdx) => {
+                {quickPicks.slice(0, 10).map((track, cardIdx) => {
                   const isActive = currentTrack?.url === track.url;
                   const isCardLoading = (loadingTrackUrl === track.url || (isActive && isLoadingTrack)) && !isPlaying;
                   return (
                     <div
                       key={track.url}
-                      onClick={() => handlePlayInContext(track, quickPicks.slice(0, 12))}
+                      onClick={() => handlePlayInContext(track, quickPicks.slice(0, 10))}
                       onContextMenu={e => openCtx(e, { type: 'quickpick', track })}
                       style={{
                          display: 'flex',
