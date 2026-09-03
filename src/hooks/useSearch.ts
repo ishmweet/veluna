@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import { invoke } from "@tauri-apps/api/core";
 import { Track } from '../types';
-import { loadLS, saveLS, cleanArtist } from '../utils';
+import { loadLS, saveLS, parseTrackMeta } from '../utils';
 
 export function useSearch(showToast?: (msg: string) => void, cacheEnabled: boolean = true) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,15 +80,14 @@ export function useSearch(showToast?: (msg: string) => void, cacheEnabled: boole
       const parseLines = (res: string, mediaType: 'music' | 'video'): Track[] => {
         return res.trim().split('\n').filter(Boolean).map((line, i): Track | null => {
           const parts = line.split('====');
-          const title = parts[0]?.trim() || '';
-          const artist = cleanArtist(parts[1]);
+          const meta = parseTrackMeta(parts[0], parts[1]);
           const duration = parts[2]?.trim() || '0:00';
           const id = parts[3]?.trim() || '';
           if (!id || id === 'NA') return null;
           return {
             id: i,
-            title: title || 'Unknown Track',
-            artist: artist || 'YouTube',
+            title: meta.title || parts[0]?.trim() || 'Unknown Track',
+            artist: meta.artist || 'YouTube',
             duration: duration || '0:00',
             url: `https://youtube.com/watch?v=${id}`,
             cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,

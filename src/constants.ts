@@ -389,18 +389,6 @@ export interface OnboardingCategory {
 
 export const ONBOARDING_MUSIC_CATEGORIES: OnboardingCategory[] = [
   {
-    id: 'hindi',
-    label: 'Hindi / Bollywood',
-    subtitle: 'Melodies, romance & contemporary film hits',
-    artists: ['Arijit Singh', 'Shreya Ghoshal', 'A.R. Rahman', 'Pritam', 'Atif Aslam', 'KK', 'Anuv Jain', 'Sonu Nigam', 'Darshan Raval', 'Mohit Chauhan']
-  },
-  {
-    id: 'punjabi',
-    label: 'Punjabi',
-    subtitle: 'High energy beats, bhangra & modern wave',
-    artists: ['Diljit Dosanjh', 'AP Dhillon', 'Sidhu Moose Wala', 'Karan Aujla', 'Shubh', 'Gurinder Gill', 'B Praak', 'PropheC', 'Amrinder Gill']
-  },
-  {
     id: 'pop',
     label: 'English / Global Pop',
     subtitle: 'Chart-topping hits, viral anthems & pop icons',
@@ -477,6 +465,18 @@ export const ONBOARDING_MUSIC_CATEGORIES: OnboardingCategory[] = [
     label: 'Afrobeats & Amapiano',
     subtitle: 'West African rhythms & log-drum grooves',
     artists: ['Burna Boy', 'Rema', 'Wizkid', 'Tems', 'Asake', 'Ayra Starr', 'Davido', 'CKay', 'Tyla']
+  },
+  {
+    id: 'hindi',
+    label: 'Hindi / Bollywood',
+    subtitle: 'Melodies, romance & contemporary film hits',
+    artists: ['Arijit Singh', 'Shreya Ghoshal', 'A.R. Rahman', 'Pritam', 'Atif Aslam', 'KK', 'Anuv Jain', 'Sonu Nigam', 'Darshan Raval', 'Mohit Chauhan']
+  },
+  {
+    id: 'punjabi',
+    label: 'Punjabi',
+    subtitle: 'High energy beats, bhangra & modern wave',
+    artists: ['Diljit Dosanjh', 'AP Dhillon', 'Sidhu Moose Wala', 'Karan Aujla', 'Shubh', 'Gurinder Gill', 'B Praak', 'PropheC', 'Amrinder Gill']
   },
   {
     id: 'tamil',
@@ -688,11 +688,12 @@ export function getStarterRecommendations(preferences?: { languages?: string[]; 
   }
 
   if (pool.length === 0) {
+    // ONLY if user didn't pick ANY category or genre at all, use default global pop/hiphop
     pool = [
       ...(CURATED_STARTER_TRACKS['pop'] || []),
-      ...(CURATED_STARTER_TRACKS['hindi'] || []),
       ...(CURATED_STARTER_TRACKS['hiphop'] || []),
-      ...(CURATED_STARTER_TRACKS['punjabi'] || [])
+      ...(CURATED_STARTER_TRACKS['rock'] || []),
+      ...(CURATED_STARTER_TRACKS['edm'] || [])
     ];
   }
 
@@ -729,9 +730,9 @@ export function getStarterRecommendations(preferences?: { languages?: string[]; 
     }
   }
 
+  // If we still need more tracks, ONLY take from chosenCategories (or pool), never unselected categories!
   if (finalTracks.length < 15) {
-    const fallbackAll = Object.values(CURATED_STARTER_TRACKS).flat().sort(() => 0.5 - Math.random());
-    for (const t of fallbackAll) {
+    for (const t of pool) {
       if (finalTracks.length >= 15) break;
       if (!uniqueUrls.has(t.url)) {
         uniqueUrls.add(t.url);
@@ -747,6 +748,6 @@ export function getStarterRecommendations(preferences?: { languages?: string[]; 
     }
   }
 
-  return finalTracks.slice(0, 15);
+  return finalTracks;
 }
 

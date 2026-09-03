@@ -11,6 +11,7 @@ import {
   Plus,
   Heart,
   FileOutput,
+  Mic2,
 } from 'lucide-react';
 import { Playlist, CtxMenu, SettingsTab } from '../../types';
 
@@ -113,6 +114,12 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           className={`v-nav-btn${activeNav==='home'?' v-nav-btn--active':''}`}>
           <span className="v-nav-icon"><Home size={18} style={activeNav==='home'?{color:'#c8c4c0'}:{color:'#4a4644'}} /></span>
           <span>Home</span>
+        </button>
+
+        <button onClick={() => navigateTo('artists')}
+          className={`v-nav-btn${activeNav==='artists'||activeNav==='artist'?' v-nav-btn--active':''}`}>
+          <span className="v-nav-icon"><Mic2 size={18} style={(activeNav==='artists'||activeNav==='artist')?{color:'#c8c4c0'}:{color:'#4a4644'}} /></span>
+          <span>Artists</span>
         </button>
 
         <button onClick={() => navigateTo('downloads')}

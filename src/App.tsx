@@ -21,6 +21,8 @@ import {
   SettingsTab,
   ActiveDownload,
   UserPreferences,
+  FollowedArtist,
+  ArtistPageData,
 } from './types';
 import {
   loadLS,
@@ -28,6 +30,7 @@ import {
   clampMenu,
   getTrackGradient,
   cleanArtist,
+  parseTrackMeta,
   findDuplicateTracks,
   fetchArtistYouTubeTracks,
 } from './utils';
@@ -54,6 +57,8 @@ import { HomeView } from './components/views/HomeView';
 import { PlaylistsView } from './components/views/PlaylistsView';
 import { StatsView } from './components/views/StatsView';
 import { LyricsView } from './components/views/LyricsView';
+import { ArtistsView } from './components/views/ArtistsView';
+import { ArtistView } from './components/views/ArtistView';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { OnboardingModal } from './components/OnboardingModal';
@@ -354,6 +359,10 @@ export function App() {
     !loadLS('vg_onboardingCompleted', false)
   );
 
+  const handleCloseOnboarding = useCallback(() => {
+    setShowOnboardingModal(false);
+  }, []);
+
   const handleCompleteOnboarding = useCallback((prefs: UserPreferences, tracks: Track[]) => {
     setUserPreferences(prefs);
     setRecommendedTracks(tracks);
@@ -396,6 +405,46 @@ export function App() {
       });
     }
   }, [userPreferences, showToast]);
+
+  // Followed Artists State
+  const [followedArtists, setFollowedArtists] = useState<FollowedArtist[]>(() =>
+    loadLS('vg_followedArtists', [])
+  );
+  useEffect(() => {
+    saveLS('vg_followedArtists', followedArtists);
+  }, [followedArtists]);
+
+  const toggleFollowArtist = useCallback((artist: { name: string; avatar?: string; banner?: string }) => {
+    const raw = artist.name.trim();
+    if (!raw) return;
+    setFollowedArtists(prev => {
+      const exists = prev.some(a => a.name.toLowerCase() === raw.toLowerCase());
+      if (exists) {
+        showToast(`Unfollowed ${raw}`);
+        return prev.filter(a => a.name.toLowerCase() !== raw.toLowerCase());
+      } else {
+        showToast(`Following ${raw}`);
+        return [
+          {
+            name: raw,
+            avatar: artist.avatar,
+            banner: artist.banner,
+            followedAt: new Date().toISOString()
+          },
+          ...prev
+        ];
+      }
+    });
+  }, [showToast]);
+
+  // Artist Page State
+  const [selectedArtistName, setSelectedArtistName] = useState<string | null>(null);
+  const [artistPageData, setArtistPageData] = useState<ArtistPageData | null>(null);
+  const [isArtistLoading, setIsArtistLoading] = useState(false);
+  const [artistError, setArtistError] = useState<string | null>(null);
+  const artistCacheRef = useRef<Map<string, ArtistPageData>>(new Map());
+  const previousNavRef = useRef<NavView>('home');
+  const activeArtistQueryIdRef = useRef<number>(0);
 
   useEffect(() => {
     const unlistenPromise = listen<{ url: string; percent: number; status: string; error?: string }>('download_progress', (event) => {
@@ -496,10 +545,133 @@ export function App() {
   const setActiveNav = useCallback((nav: NavView) => {
     setActiveNavState(nav);
     saveLS('vg_lastNav', nav);
-    setNavHistory(prev => [...prev.filter(n => n !== nav), nav]);
+    setNavHistory(prev => (prev[prev.length - 1] === nav ? prev : [...prev, nav]));
   }, []);
 
+  const openArtistPage = useCallback(async (artistName: string, avatarUrl?: string) => {
+    const rawName = cleanArtist(artistName).trim();
+    if (!rawName) return;
+
+    const queryId = ++activeArtistQueryIdRef.current;
+
+    if (activeNav !== 'artist') {
+      previousNavRef.current = activeNav;
+    }
+    setSelectedArtistName(rawName);
+    setActiveNav('artist');
+
+    const cacheKey = rawName.toLowerCase();
+    const cached = artistCacheRef.current.get(cacheKey);
+    if (cached && cached.name.toLowerCase() === rawName.toLowerCase()) {
+      setArtistPageData(cached);
+      setSelectedArtistName(cached.name);
+      setIsArtistLoading(false);
+      setArtistError(null);
+      return;
+    }
+
+    // Set optimistic placeholder strictly for THIS artist
+    setArtistPageData({
+      name: rawName,
+      avatar: avatarUrl,
+      banner: avatarUrl,
+      topTracks: []
+    });
+    setIsArtistLoading(true);
+    setArtistError(null);
+
+    try {
+      const res = await invoke<string>('get_artist_page_details', { artistName: rawName });
+      if (activeArtistQueryIdRef.current !== queryId) return;
+
+      const lines = res.trim().split('\n').filter(Boolean);
+      let canonicalName = rawName;
+      let finalAvatar = avatarUrl;
+      let finalBanner = avatarUrl;
+      const tracks: Track[] = [];
+
+      lines.forEach((line, i) => {
+        if (line.startsWith('ARTIST_INFO====')) {
+          const parts = line.split('====');
+          if (parts[1]?.trim()) canonicalName = parts[1].trim();
+          if (parts[2]?.trim() && parts[2].startsWith('http')) finalAvatar = parts[2].trim();
+          if (parts[3]?.trim() && parts[3].startsWith('http')) finalBanner = parts[3].trim();
+          return;
+        }
+
+        const parts = line.split('====');
+        const meta = parseTrackMeta(parts[0], parts[1] || canonicalName);
+        const duration = parts[2]?.trim() || '0:00';
+        const id = parts[3]?.trim() || '';
+        if (!id || id === 'NA') return;
+
+        tracks.push({
+          id: Date.now() + Math.floor(Math.random() * 1000000) + i,
+          title: meta.title || parts[0]?.trim() || '',
+          artist: meta.artist || canonicalName,
+          duration,
+          url: `https://youtube.com/watch?v=${id}`,
+          cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+          mediaType: 'music'
+        });
+      });
+
+      if (!finalAvatar && tracks.length > 0) {
+        finalAvatar = tracks[0].cover;
+      }
+      if (!finalBanner) {
+        finalBanner = finalAvatar;
+      }
+
+      const pageData: ArtistPageData = {
+        name: canonicalName,
+        avatar: finalAvatar,
+        banner: finalBanner,
+        topTracks: tracks
+      };
+
+      if (activeArtistQueryIdRef.current !== queryId) return;
+
+      setSelectedArtistName(canonicalName);
+      artistCacheRef.current.set(cacheKey, pageData);
+      artistCacheRef.current.set(canonicalName.toLowerCase(), pageData);
+      setArtistPageData(pageData);
+      setIsArtistLoading(false);
+
+      if (finalAvatar) {
+        setFollowedArtists(prev => prev.map(a => {
+          if (a.name.toLowerCase() === canonicalName.toLowerCase() || a.name.toLowerCase() === rawName.toLowerCase()) {
+            return { ...a, name: canonicalName, avatar: finalAvatar, banner: finalBanner };
+          }
+          return a;
+        }));
+      }
+
+      if (tracks.length === 0) {
+        setArtistError(`No songs found for "${canonicalName}".`);
+      }
+    } catch {
+      if (activeArtistQueryIdRef.current === queryId) {
+        setIsArtistLoading(false);
+        setArtistError(`Failed to load songs for "${rawName}".`);
+      }
+    }
+  }, [activeNav, setActiveNav]);
+
+  const handleArtistBack = useCallback(() => {
+    const target = previousNavRef.current && previousNavRef.current !== 'artist' ? previousNavRef.current : 'artists';
+    setActiveNav(target);
+  }, [setActiveNav]);
+
+  const handlePlayArtist = useCallback((name: string) => {
+    openArtistPage(name);
+  }, [openArtistPage]);
+
   const navigateBack = useCallback(() => {
+    if (activeNav === 'artist') {
+      handleArtistBack();
+      return;
+    }
     if (activeNav === 'home' && (searchQuery || hasSearched)) {
       resetSearch();
       return;
@@ -518,7 +690,7 @@ export function App() {
     } else if (activeNav !== 'home') {
       setActiveNav('home');
     }
-  }, [activeNav, searchQuery, hasSearched, resetSearch, openPlaylistId, navHistory, setActiveNav, setOpenPlaylistId]);
+  }, [activeNav, handleArtistBack, searchQuery, hasSearched, resetSearch, openPlaylistId, navHistory, setActiveNav, setOpenPlaylistId]);
 
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
   const [infoModalTrack, setInfoModalTrack] = useState<Track | null>(null);
@@ -731,29 +903,35 @@ export function App() {
 
         if (e.code === 'Digit2' || e.key === '2') {
           e.preventDefault();
-          setActiveNav('downloads');
+          setActiveNav('artists');
           return;
         }
 
         if (e.code === 'Digit3' || e.key === '3') {
           e.preventDefault();
-          setActiveNav('stats');
+          setActiveNav('downloads');
           return;
         }
 
         if (e.code === 'Digit4' || e.key === '4') {
           e.preventDefault();
-          setActiveNav('settings');
+          setActiveNav('stats');
           return;
         }
 
         if (e.code === 'Digit5' || e.key === '5') {
           e.preventDefault();
+          setActiveNav('settings');
+          return;
+        }
+
+        if (e.code === 'Digit6' || e.key === '6') {
+          e.preventDefault();
           setIsQueueOpen(prev => !prev);
           return;
         }
 
-        if (e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
+        if (e.code === 'Digit7' || e.key === '7' || e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
           e.preventDefault();
           setOpenPlaylistId(null);
           setActiveNav('playlists');
@@ -797,6 +975,12 @@ export function App() {
         }
       }
 
+      if (!isInput && ((e.altKey && (e.code === 'ArrowLeft' || e.key === 'ArrowLeft')) || e.code === 'BrowserBack')) {
+        e.preventDefault();
+        navigateBack();
+        return;
+      }
+
       if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isInput) {
         const digitMatch = e.code.match(/^Digit([1-9])$/);
         if (digitMatch) {
@@ -835,7 +1019,7 @@ export function App() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast, showLyrics, setShowLyrics, setConfirmModal, setShowCsvImportModal, setShowYtImportModal, setShowDuplicatesPlaylist, setBulkEditPlaylist, setInfoModalTrack, setAddToPlaylistTrack, setCtxMenu]);
+  }, [togglePlayPause, toggleMute, searchRef, currentTrackRef, activeNav, setActiveNav, setIsQueueOpen, setOpenPlaylistId, playlists, showToast, showLyrics, setShowLyrics, setConfirmModal, setShowCsvImportModal, setShowYtImportModal, setShowDuplicatesPlaylist, setBulkEditPlaylist, setInfoModalTrack, setAddToPlaylistTrack, setCtxMenu, navigateBack]);
 
   useEffect(() => {
     const h = () => {
@@ -1245,6 +1429,7 @@ export function App() {
         onboardingCompleted: loadLS('vg_onboardingCompleted', false),
         userPreferences,
         recommendedTracks,
+        followedArtists,
       };
 
       const json = JSON.stringify(data, null, 2);
@@ -1274,7 +1459,7 @@ export function App() {
     skipSilence, autoplayEnabled, theme, customBgColor, accentColor, uiScale, performanceMode,
     startupNav, trayEnabled, cacheEnabled, autoCheckUpdates, discordRpcEnabled, discordShowCover, discordTimeDisplay,
     discordCustomBtn, discordBtnLabel, discordBtnUrl, lyricsSource,
-    searchHistory, quickPicks, currentTrack, showToast
+    searchHistory, quickPicks, currentTrack, showToast, followedArtists, userPreferences, recommendedTracks
   ]);
 
   const handleRestore = useCallback(() => {
@@ -1289,88 +1474,108 @@ export function App() {
       if (!file) return;
       try {
         const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (!parsed || (typeof parsed !== 'object')) {
+        const data = JSON.parse(text);
+
+        if (!data || typeof data !== 'object') {
           showToast('Invalid backup file');
           return;
         }
 
-        const data: any = Array.isArray(parsed) ? { playlists: parsed } : (parsed.data || parsed);
-
-        const ls = <T,>(key: string, val: T): T => { saveLS(key, val); return val; };
+        const ls = (k: string, v: any) => {
+          saveLS(k, v);
+          return v;
+        };
 
         if (Array.isArray(data.playlists)) {
-          let plList = data.playlists;
-          if (!plList.some((p: any) => p.id === 'p1')) {
-            plList = [{ id: 'p1', name: 'Liked Songs', description: '', tracks: [] }, ...plList];
-          }
-          setPlaylists(ls('vg_playlists', plList));
+          setPlaylists(ls('vg_playlists', data.playlists));
         }
-        if (data.playlistViewMode) setPlaylistViewMode(ls('vg_playlistViewMode', data.playlistViewMode));
-        if (Array.isArray(data.queue)) setQueue(ls('vg_queue', data.queue));
-        if (Array.isArray(data.quickPicks)) setQuickPicks(ls('vg_quickPicks', data.quickPicks));
-        if (Array.isArray(data.searchHistory)) ls('vg_searchHistory', data.searchHistory);
-        if (data.currentTrack !== undefined) setCurrentTrack(data.currentTrack ? ls('vg_lastTrack', data.currentTrack) : null);
-
-        if (Array.isArray(data.playHistory)) setPlayHistory(ls('vg_playHistory', data.playHistory));
-        if (data.playCounts && typeof data.playCounts === 'object') setPlayCounts(ls('vg_playCounts', data.playCounts));
-        if (data.listenSecs && typeof data.listenSecs === 'object') setListenSecs(ls('vg_listenSecs', data.listenSecs));
-        if (data.dailyPlays && typeof data.dailyPlays === 'object') setDailyPlays(ls('vg_dailyPlays', data.dailyPlays));
-        if (data.firstSeen && typeof data.firstSeen === 'object') setFirstSeen(ls('vg_firstSeen', data.firstSeen));
-        if (Array.isArray(data.listeningHistory)) setListeningHistory(ls('vg_listeningHistory', data.listeningHistory));
-        if (data.statsTimeRange) setStatsTimeRange(ls('vg_statsTimeRange', data.statsTimeRange));
-        if (data.artistThumbs && typeof data.artistThumbs === 'object') ls('vg_artistThumbs', data.artistThumbs);
-
-        const vol = data.volume !== undefined ? data.volume : data.vg_volume;
-        if (vol !== undefined) {
-          setVolume(ls('vg_volume', Number(vol)));
-          invoke('set_volume', { volume: Number(vol) }).catch(() => {});
+        if (data.playlistViewMode) {
+          setPlaylistViewMode(ls('vg_playlistViewMode', data.playlistViewMode));
+        }
+        if (Array.isArray(data.queue)) {
+          setQueue(ls('vg_queue', data.queue));
+        }
+        if (data.currentTrack) {
+          setCurrentTrack(ls('vg_currentTrack', data.currentTrack));
+        }
+        if (Array.isArray(data.quickPicks)) {
+          setQuickPicks(ls('vg_quickPicks', data.quickPicks));
+        }
+        if (Array.isArray(data.searchHistory)) {
+          ls('vg_searchHistory', data.searchHistory);
         }
 
-        const speed = data.playbackSpeed !== undefined ? data.playbackSpeed : (data.speed !== undefined ? data.speed : data.vg_speed);
-        if (speed !== undefined) setPlaybackSpeedState(ls('vg_speed', Number(speed)));
-
-        const eqVal = data.eq || data.vg_eq;
-        if (eqVal && typeof eqVal === 'object') setEqState(ls('vg_eq', eqVal));
-
-        const shuffleVal = data.shuffle !== undefined ? data.shuffle : data.vg_shuffle;
-        if (shuffleVal !== undefined) setShuffle(ls('vg_shuffle', Boolean(shuffleVal)));
-
-        const repeatVal = data.repeatMode || data.repeat || data.vg_repeat;
-        if (repeatVal) setRepeatMode(ls('vg_repeat', repeatVal));
-
-        const loudnormVal = data.loudnormEnabled !== undefined ? data.loudnormEnabled : (data.loudnorm !== undefined ? data.loudnorm : data.vg_loudnorm);
-        if (loudnormVal !== undefined) {
-          setLoudnormEnabledState(ls('vg_loudnorm', Boolean(loudnormVal)));
-          invoke('set_loudnorm_enabled', { enabled: Boolean(loudnormVal) }).catch(() => {});
+        if (Array.isArray(data.playHistory)) {
+          setPlayHistory(ls('vg_playHistory', data.playHistory));
+        }
+        if (data.playCounts && typeof data.playCounts === 'object') {
+          setPlayCounts(ls('vg_playCounts', data.playCounts));
+        }
+        if (data.listenSecs && typeof data.listenSecs === 'object') {
+          setListenSecs(ls('vg_listenSecs', data.listenSecs));
+        }
+        if (data.dailyPlays && typeof data.dailyPlays === 'object') {
+          setDailyPlays(ls('vg_dailyPlays', data.dailyPlays));
+        }
+        if (data.firstSeen && typeof data.firstSeen === 'object') {
+          setFirstSeen(ls('vg_firstSeen', data.firstSeen));
+        }
+        if (Array.isArray(data.listeningHistory)) {
+          setListeningHistory(ls('vg_listeningHistory', data.listeningHistory));
+        }
+        if (data.statsTimeRange) {
+          setStatsTimeRange(ls('vg_statsTimeRange', data.statsTimeRange));
+        }
+        if (data.artistThumbs && typeof data.artistThumbs === 'object') {
+          ls('vg_artistThumbs', data.artistThumbs);
         }
 
-        const skipSilenceVal = data.skipSilence !== undefined ? data.skipSilence : data.vg_skipSilence;
-        if (skipSilenceVal !== undefined) {
-          setSkipSilenceState(ls('vg_skipSilence', Boolean(skipSilenceVal)));
-          invoke('set_skip_silence', { enabled: Boolean(skipSilenceVal) }).catch(() => {});
+        const vol = typeof data.volume === 'number' ? data.volume : data.vg_volume;
+        if (typeof vol === 'number') {
+          setVolume(ls('vg_volume', vol));
+          invoke('set_volume', { volume: vol }).catch(() => {});
         }
 
-        const autoplayVal = data.autoplayEnabled !== undefined ? data.autoplayEnabled : (data.autoplay !== undefined ? data.autoplay : data.vg_autoplay);
-        if (autoplayVal !== undefined) setAutoplayEnabled(ls('vg_autoplay', Boolean(autoplayVal)));
+        const spd = data.playbackSpeed || data.vg_playbackSpeed;
+        if (spd) setPlaybackSpeedState(ls('vg_playbackSpeed', Number(spd)));
 
-        const themeVal = data.theme || data.vg_theme;
-        if (themeVal) setTheme(ls('vg_theme', themeVal));
+        const cf = data.crossfadeSeconds !== undefined ? data.crossfadeSeconds : data.vg_crossfade;
+        if (cf !== undefined) ls('vg_crossfade', Number(cf));
+
+        const shuf = data.shuffle !== undefined ? data.shuffle : data.vg_shuffle;
+        if (shuf !== undefined) setShuffle(ls('vg_shuffle', Boolean(shuf)));
+
+        const rep = data.repeatMode || data.vg_repeatMode;
+        if (rep) setRepeatMode(ls('vg_repeatMode', rep));
+
+        if (data.eq) setEqState(ls('vg_eq', data.eq));
+
+        const loudnorm = data.loudnormEnabled !== undefined ? data.loudnormEnabled : data.vg_loudnormEnabled;
+        if (loudnorm !== undefined) setLoudnormEnabledState(ls('vg_loudnormEnabled', Boolean(loudnorm)));
+
+        const skipSil = data.skipSilence !== undefined ? data.skipSilence : data.vg_skipSilence;
+        if (skipSil !== undefined) setSkipSilenceState(ls('vg_skipSilence', Boolean(skipSil)));
+
+        const autoPlay = data.autoplayEnabled !== undefined ? data.autoplayEnabled : data.vg_autoplayEnabled;
+        if (autoPlay !== undefined) setAutoplayEnabled(ls('vg_autoplayEnabled', Boolean(autoPlay)));
+
+        const thm = data.theme || data.vg_theme;
+        if (thm) setTheme(ls('vg_theme', thm));
 
         const customBg = data.customBgColor || data.vg_customBgColor;
         if (customBg !== undefined) setCustomBgColor(ls('vg_customBgColor', customBg));
 
-        const accent = data.accentColor || data.accent || data.vg_accentColor;
-        if (accent) setAccentColor(ls('vg_accentColor', accent));
+        const acc = data.accentColor || data.vg_accentColor;
+        if (acc) setAccentColor(ls('vg_accentColor', acc));
 
-        const scaleVal = data.uiScale !== undefined ? data.uiScale : data.vg_uiScale;
-        if (scaleVal !== undefined) setUiScale(ls('vg_uiScale', Number(scaleVal)));
+        const scale = data.uiScale !== undefined ? data.uiScale : data.vg_uiScale;
+        if (scale !== undefined) setUiScale(ls('vg_uiScale', Number(scale)));
 
-        const perfMode = data.performanceMode !== undefined ? data.performanceMode : data.vg_performanceMode;
-        if (perfMode !== undefined) setPerformanceMode(ls('vg_performanceMode', Boolean(perfMode)));
+        const perf = data.performanceMode !== undefined ? data.performanceMode : data.vg_performanceMode;
+        if (perf !== undefined) setPerformanceMode(ls('vg_performanceMode', Boolean(perf)));
 
-        const startup = data.startupNav || data.vg_startupNav;
-        if (startup) setStartupNav(ls('vg_startupNav', startup));
+        const stNav = data.startupNav || data.vg_startupNav;
+        if (stNav) setStartupNav(ls('vg_startupNav', stNav));
 
         const tray = data.trayEnabled !== undefined ? data.trayEnabled : data.vg_trayEnabled;
         if (tray !== undefined) setTrayEnabled(ls('vg_trayEnabled', Boolean(tray)));
@@ -1447,6 +1652,9 @@ export function App() {
           setRecommendedTracks(data.recommendedTracks);
           ls('vg_recommendedTracks', data.recommendedTracks);
         }
+        if (Array.isArray(data.followedArtists)) {
+          setFollowedArtists(ls('vg_followedArtists', data.followedArtists));
+        }
         if (data.onboardingCompleted !== undefined) {
           ls('vg_onboardingCompleted', data.onboardingCompleted);
         }
@@ -1466,7 +1674,7 @@ export function App() {
     setDownloadFormatState, setDownloadPath, setBackupPath, setEmbedThumbnailState,
     setDuplicateDetectState, setCacheEnabled, setAutoCheckUpdates, setDiscordRpcEnabled,
     setLyricsSource, setLastfmEnabled, setLastfmUsername, setLastfmSessionKey, setLastfmApiKey,
-    setLastfmApiSecret
+    setLastfmApiSecret, setFollowedArtists, setUserPreferences, setRecommendedTracks
   ]);
 
   return (
@@ -1594,6 +1802,53 @@ export function App() {
             recommendedTracks={recommendedTracks}
             onRefreshRecommendations={handleRefreshRecommendations}
             onOpenPersonalization={() => setShowOnboardingModal(true)}
+            onArtistClick={openArtistPage}
+            setOpenPlaylistId={setOpenPlaylistId}
+            followedArtists={followedArtists}
+          />
+        )}
+
+        {activeNav === 'artists' && (
+          <ArtistsView
+            followedArtists={followedArtists}
+            onToggleFollow={toggleFollowArtist}
+            onArtistClick={openArtistPage}
+            onPlayArtist={handlePlayArtist}
+            showToast={showToast}
+          />
+        )}
+
+        {activeNav === 'artist' && (
+          <ArtistView
+            artistName={selectedArtistName || 'Artist'}
+            artistData={artistPageData}
+            isLoading={isArtistLoading}
+            error={artistError}
+            isFollowed={followedArtists.some(a => a.name.toLowerCase() === (selectedArtistName || '').toLowerCase())}
+            onToggleFollow={() => toggleFollowArtist({
+              name: selectedArtistName || 'Artist',
+              avatar: artistPageData?.avatar,
+              banner: artistPageData?.banner
+            })}
+            onBack={handleArtistBack}
+            onArtistClick={openArtistPage}
+            handlePlayTrack={handlePlayTrack}
+            handlePlayInContext={handlePlayInContext}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            loadingTrackUrl={loadingTrackUrl}
+            isLoadingTrack={isLoadingTrack}
+            hoveredTrackUrl={hoveredTrackUrl}
+            setHoveredTrackUrl={setHoveredTrackUrl}
+            toggleLikeTrack={toggleLikeTrack}
+            isTrackLiked={(t) => isTrackLiked(t.url)}
+            handleDownload={handleDownload}
+            downloadingTracks={downloadingTracks}
+            openCtx={openCtx}
+            prefetchOnHover={prefetchOnHover}
+            showToast={showToast}
+            addToQueue={addToQueue}
+            playlists={playlists}
           />
         )}
 
@@ -1671,6 +1926,7 @@ export function App() {
             showToast={showToast}
             getPlaylistCover={getPlaylistCover}
             addToQueue={addToQueue}
+            onArtistClick={openArtistPage}
           />
         )}
 
@@ -1699,6 +1955,7 @@ export function App() {
             artistThumbs={artistThumbs}
             setConfirmModal={setConfirmModal}
             showToast={showToast}
+            onArtistClick={openArtistPage}
           />
         )}
 
@@ -1863,6 +2120,7 @@ export function App() {
         abLoopRef={abLoopRef}
         trackDurationRef={trackDurationRef}
         showToast={showToast}
+        onArtistClick={openArtistPage}
       />
 
       {/* 5. Context Menu & Shared Modals */}
@@ -1922,6 +2180,7 @@ export function App() {
         lyricsLoading={lyricsLoading}
         lyricsData={lyricsData}
         lyricsScrollContainerRef={lyricsScrollContainerRef}
+        onArtistClick={openArtistPage}
       />
 
       {/* 7. Dialogs and Overlays */}
@@ -2242,11 +2501,13 @@ export function App() {
                 ['M', 'Mute / Unmute'],
                 ['Navigation', null],
                 ['Ctrl+1', 'Home View'],
-                ['Ctrl+2', 'Offline Library'],
-                ['Ctrl+3', 'Listening Stats'],
-                ['Ctrl+4', 'Settings Panel'],
-                ['Ctrl+5', 'Toggle Play Queue'],
-                ['Ctrl+P', 'Playlists Menu'],
+                ['Ctrl+2', 'Artists Hub'],
+                ['Ctrl+3', 'Offline Library'],
+                ['Ctrl+4', 'Listening Stats'],
+                ['Ctrl+5', 'Settings Panel'],
+                ['Ctrl+6', 'Toggle Play Queue'],
+                ['Ctrl+7 / Ctrl+P', 'Playlists Menu'],
+                ['Alt+←', 'Back Navigation'],
                 ['Shift+1..9', 'Open Playlist 1..9'],
                 ['Ctrl+F', 'Focus Search'],
                 ['Interface & Zoom', null],
@@ -2879,7 +3140,7 @@ export function App() {
         isOpen={showOnboardingModal}
         initialPreferences={userPreferences}
         onComplete={handleCompleteOnboarding}
-        onClose={() => setShowOnboardingModal(false)}
+        onClose={handleCloseOnboarding}
       />
 
       {/* Toast Notification */}

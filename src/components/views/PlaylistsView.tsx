@@ -87,6 +87,7 @@ interface PlaylistsViewProps {
   handleImportPlaylistM3u: () => void;
   showToast: (msg: string) => void;
   addToQueue?: (tracks: Track | Track[]) => void;
+  onArtistClick?: (artistName: string) => void;
 }
 
 export const PlaylistsView: React.FC<PlaylistsViewProps> = React.memo(({
@@ -150,6 +151,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = React.memo(({
   handleImportPlaylistM3u,
   showToast,
   addToQueue,
+  onArtistClick,
 }) => {
   const [internalHoveredTrackUrl, setInternalHoveredTrackUrl] = useState<string | null>(null);
   const [playlistSortBy, setPlaylistSortBy] = useState<'default' | 'title_asc' | 'title_desc' | 'artist_asc' | 'duration_asc' | 'duration_desc'>('default');
@@ -681,6 +683,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = React.memo(({
                                   onDownload={() => handleDownload(enrichedTrack)}
                                   onCtx={e => openCtx(e, { type: 'track', track: enrichedTrack })}
                                   onSelectToggle={e => toggleTrackSelect(enrichedTrack, i, e, openPlaylist.tracks)}
+                                  onArtistClick={onArtistClick}
                                 />
                               </div>
                             </div>

@@ -13,9 +13,12 @@ import {
   X,
   Sparkles,
   RefreshCw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Mic2,
+  HardDrive,
+  BarChart2
 } from 'lucide-react';
-import { Track, Playlist, LocalTrack, CtxMenu, SettingsTab } from '../../types';
+import { Track, Playlist, LocalTrack, CtxMenu, SettingsTab, FollowedArtist } from '../../types';
 import { GENRES, matchGenreTrack } from '../../constants';
 import { getTrackGradient, cleanArtist } from '../../utils';
 import { TrackRow, TrackRowSkeleton } from '../TrackRow';
@@ -81,6 +84,8 @@ interface HomeViewProps {
   recommendedTracks?: Track[];
   onRefreshRecommendations?: () => void;
   onOpenPersonalization?: () => void;
+  onArtistClick?: (artistName: string, avatarUrl?: string) => void;
+  followedArtists?: FollowedArtist[];
 }
 
 export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: React.CSSProperties }> = ({ id, size = 18, style }) => {
@@ -293,6 +298,8 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
   recommendedTracks = [],
   onRefreshRecommendations,
   onOpenPersonalization,
+  onArtistClick,
+  followedArtists = [],
 }) => {
   const defaultSearchRef = useRef<HTMLInputElement>(null);
   const searchRef = customSearchRef || defaultSearchRef;
@@ -1651,20 +1658,74 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
                   animation: 'fadeUp 0.22s cubic-bezier(0.2,0,0,1) 320ms both'
                 }}>
-                  <h2 style={{
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    color: 'var(--v-fg)',
-                    letterSpacing: '-0.01em',
-                    margin: '0 0 10px 0'
-                  }}>Playlists</h2>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {playlists.slice(0, 4).map(pl => {
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '10px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <h2 style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: 'var(--v-fg)',
+                        letterSpacing: '-0.01em',
+                        margin: 0
+                      }}>Playlists</h2>
+                      {playlists.length > 0 && (
+                        <span style={{ fontSize: '11px', color: 'var(--v-fg3)', fontWeight: 600 }}>
+                          ({playlists.length})
+                        </span>
+                      )}
+                    </div>
+                    {playlists.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setOpenPlaylistId?.(null);
+                          setActiveNav('playlists');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--v-accent)',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: '2px 4px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          transition: 'opacity 0.12s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                      >
+                        <span>View All</span>
+                        <ChevronRight size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    className="custom-scrollbar"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      maxHeight: '360px',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {playlists.map(pl => {
                       const isLiked = pl.id === 'p1';
+                      const cover = isLiked ? null : ((pl as any).customCover || pl.tracks?.find(t => t.cover)?.cover || null);
                       return (
                         <div
                           key={pl.id}
-                          onClick={() => { setOpenPlaylistId?.(pl.id); setActiveNav('library'); }}
+                          onClick={() => {
+                            setOpenPlaylistId?.(pl.id);
+                            setActiveNav('playlists');
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1687,9 +1748,13 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            flexShrink: 0
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                            position: 'relative'
                           }}>
-                            {isLiked ? (
+                            {cover ? (
+                              <img src={cover} alt={pl.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : isLiked ? (
                               <Heart size={14} style={{ color: '#e05555', fill: 'rgba(220,60,60,0.15)' }} />
                             ) : (
                               <ListMusic size={14} style={{ color: 'var(--v-fg2)' }} />
@@ -1705,7 +1770,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                               whiteSpace: 'nowrap'
                             }}>{pl.name}</div>
                             <div style={{ fontSize: '11px', color: 'var(--v-fg2)', marginTop: '1px' }}>
-                              {pl.tracks.length} tracks
+                              {pl.tracks.length} {pl.tracks.length === 1 ? 'track' : 'tracks'}
                             </div>
                           </div>
                           <ChevronRight size={14} style={{ color: 'var(--v-fg3)' }} />
@@ -1714,6 +1779,251 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                     })}
                   </div>
                 </div>
+
+                {followedArtists.length > 0 ? (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    background: 'rgba(255, 255, 255, 0.015)',
+                    border: '1px solid rgba(255, 255, 255, 0.04)',
+                    borderRadius: '14px',
+                    padding: '14px 14px 16px 14px',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+                    animation: 'fadeUp 0.22s cubic-bezier(0.2,0,0,1) 360ms both'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '10px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <h2 style={{
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          color: 'var(--v-fg)',
+                          letterSpacing: '-0.01em',
+                          margin: 0
+                        }}>Favorite Artists</h2>
+                        <span style={{ fontSize: '11px', color: 'var(--v-fg3)', fontWeight: 600 }}>
+                          ({followedArtists.length})
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setActiveNav('artists')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--v-accent)',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: '2px 4px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          transition: 'opacity 0.12s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                      >
+                        <span>View All</span>
+                        <ChevronRight size={12} />
+                      </button>
+                    </div>
+                    <div
+                      className="custom-scrollbar"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        maxHeight: '220px',
+                        overflowY: 'auto'
+                      }}
+                    >
+                      {followedArtists.slice(0, 6).map(artist => (
+                        <div
+                          key={artist.name}
+                          onClick={() => onArtistClick?.(artist.name, artist.avatar)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '6px 8px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            background: 'transparent',
+                            transition: 'background 0.15s ease'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <div style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '50%',
+                            background: getTrackGradient(artist.name, 'artist'),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                            position: 'relative',
+                            border: '1px solid rgba(255,255,255,0.08)'
+                          }}>
+                            <Music size={13} style={{ position: 'absolute', color: 'rgba(255,255,255,0.25)' }} />
+                            {artist.avatar && (
+                              <img src={artist.avatar} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: '12.5px',
+                              fontWeight: 600,
+                              color: 'var(--v-fg)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>{artist.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--v-fg3)', marginTop: '1px' }}>
+                              Artist
+                            </div>
+                          </div>
+                          <ChevronRight size={14} style={{ color: 'var(--v-fg3)' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    background: 'rgba(255, 255, 255, 0.015)',
+                    border: '1px solid rgba(255, 255, 255, 0.04)',
+                    borderRadius: '14px',
+                    padding: '14px 14px 16px 14px',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+                    animation: 'fadeUp 0.22s cubic-bezier(0.2,0,0,1) 360ms both'
+                  }}>
+                    <h2 style={{
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: 'var(--v-fg)',
+                      letterSpacing: '-0.01em',
+                      margin: '0 0 10px 0'
+                    }}>Quick Access</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div
+                        onClick={() => setActiveNav('artists')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid rgba(255, 255, 255, 0.03)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(57, 255, 20, 0.04)'; e.currentTarget.style.borderColor = 'rgba(57, 255, 20, 0.2)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.03)'; }}
+                      >
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: 'rgba(57, 255, 20, 0.1)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--v-accent)',
+                          flexShrink: 0
+                        }}>
+                          <Mic2 size={15} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--v-fg)' }}>Artists Hub</div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--v-fg3)' }}>Search & follow artists</div>
+                        </div>
+                        <ChevronRight size={13} style={{ color: 'var(--v-fg3)' }} />
+                      </div>
+
+                      <div
+                        onClick={() => setActiveNav('downloads')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid rgba(255, 255, 255, 0.03)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; }}
+                      >
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--v-fg2)',
+                          flexShrink: 0
+                        }}>
+                          <HardDrive size={15} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--v-fg)' }}>Offline Library</div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--v-fg3)' }}>{localTracks.length} {localTracks.length === 1 ? 'song' : 'songs'} saved</div>
+                        </div>
+                        <ChevronRight size={13} style={{ color: 'var(--v-fg3)' }} />
+                      </div>
+
+                      <div
+                        onClick={() => setActiveNav('stats')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid rgba(255, 255, 255, 0.03)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; }}
+                      >
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--v-fg2)',
+                          flexShrink: 0
+                        }}>
+                          <BarChart2 size={15} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--v-fg)' }}>Listening Stats</div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--v-fg3)' }}>Top artists & history</div>
+                        </div>
+                        <ChevronRight size={13} style={{ color: 'var(--v-fg3)' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1786,6 +2096,108 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 </div>
               )}
 
+              {!isSearching && (() => {
+                const q = searchQuery.trim().toLowerCase();
+                const firstMatch = activeTracks.find(t => {
+                  const a = cleanArtist(t.artist).toLowerCase();
+                  return a && (a === q || a.includes(q) || q.includes(a));
+                });
+                const detectedName = firstMatch ? cleanArtist(firstMatch.artist) : (activeTracks[0] ? cleanArtist(activeTracks[0].artist) : searchQuery.trim());
+                const isGeneric = !detectedName || ['various artists', 'unknown', 'youtube', 'various', 'artist'].includes(detectedName.toLowerCase());
+                if (isGeneric || !onArtistClick) return null;
+                const avatar = firstMatch?.cover || activeTracks[0]?.cover;
+
+                return (
+                  <div
+                    onClick={() => onArtistClick(detectedName, avatar)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 18px',
+                      background: 'linear-gradient(135deg, rgba(57, 255, 20, 0.08) 0%, var(--v-bg2, #141212) 100%)',
+                      border: '1px solid rgba(57, 255, 20, 0.25)',
+                      borderRadius: '12px',
+                      marginBottom: '16px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'var(--v-accent)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'rgba(57, 255, 20, 0.25)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          background: getTrackGradient(detectedName, 'artist'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '2px solid var(--v-accent)',
+                          flexShrink: 0,
+                          position: 'relative'
+                        }}
+                      >
+                        <Music size={18} style={{ color: 'rgba(255,255,255,0.3)', position: 'absolute' }} />
+                        {avatar && (
+                          <img
+                            src={avatar}
+                            alt={detectedName}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                            onError={e => { e.currentTarget.style.display = 'none'; }}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--v-accent)' }}>
+                            Artist
+                          </span>
+                          <Sparkles size={11} style={{ color: 'var(--v-accent)' }} />
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--v-fg)', marginTop: '2px' }}>
+                          {detectedName}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--v-fg3)', marginTop: '2px' }}>
+                          View artist profile, banner & all-time top songs
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'var(--v-accent)',
+                        color: '#000',
+                        border: 'none',
+                        borderRadius: '9999px',
+                        padding: '7px 16px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                    >
+                      <span>View Artist</span>
+                      <ChevronRight size={14} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                );
+              })()}
+
               {isSearching && (
                 <>
                   <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"0 12px 6px",borderBottom:"1px solid var(--v-bdr2)",marginBottom:"4px"}}>
@@ -1830,6 +2242,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                           onDownload={() => handleDownload(track)}
                           onCtx={e => openCtx(e, { type: 'track', track })}
                           onSelectToggle={e => toggleSelect(track, i, e, activeTracks)}
+                          onArtistClick={onArtistClick ? (name) => onArtistClick(name) : undefined}
                         />
                       )}
                     />

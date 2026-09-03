@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Track } from './types';
 
+export const globalArtistAvatarCache = new Map<string, string>();
+
 export interface DuplicateTrackInfo {
   track: Track;
   originalIndex: number;
@@ -62,10 +64,85 @@ export const hexToRgb = (hex: string): string => {
 
 export const cleanArtist = (a?: string | null): string => {
   if (!a) return '';
-  const t = a.trim();
+  let t = a.trim();
   const bad = ['unknown', 'na', 'n/a', 'none', '-', '--', 'unknown artist', 'various artists', 'various', '?'];
-  return bad.includes(t.toLowerCase()) ? '' : t;
+  if (bad.includes(t.toLowerCase())) return '';
+
+  t = t.replace(/\s*-\s*Topic\s*$/i, '')
+       .replace(/\s+VEVO\s*$/i, '')
+       .replace(/\s+Official\s*$/i, '')
+       .replace(/\s+Official Channel\s*$/i, '')
+       .replace(/\s+Channel\s*$/i, '')
+       .trim();
+
+  return t;
 };
+
+export function parseTrackMeta(rawTitle: string, rawArtist?: string | null): { title: string; artist: string } {
+  let title = (rawTitle || '').trim();
+  let artist = cleanArtist(rawArtist);
+
+  const isChannelOrCurator = (art: string): boolean => {
+    if (!art) return true;
+    const lower = art.toLowerCase().trim();
+    const bad = ['unknown', 'na', 'n/a', 'none', 'unknown artist', 'various artists', 'various'];
+    if (bad.includes(lower)) return true;
+
+    const channelSuffixes = [
+      'music', 'lyrics', 'records', 'recordings', 'vevo', 'nation', 'vibes', 'tracks',
+      'network', 'channel', 'audio', 'tv', 'fm', 'radio', 'hits', 'beats', 'lofi',
+      'sound', 'sounds', 'mix', 'remix', 'central', 'station', 'sessions', 'studio',
+      'studios', 'hub', 'zone', 'plus', 'official', 'entertainment', 'media', 'films',
+      'series', 'company', 'label', 'production', 'productions'
+    ];
+    for (const suf of channelSuffixes) {
+      if (lower.endsWith(' ' + suf) || lower === suf) return true;
+    }
+
+    const knownCurators = [
+      '7clouds', 't-series', 'sonymusicindiavevo', 'zee music company', 'tips official',
+      'yrf', 'speed records', 'trap nation', 'mrsuicidesheep', 'chill nation', 'sensual musique',
+      'syrebralvibes', 'taj tracks', 'taz network', 'dopelyrics', 'pizza music', 'lofi girl',
+      'cassiopeia', 'royal music', 'wave music', 'venus', 'worldwide records', 'geet mp3',
+      'white hill music', 'saregama music', 'saregama', 'aditya music', 'lahari music',
+      'tseries', 'zeemusiccompany', 'sonymusicindia', 'yrfmusic', 'warnermusic', 'universalmusic'
+    ];
+    return knownCurators.includes(lower);
+  };
+
+  const cleanNoise = (str: string) => {
+    return str
+      .replace(/\s*[\(\[\{]\s*(?:official\s+music\s+video|official\s+lyric\s+video|official\s+video|official\s+audio|official\s+visualizer|lyric\s+video|lyrics\s+video|full\s+song|full\s+video|music\s+video|lyrics|lyric|audio|visualizer|video|4k|hd|remastered|hq|explicit|clean)\s*[\)\]\}]\s*/gi, ' ')
+      .replace(/\s*[-–—|]\s*(?:official\s+video|official\s+audio|lyrics|lyric|visualizer|audio)\s*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  // Check if title has format: "Artist - Song Title" or "Artist - Song Title (Lyrics)"
+  const sepMatch = title.match(/^([^–—\-|]+?)\s*[-–—|]\s*(.+)$/);
+  if (sepMatch) {
+    const candidateArtist = cleanArtist(sepMatch[1].trim());
+    const candidateTitle = cleanNoise(sepMatch[2].trim());
+
+    if (candidateArtist.length > 0 && candidateArtist.length <= 60 && candidateTitle.length > 0) {
+      if (isChannelOrCurator(artist) || !artist || artist.toLowerCase() === candidateArtist.toLowerCase()) {
+        return {
+          title: candidateTitle,
+          artist: candidateArtist
+        };
+      }
+      return {
+        title: candidateTitle,
+        artist: candidateArtist
+      };
+    }
+  }
+
+  return {
+    title: cleanNoise(title) || rawTitle,
+    artist: artist
+  };
+}
 
 export const getTrackGradient = (title?: string | null, artist?: string | null): string => {
   const str = `${title || ''}${artist || ''}`;
@@ -227,22 +304,59 @@ export async function fetchArtistYouTubeTracks(artists: string[]): Promise<Track
     const artist = rawArtist.trim();
     if (!artist) continue;
     try {
-      const res = await invoke<string>('search_youtube', { query: `${artist} top songs` });
+      // 1. Try to fetch verified artist discography first
+      const rawData = await invoke<string>('get_artist_page_details', { artistName: artist });
+      if (rawData && rawData.trim()) {
+        try {
+          const parsed = JSON.parse(rawData);
+          if (Array.isArray(parsed.tracks) && parsed.tracks.length > 0) {
+            for (let i = 0; i < parsed.tracks.length && i < 4; i++) {
+              const line = parsed.tracks[i];
+              const parts = line.split('====');
+              const rawTitle = parts[0]?.trim() || '';
+              const rawUploader = parts[1]?.trim() || artist;
+              const duration = parts[2]?.trim() || '0:00';
+              const id = parts[3]?.trim() || '';
+              if (!id || id === 'NA') continue;
+              const url = `https://youtube.com/watch?v=${id}`;
+              if (!seenUrls.has(url)) {
+                seenUrls.add(url);
+                const meta = parseTrackMeta(rawTitle, rawUploader || artist);
+                tracks.push({
+                  id: Date.now() + Math.floor(Math.random() * 1000000) + tracks.length,
+                  title: meta.title || rawTitle,
+                  artist: meta.artist || artist,
+                  duration: duration || '0:00',
+                  url,
+                  cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+                  mediaType: 'music'
+                });
+              }
+            }
+            if (tracks.length >= 15) break;
+            continue;
+          }
+        } catch {}
+      }
+
+      // 2. Fallback to youtube search with parseTrackMeta
+      const res = await invoke<string>('search_youtube', { query: `${artist} songs` });
       const lines = res.trim().split('\n').filter(Boolean);
-      for (let i = 0; i < lines.length && i < 3; i++) {
+      for (let i = 0; i < lines.length && i < 4; i++) {
         const parts = lines[i].split('====');
-        const title = parts[0]?.trim() || '';
-        const fetchedArtist = cleanArtist(parts[1]) || artist;
+        const rawTitle = parts[0]?.trim() || '';
+        const rawUploader = parts[1]?.trim() || artist;
         const duration = parts[2]?.trim() || '0:00';
         const id = parts[3]?.trim() || '';
         if (!id || id === 'NA') continue;
         const url = `https://youtube.com/watch?v=${id}`;
         if (!seenUrls.has(url)) {
           seenUrls.add(url);
+          const meta = parseTrackMeta(rawTitle, rawUploader || artist);
           tracks.push({
             id: Date.now() + Math.floor(Math.random() * 1000000) + tracks.length,
-            title: title || 'Unknown Track',
-            artist: fetchedArtist,
+            title: meta.title || rawTitle,
+            artist: meta.artist || artist,
             duration: duration || '0:00',
             url,
             cover: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,

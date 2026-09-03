@@ -551,12 +551,23 @@ async fn search_youtube_direct(query: &str) -> Option<String> {
                     }
                     if let Some(col1) = flex_cols.get(1) {
                         if let Some(runs) = col1.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
-                            let parts: Vec<&str> = runs.iter().filter_map(|r| r.get("text").and_then(|t| t.as_str())).filter(|t| !t.trim().is_empty() && *t != "•" && *t != "·").collect();
-                            if !parts.is_empty() {
-                                uploader = parts[0].to_string();
-                                if parts.len() > 1 && parts.last().map(|p| p.contains(':')).unwrap_or(false) {
-                                    duration = parts.last().unwrap().to_string();
+                            let mut artist_parts = Vec::new();
+                            let mut found_separator = false;
+                            for r in runs {
+                                if let Some(t) = r.get("text").and_then(|t| t.as_str()) {
+                                    let trimmed = t.trim();
+                                    if trimmed == "•" || trimmed == "·" {
+                                        found_separator = true;
+                                    } else if !found_separator && !t.is_empty() {
+                                        artist_parts.push(t);
+                                    }
+                                    if trimmed.contains(':') && (trimmed.len() == 4 || trimmed.len() == 5 || trimmed.len() == 7 || trimmed.len() == 8) {
+                                        duration = trimmed.to_string();
+                                    }
                                 }
+                            }
+                            if !artist_parts.is_empty() {
+                                uploader = artist_parts.concat().trim().to_string();
                             }
                         }
                     }
@@ -596,6 +607,569 @@ async fn search_youtube_direct(query: &str) -> Option<String> {
     } else {
         Some(items.join("\n"))
     }
+}
+
+fn find_thumbnail_url(val: &serde_json::Value) -> Option<String> {
+    if let Some(arr) = val.get("thumbnails").and_then(|t| t.as_array()) {
+        if let Some(last) = arr.last() {
+            if let Some(u) = last.get("url").and_then(|u| u.as_str()) {
+                let mut url = u.to_string();
+                if url.starts_with("//") {
+                    url = format!("https:{}", url);
+                }
+                return Some(url);
+            }
+        }
+    }
+    if let Some(obj) = val.as_object() {
+        for (k, v) in obj {
+            if k == "thumbnail" || k == "thumbnails" || k == "thumbnailRenderer" || k == "musicThumbnailRenderer" || k == "leftThumbnail" {
+                if let Some(found) = find_thumbnail_url(v) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
+}
+
+async fn search_youtube_artists_direct(query: &str) -> Option<String> {
+    let q = query.trim();
+    if q.is_empty() { return None; }
+    let client = get_http_client();
+
+    let body = serde_json::json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240801.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "query": q,
+        "params": "EgWKAQIgAUICCAE%3D"
+    });
+
+    let res = client.post("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+        .header("Origin", "https://music.youtube.com")
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() { return None; }
+    let json: serde_json::Value = res.json().await.ok()?;
+
+    let mut items = Vec::new();
+    let mut seen_names = std::collections::HashSet::new();
+
+    fn extract_artists(val: &serde_json::Value, items: &mut Vec<String>, seen: &mut std::collections::HashSet<String>) {
+        if let Some(obj) = val.as_object() {
+            if let Some(item) = obj.get("musicResponsiveListItemRenderer") {
+                let mut name = String::new();
+                let mut avatar = String::new();
+                let mut subtitle = String::from("Artist");
+                let mut browse_id = String::new();
+
+                if let Some(flex_cols) = item.get("flexColumns").and_then(|f| f.as_array()) {
+                    if let Some(col0) = flex_cols.get(0) {
+                        if let Some(runs) = col0.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            if let Some(run0) = runs.get(0) {
+                                if let Some(t) = run0.get("text").and_then(|t| t.as_str()) {
+                                    name = t.to_string();
+                                }
+                                if let Some(bid) = run0.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                                    browse_id = bid.to_string();
+                                }
+                            }
+                        }
+                    }
+                    if let Some(col1) = flex_cols.get(1) {
+                        if let Some(runs) = col1.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            let sub: Vec<&str> = runs.iter().filter_map(|r| r.get("text").and_then(|t| t.as_str())).collect();
+                            if !sub.is_empty() {
+                                subtitle = sub.concat();
+                            }
+                        }
+                    }
+                }
+
+                if browse_id.is_empty() {
+                    if let Some(bid) = item.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                        browse_id = bid.to_string();
+                    }
+                }
+                if browse_id.is_empty() {
+                    if let Some(bid) = item.pointer("/thumbnail/musicThumbnailRenderer/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                        browse_id = bid.to_string();
+                    }
+                }
+
+                if let Some(found_avatar) = find_thumbnail_url(item) {
+                    avatar = found_avatar;
+                }
+
+                let norm_name = name.trim().to_lowercase();
+                if !norm_name.is_empty() && !seen.contains(&norm_name) {
+                    seen.insert(norm_name);
+                    items.push(format!("{}===={}===={}===={}", name.trim(), avatar.trim(), subtitle.trim(), browse_id.trim()));
+                }
+            }
+
+            if let Some(item) = obj.get("musicCardShelfRenderer") {
+                let mut name = String::new();
+                let mut avatar = String::new();
+                let mut subtitle = String::from("Artist");
+                let mut browse_id = String::new();
+
+                if let Some(runs) = item.pointer("/title/runs").and_then(|r| r.as_array()) {
+                    if let Some(run0) = runs.get(0) {
+                        if let Some(t) = run0.get("text").and_then(|t| t.as_str()) {
+                            name = t.to_string();
+                        }
+                        if let Some(bid) = run0.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                            browse_id = bid.to_string();
+                        }
+                    }
+                }
+                if browse_id.is_empty() {
+                    if let Some(bid) = item.pointer("/title/runs/0/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                        browse_id = bid.to_string();
+                    }
+                }
+                if let Some(found_avatar) = find_thumbnail_url(item) {
+                    avatar = found_avatar;
+                }
+                if let Some(sub) = item.pointer("/subtitle/runs/0/text").and_then(|s| s.as_str()) {
+                    subtitle = sub.to_string();
+                }
+
+                let norm_name = name.trim().to_lowercase();
+                if !norm_name.is_empty() && !seen.contains(&norm_name) {
+                    seen.insert(norm_name);
+                    items.push(format!("{}===={}===={}===={}", name.trim(), avatar.trim(), subtitle.trim(), browse_id.trim()));
+                }
+            }
+
+            if let Some(item) = obj.get("musicTwoRowItemRenderer") {
+                let mut name = String::new();
+                let mut avatar = String::new();
+                let mut subtitle = String::from("Artist");
+                let mut browse_id = String::new();
+
+                if let Some(runs) = item.pointer("/title/runs").and_then(|r| r.as_array()) {
+                    if let Some(run0) = runs.get(0) {
+                        if let Some(t) = run0.get("text").and_then(|t| t.as_str()) {
+                            name = t.to_string();
+                        }
+                        if let Some(bid) = run0.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                            browse_id = bid.to_string();
+                        }
+                    }
+                }
+                if browse_id.is_empty() {
+                    if let Some(bid) = item.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(|id| id.as_str()) {
+                        browse_id = bid.to_string();
+                    }
+                }
+
+                if let Some(runs) = item.pointer("/subtitle/runs").and_then(|r| r.as_array()) {
+                    let sub: Vec<&str> = runs.iter().filter_map(|r| r.get("text").and_then(|t| t.as_str())).collect();
+                    if !sub.is_empty() {
+                        subtitle = sub.concat();
+                    }
+                }
+
+                if let Some(found_avatar) = find_thumbnail_url(item) {
+                    avatar = found_avatar;
+                }
+
+                let norm_name = name.trim().to_lowercase();
+                if !norm_name.is_empty() && !seen.contains(&norm_name) {
+                    seen.insert(norm_name);
+                    items.push(format!("{}===={}===={}===={}", name.trim(), avatar.trim(), subtitle.trim(), browse_id.trim()));
+                }
+            }
+
+            for v in obj.values() {
+                extract_artists(v, items, seen);
+            }
+        } else if let Some(arr) = val.as_array() {
+            for v in arr {
+                extract_artists(v, items, seen);
+            }
+        }
+    }
+
+    extract_artists(&json, &mut items, &mut seen_names);
+
+    if items.is_empty() {
+        None
+    } else {
+        Some(items.join("\n"))
+    }
+}
+
+#[tauri::command]
+async fn search_youtube_artists(query: String) -> Result<String, String> {
+    let q_trim = query.trim().to_string();
+    if q_trim.is_empty() {
+        return Ok(String::new());
+    }
+
+    if let Some(direct) = search_youtube_artists_direct(&q_trim).await {
+        if !direct.trim().is_empty() {
+            return Ok(direct);
+        }
+    }
+
+    // Direct YouTube channel search fallback via HTTP
+    let client = get_http_client();
+    let encoded = urlencoding::encode(&q_trim);
+    let yt_url = format!("https://www.youtube.com/results?search_query={}&sp=EgIQAg%3D%3D", encoded);
+    if let Ok(resp) = client.get(&yt_url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+        .send()
+        .await
+    {
+        if let Ok(html) = resp.text().await {
+            if let Some(start_idx) = html.find("var ytInitialData = ") {
+                let json_slice = &html[start_idx + 20..];
+                if let Some(end_idx) = json_slice.find(";</script>") {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_slice[..end_idx]) {
+                        let mut items = Vec::new();
+                        let mut seen = std::collections::HashSet::new();
+
+                        fn extract_channel_items(val: &serde_json::Value, items: &mut Vec<String>, seen: &mut std::collections::HashSet<String>) {
+                            if let Some(obj) = val.as_object() {
+                                if let Some(ch) = obj.get("channelRenderer") {
+                                    let mut title = String::new();
+                                    let mut avatar = String::new();
+                                    let mut subs = String::from("Artist");
+                                    let mut channel_id = String::new();
+
+                                    if let Some(t) = ch.pointer("/title/simpleText").and_then(|t| t.as_str()) {
+                                        title = t.to_string();
+                                    }
+                                    if let Some(cid) = ch.get("channelId").and_then(|c| c.as_str()) {
+                                        channel_id = cid.to_string();
+                                    }
+                                    if let Some(s) = ch.pointer("/subscriberCountText/simpleText").and_then(|s| s.as_str()) {
+                                        subs = s.to_string();
+                                    }
+                                    if let Some(thumbs) = ch.pointer("/thumbnail/thumbnails").and_then(|t| t.as_array()) {
+                                        if let Some(last) = thumbs.last() {
+                                            if let Some(u) = last.get("url").and_then(|u| u.as_str()) {
+                                                let mut url = u.to_string();
+                                                if url.starts_with("//") {
+                                                    url = format!("https:{}", url);
+                                                }
+                                                avatar = url;
+                                            }
+                                        }
+                                    }
+
+                                    let norm = title.trim().to_lowercase();
+                                    if !norm.is_empty() && !seen.contains(&norm) {
+                                        seen.insert(norm);
+                                        items.push(format!("{}===={}===={}===={}", title.trim(), avatar.trim(), subs.trim(), channel_id.trim()));
+                                    }
+                                }
+
+                                for v in obj.values() {
+                                    extract_channel_items(v, items, seen);
+                                }
+                            } else if let Some(arr) = val.as_array() {
+                                for v in arr {
+                                    extract_channel_items(v, items, seen);
+                                }
+                            }
+                        }
+
+                        extract_channel_items(&json, &mut items, &mut seen);
+                        if !items.is_empty() {
+                            return Ok(items.join("\n"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(String::new())
+}
+
+async fn fetch_artist_browse_details(browse_id: &str) -> Option<(String, String, Vec<String>)> {
+    let client = get_http_client();
+    let body = serde_json::json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240801.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "browseId": browse_id
+    });
+
+    let res = client.post("https://music.youtube.com/youtubei/v1/browse?prettyPrint=false")
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+        .header("Origin", "https://music.youtube.com")
+        .json(&body)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() { return None; }
+    let json: serde_json::Value = res.json().await.ok()?;
+
+    let mut avatar = String::new();
+    let mut banner = String::new();
+    let mut tracks = Vec::new();
+
+    // Extract headers (avatar / banner)
+    if let Some(header) = json.get("header") {
+        if let Some(found_avatar) = find_thumbnail_url(header) {
+            avatar = found_avatar;
+        }
+    }
+
+    // Extract tracks
+    fn extract_tracks_from_shelf(val: &serde_json::Value, tracks: &mut Vec<String>) {
+        if let Some(obj) = val.as_object() {
+            if let Some(item) = obj.get("musicResponsiveListItemRenderer") {
+                let mut title = String::new();
+                let mut uploader = String::new();
+                let mut duration = String::from("0:00");
+                let mut video_id = None;
+
+                if let Some(flex_cols) = item.get("flexColumns").and_then(|f| f.as_array()) {
+                    if let Some(col0) = flex_cols.get(0) {
+                        if let Some(runs) = col0.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            if let Some(run0) = runs.get(0) {
+                                if let Some(t) = run0.get("text").and_then(|t| t.as_str()) {
+                                    title = t.to_string();
+                                }
+                                if let Some(v_id) = run0.pointer("/navigationEndpoint/watchEndpoint/videoId").and_then(|id| id.as_str()) {
+                                    video_id = Some(v_id.to_string());
+                                }
+                            }
+                        }
+                    }
+                    if video_id.is_none() {
+                        if let Some(v_id) = item.pointer("/overlay/musicItemThumbnailOverlayRenderer/content/musicPlayButtonRenderer/playNavigationEndpoint/watchEndpoint/videoId").and_then(|id| id.as_str()) {
+                            video_id = Some(v_id.to_string());
+                        }
+                    }
+                    if video_id.is_none() {
+                        if let Some(v_id) = item.pointer("/playlistItemData/videoId").and_then(|id| id.as_str()) {
+                            video_id = Some(v_id.to_string());
+                        }
+                    }
+                    if video_id.is_none() {
+                        if let Some(v_id) = item.pointer("/menu/menuRenderer/topLevelButtons/0/likeButtonRenderer/target/videoId").and_then(|id| id.as_str()) {
+                            video_id = Some(v_id.to_string());
+                        }
+                    }
+                    if let Some(col1) = flex_cols.get(1) {
+                        if let Some(runs) = col1.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs").and_then(|r| r.as_array()) {
+                            let mut artist_parts = Vec::new();
+                            let mut found_separator = false;
+                            for r in runs {
+                                if let Some(t) = r.get("text").and_then(|t| t.as_str()) {
+                                    let trimmed = t.trim();
+                                    if trimmed == "•" || trimmed == "·" {
+                                        found_separator = true;
+                                    } else if !found_separator && !t.is_empty() {
+                                        artist_parts.push(t);
+                                    }
+                                    if trimmed.contains(':') && (trimmed.len() == 4 || trimmed.len() == 5 || trimmed.len() == 7 || trimmed.len() == 8) {
+                                        duration = trimmed.to_string();
+                                    }
+                                }
+                            }
+                            if !artist_parts.is_empty() {
+                                uploader = artist_parts.concat().trim().to_string();
+                            }
+                        }
+                    }
+                }
+                if let Some(vid) = video_id {
+                    if !title.is_empty() && !vid.is_empty() && vid != "NA" {
+                        tracks.push(format!("{}===={}===={}===={}", title, uploader, duration, vid));
+                    }
+                }
+            }
+            for v in obj.values() {
+                extract_tracks_from_shelf(v, tracks);
+            }
+        } else if let Some(arr) = val.as_array() {
+            for v in arr {
+                extract_tracks_from_shelf(v, tracks);
+            }
+        }
+    }
+
+    extract_tracks_from_shelf(&json, &mut tracks);
+    if banner.is_empty() { banner = avatar.clone(); }
+
+    Some((avatar, banner, tracks))
+}
+
+fn track_matches_artist(title: &str, artist: &str, target_artist: &str) -> bool {
+    let target = target_artist.trim().to_lowercase();
+    if target.is_empty() { return false; }
+
+    let art = artist.trim().to_lowercase();
+    if art == target || art.contains(&target) || (target.contains(&art) && art.len() >= 3) {
+        return true;
+    }
+
+    for part in art.split([',', ';', '&', '/']).map(|s| s.trim()) {
+        let p_clean = part.replace("feat.", "").replace("ft.", "").replace(" - topic", "").trim().to_string();
+        if p_clean == target || p_clean.contains(&target) || (target.contains(&p_clean) && p_clean.len() >= 3) {
+            return true;
+        }
+    }
+
+    let title_clean = title.trim();
+    if let Some((first, _)) = title_clean.split_once('-').or_else(|| title_clean.split_once('–')).or_else(|| title_clean.split_once('|')) {
+        let candidate_art = first.trim().to_lowercase();
+        if candidate_art == target || candidate_art.contains(&target) || (target.contains(&candidate_art) && candidate_art.len() >= 3) {
+            return true;
+        }
+    }
+
+    false
+}
+
+#[tauri::command]
+async fn get_artist_page_details(artist_name: String) -> Result<String, String> {
+    let name_trim = artist_name.trim().to_string();
+    if name_trim.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut canonical_name = name_trim.clone();
+    let mut avatar = String::new();
+    let mut banner = String::new();
+    let mut tracks = Vec::new();
+    let mut browse_id = String::new();
+
+    // 1. Search for artist in YouTube Music
+    if let Some(artists_raw) = search_youtube_artists_direct(&name_trim).await {
+        let lines: Vec<&str> = artists_raw.trim().split('\n').filter(|l| !l.is_empty()).collect();
+        let target_lower = name_trim.to_lowercase();
+        let matched_line = lines.iter().find(|l| {
+            let n = l.split("====").next().unwrap_or("").trim().to_lowercase();
+            n == target_lower || n.contains(&target_lower) || target_lower.contains(&n)
+        }).or_else(|| lines.first());
+
+        if let Some(line) = matched_line {
+            let parts: Vec<&str> = line.split("====").collect();
+            if let Some(n) = parts.get(0) { if !n.trim().is_empty() { canonical_name = n.trim().to_string(); } }
+            if let Some(a) = parts.get(1) { if !a.trim().is_empty() { avatar = a.trim().to_string(); } }
+            if let Some(bid) = parts.get(3) { if !bid.trim().is_empty() { browse_id = bid.trim().to_string(); } }
+        }
+    }
+
+    // 2. If browse_id is available, fetch exact artist browse discography
+    if !browse_id.is_empty() {
+        if let Some((b_avatar, b_banner, b_tracks)) = fetch_artist_browse_details(&browse_id).await {
+            if !b_avatar.is_empty() { avatar = b_avatar; }
+            if !b_banner.is_empty() { banner = b_banner; }
+            if !b_tracks.is_empty() {
+                for t in b_tracks {
+                    let parts: Vec<&str> = t.split("====").collect();
+                    if parts.len() >= 4 {
+                        let title = parts[0].trim();
+                        let mut uploader = parts[1].trim().to_string();
+                        let duration = parts[2].trim();
+                        let vid = parts[3].trim();
+                        if !vid.is_empty() && vid != "NA" {
+                            if uploader.is_empty() {
+                                uploader = canonical_name.clone();
+                            }
+                            tracks.push(format!("{}===={}===={}===={}", title, uploader, duration, vid));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Supplement or populate with direct YouTube Music song search for the artist
+    if tracks.len() < 25 {
+        if let Some(songs_raw) = search_youtube_direct(&canonical_name).await {
+            let mut seen_ids: std::collections::HashSet<String> = tracks.iter()
+                .filter_map(|t| t.split("====").nth(3).map(|s| s.trim().to_string()))
+                .collect();
+
+            for line in songs_raw.trim().split('\n') {
+                let parts: Vec<&str> = line.split("====").collect();
+                if parts.len() >= 4 {
+                    let title = parts[0].trim();
+                    let uploader = parts[1].trim();
+                    let vid = parts[3].trim();
+                    if !seen_ids.contains(vid) && !vid.is_empty() && vid != "NA" {
+                        if track_matches_artist(title, uploader, &canonical_name) || tracks.is_empty() {
+                            seen_ids.insert(vid.to_string());
+                            tracks.push(line.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Secondary supplement if still empty
+    if tracks.is_empty() {
+        if let Some(songs_raw) = search_youtube_direct(&format!("{} songs", canonical_name)).await {
+            let mut seen_ids = std::collections::HashSet::new();
+            for line in songs_raw.trim().split('\n') {
+                let parts: Vec<&str> = line.split("====").collect();
+                if parts.len() >= 4 {
+                    let title = parts[0].trim();
+                    let uploader = parts[1].trim();
+                    let vid = parts[3].trim();
+                    if !seen_ids.contains(vid) && !vid.is_empty() && vid != "NA" {
+                        if track_matches_artist(title, uploader, &canonical_name) || tracks.is_empty() {
+                            seen_ids.insert(vid.to_string());
+                            tracks.push(line.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Final fallback to ytsearch if direct was blocked or empty
+    if tracks.is_empty() {
+        if let Ok(fallback_raw) = search_youtube(format!("{} official songs", canonical_name)).await {
+            for line in fallback_raw.trim().split('\n') {
+                let parts: Vec<&str> = line.split("====").collect();
+                if parts.len() >= 4 {
+                    let vid = parts[3].trim();
+                    if !vid.is_empty() && vid != "NA" {
+                        tracks.push(line.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if banner.is_empty() { banner = avatar.clone(); }
+
+    let mut result_lines = Vec::new();
+    result_lines.push(format!("ARTIST_INFO===={}===={}===={}", canonical_name, avatar, banner));
+    result_lines.extend(tracks);
+
+    Ok(result_lines.join("\n"))
 }
 
 #[tauri::command]
@@ -3745,6 +4319,8 @@ fn main() {
             db_search_library,
             download_stream_chunked,
             search_youtube,
+            search_youtube_artists,
+            get_artist_page_details,
             prefetch_track,
             import_csv_playlist,
             import_youtube_playlist,

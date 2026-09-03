@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { BarChart2, Clock, ListMusic, Music, Play } from 'lucide-react';
 import { Track, Playlist } from '../../types';
 import { GENRES, matchGenreTrack } from '../../constants';
-import { getTrackGradient, cleanArtist, saveLS } from '../../utils';
+import { getTrackGradient, cleanArtist, saveLS, globalArtistAvatarCache } from '../../utils';
 
 interface StatsViewProps {
   listenSecs: Record<string, number>;
@@ -28,6 +29,7 @@ interface StatsViewProps {
   artistThumbs: Record<string, string>;
   setConfirmModal: (modal: { message: string; onConfirm: () => void } | null) => void;
   showToast: (msg: string) => void;
+  onArtistClick?: (artistName: string, avatarUrl?: string) => void;
 }
 
 export const StatsView: React.FC<StatsViewProps> = React.memo(({
@@ -54,6 +56,7 @@ export const StatsView: React.FC<StatsViewProps> = React.memo(({
   artistThumbs,
   setConfirmModal,
   showToast,
+  onArtistClick,
 }) => {
   const totalSecs = Object.values(listenSecs).reduce((s: number, n) => s + (n as number), 0);
   const totalPlays = Object.values(playCounts).reduce((s: number, n) => s + (n as number), 0);
@@ -128,6 +131,51 @@ export const StatsView: React.FC<StatsViewProps> = React.memo(({
   });
   const topArtists: [string, number][] = Object.entries(artistCounts)
     .sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const [topArtistAvatars, setTopArtistAvatars] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let isCancelled = false;
+    const initial: Record<string, string> = {};
+    const missing: string[] = [];
+
+    topArtists.forEach(([artist]) => {
+      const clean = cleanArtist(artist).trim();
+      const cached = globalArtistAvatarCache.get(clean.toLowerCase()) || artistThumbs[clean] || artistThumbs[artist];
+      if (cached) {
+        initial[artist] = cached;
+      } else {
+        missing.push(clean);
+      }
+    });
+
+    setTopArtistAvatars(initial);
+
+    if (missing.length === 0) return;
+
+    const fetchMissing = async () => {
+      for (const name of missing) {
+        if (isCancelled) break;
+        try {
+          const res = await invoke<string>('search_youtube_artists', { query: name });
+          const lines = res.trim().split('\n').filter(Boolean);
+          if (lines.length > 0) {
+            const parts = lines[0].split('====');
+            const avatar = parts[1]?.trim() || '';
+            if (avatar.startsWith('http')) {
+              globalArtistAvatarCache.set(name.toLowerCase(), avatar);
+              if (!isCancelled) {
+                setTopArtistAvatars(prev => ({ ...prev, [name]: avatar }));
+              }
+            }
+          }
+        } catch {}
+      }
+    };
+
+    fetchMissing();
+    return () => { isCancelled = true; };
+  }, [topArtists, artistThumbs]);
 
   const topGenres = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -397,17 +445,64 @@ export const StatsView: React.FC<StatsViewProps> = React.memo(({
               <h2>Top Artists</h2>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:"5px"}}>
-              {topArtists.map(([artist, count], i) => {
-                const thumb = artistThumbs[artist];
+              {topArtists.map(([rawArtist, count], i) => {
+                const artist = cleanArtist(rawArtist) || rawArtist;
+                const thumb = topArtistAvatars[artist] || topArtistAvatars[rawArtist] || globalArtistAvatarCache.get(artist.toLowerCase()) || artistThumbs[artist] || artistThumbs[rawArtist];
                 return (
-                  <div key={artist} className="v-track"
-                    onClick={() => { setSearchQuery(artist); searchMusic(artist); setActiveNav('home'); }}>
+                  <div
+                    key={rawArtist}
+                    className="v-track"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      if (onArtistClick) {
+                        onArtistClick(artist, thumb);
+                      } else {
+                        setSearchQuery(artist);
+                        searchMusic(artist);
+                        setActiveNav('home');
+                      }
+                    }}
+                  >
                     <div className="v-track__num">{i+1}</div>
-                    <div style={{width:"36px",height:"36px",borderRadius:"50%",background:"var(--v-bg3)",border:"1px solid var(--v-bdr2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-                      {thumb ? <img src={thumb} alt={artist} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <span style={{fontSize:"11px",fontWeight:700,color:"var(--v-fg2)"}}>{artist.slice(0,2).toUpperCase()}</span>}
+                    <div style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      background: getTrackGradient(artist, 'artist'),
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      overflow: "hidden",
+                      position: "relative",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.35)"
+                    }}>
+                      <Music size={14} style={{ position: 'absolute', color: 'rgba(255, 255, 255, 0.25)' }} />
+                      {thumb ? (
+                        <img
+                          src={thumb}
+                          alt={artist}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            position: "absolute",
+                            inset: 0,
+                            borderRadius: "50%"
+                          }}
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "rgba(255, 255, 255, 0.7)" }}>
+                          {artist.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div className="v-track__info">
-                      <div className="v-track__title">{artist}</div>
+                      <div className="v-track__title" style={{ transition: 'color 0.12s ease' }}>{artist}</div>
                       <div style={{display:"flex",alignItems:"center",gap:"8px",marginTop:"3px"}}>
                         <div style={{flex:1,height:"2px",background:"var(--v-bg3)",borderRadius:"1px",overflow:"hidden"}}>
                           <div style={{height:"100%",background:"var(--v-accent)",borderRadius:"1px",width:`${(count/(topArtists[0]?.[1]||1))*100}%`}}/>

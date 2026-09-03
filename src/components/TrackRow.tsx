@@ -1,7 +1,7 @@
 import React from 'react';
 import { Play, Music, Heart, Download, X, MoreVertical } from 'lucide-react';
 import { Track } from '../types';
-import { cleanArtist, getTrackGradient } from '../utils';
+import { getTrackGradient, parseTrackMeta } from '../utils';
 
 export type TrackRowProps = {
   track: Track;
@@ -23,13 +23,14 @@ export type TrackRowProps = {
   onDownload: () => void;
   onCtx: (e: React.MouseEvent) => void;
   onSelectToggle?: (e: React.MouseEvent) => void;
+  onArtistClick?: (artistName: string) => void;
 };
 
 export const TrackRow = React.memo(({
   track, index, showRemove, onRemove,
   isActive, isHovered, isLoadingTrack, isPlaying, isLiked, isDownloading,
   isSelected, isMultiSelectActive,
-  onPlay, onHoverEnter, onHoverLeave, onLike, onDownload, onCtx, onSelectToggle,
+  onPlay, onHoverEnter, onHoverLeave, onLike, onDownload, onCtx, onSelectToggle, onArtistClick,
 }: TrackRowProps) => (
   <div
     className={`v-track${isActive ? ' v-track--active' : ''}${isSelected ? ' v-track--selected' : ''}`}
@@ -121,8 +122,51 @@ export const TrackRow = React.memo(({
       )}
     </div>
     <div className="v-track__info">
-      <div className="v-track__title">{track.title}</div>
-      {cleanArtist(track.artist) && <div className="v-track__artist">{cleanArtist(track.artist)}</div>}
+      {(() => {
+        const meta = parseTrackMeta(track.title, track.artist);
+        const displayTitle = meta.title || track.title;
+        const displayArtist = meta.artist;
+        return (
+          <>
+            <div className="v-track__title">{displayTitle}</div>
+            {displayArtist && (
+              <div className="v-track__artist" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
+                {(() => {
+                  const raw = displayArtist;
+                  const parts = raw.split(/(?:,\s*|;\s*|\s+ft\.\s+|\s+feat\.\s+|\s+&\s+)/i).map(s => s.trim()).filter(Boolean);
+                  if (parts.length <= 1) {
+                    return (
+                      <span
+                        onClick={onArtistClick ? (e) => { e.stopPropagation(); onArtistClick(raw); } : undefined}
+                        style={onArtistClick ? { cursor: 'pointer', transition: 'color 0.12s' } : undefined}
+                        title={onArtistClick ? `View ${raw} profile` : undefined}
+                        onMouseEnter={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-accent)'; } : undefined}
+                        onMouseLeave={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-fg3)'; } : undefined}
+                      >
+                        {raw}
+                      </span>
+                    );
+                  }
+                  return parts.map((part, idx) => (
+                    <React.Fragment key={idx}>
+                      {idx > 0 && <span style={{ color: 'var(--v-fg3)', margin: '0 3px', pointerEvents: 'none' }}>, </span>}
+                      <span
+                        onClick={onArtistClick ? (e) => { e.stopPropagation(); onArtistClick(part); } : undefined}
+                        style={onArtistClick ? { cursor: 'pointer', transition: 'color 0.12s' } : undefined}
+                        title={onArtistClick ? `View ${part} profile` : undefined}
+                        onMouseEnter={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-accent)'; } : undefined}
+                        onMouseLeave={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-fg3)'; } : undefined}
+                      >
+                        {part}
+                      </span>
+                    </React.Fragment>
+                  ));
+                })()}
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
     <div className="v-track__actions">
       <button className="v-track__btn" onClick={e => { e.stopPropagation(); onLike(); }}>

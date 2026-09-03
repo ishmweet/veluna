@@ -18,7 +18,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { Track, AudioInfo, RepeatMode, CtxMenu } from '../../types';
-import { getTrackGradient, formatTime, parseDurationToSeconds } from '../../utils';
+import { getTrackGradient, formatTime, parseDurationToSeconds, parseTrackMeta } from '../../utils';
 import { invoke } from '@tauri-apps/api/core';
 import { WaveformBar } from '../WaveformBar';
 import { SpeedSelector } from '../SpeedSelector';
@@ -78,6 +78,7 @@ export interface PlayerBarProps {
   abLoopRef?: React.MutableRefObject<{ a: number | null; b: number | null }>;
   trackDurationRef?: React.MutableRefObject<number>;
   showToast?: (msg: string) => void;
+  onArtistClick?: (artistName: string) => void;
 }
 
 export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
@@ -134,6 +135,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
   abLoopRef,
   trackDurationRef,
   showToast = () => {},
+  onArtistClick,
 }) => {
   const [showRemainingTime, setShowRemainingTime] = useState(false);
   const [hoverPct, setHoverPct] = useState<number | null>(null);
@@ -205,14 +207,54 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
                   : null}
             </div>
             <div key={currentTrack.url} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:"1px",animation:"fadeIn 0.25s ease both"}}>
-              <div style={{fontWeight:700,color:"#e2ddd9",fontSize:"14px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:"1.3"}}>{currentTrack.title}</div>
-              {isLoadingTrack && !isPlaying
-                ? <div style={{display:"flex",alignItems:"center",height:"16px"}}>
-                    <div style={{display:"flex",gap:"3px",alignItems:"center",height:"12px"}}>
-                      {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
-                    </div>
-                  </div>
-                : <div style={{fontSize:"12px",color:"#8a807c",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentTrack.artist||""}</div>}
+              {(() => {
+                const meta = parseTrackMeta(currentTrack.title, currentTrack.artist);
+                return (
+                  <>
+                    <div style={{fontWeight:700,color:"#e2ddd9",fontSize:"14px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:"1.3"}}>{meta.title || currentTrack.title}</div>
+                    {isLoadingTrack && !isPlaying
+                      ? <div style={{display:"flex",alignItems:"center",height:"16px"}}>
+                          <div style={{display:"flex",gap:"3px",alignItems:"center",height:"12px"}}>
+                            {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
+                          </div>
+                        </div>
+                      : (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#8a807c",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            cursor: onArtistClick && !currentTrack.url.startsWith('local://') ? 'pointer' : 'default',
+                            transition: 'color 0.12s ease',
+                            width: 'fit-content',
+                            maxWidth: '100%'
+                          }}
+                          onClick={() => {
+                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
+                              onArtistClick(meta.artist || currentTrack.artist || "");
+                            }
+                          }}
+                          onMouseEnter={e => {
+                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
+                              e.currentTarget.style.color = '#e2ddd9';
+                              e.currentTarget.style.textDecoration = 'underline';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
+                              e.currentTarget.style.color = '#8a807c';
+                              e.currentTarget.style.textDecoration = 'none';
+                            }
+                          }}
+                        >
+                          {meta.artist || currentTrack.artist || ""}
+                        </div>
+                      )}
+                  </>
+                );
+              })()}
               {audioInfo&&!isLoadingTrack&&(
                 <div>
                   <div className="v-player-codec-badge">

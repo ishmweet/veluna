@@ -3,7 +3,7 @@ import { Check, ChevronRight, Music, Search, Sparkles, UserPlus, X, Loader2 } fr
 import { invoke } from '@tauri-apps/api/core';
 import { UserPreferences, Track } from '../types';
 import { ONBOARDING_MUSIC_CATEGORIES, getStarterRecommendations } from '../constants';
-import { cleanArtist } from '../utils';
+import { cleanArtist, fetchArtistYouTubeTracks } from '../utils';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -113,6 +113,20 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [liveArtists, setLiveArtists] = useState<LiveArtistResult[]>([]);
   const artistTracksCacheRef = useRef<Map<string, Track[]>>(new Map());
   const activeQueryIdRef = useRef<number>(0);
+
+  const prevIsOpenRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
+      setStep(1);
+      setSelectedCategories([]);
+      setSelectedArtists([]);
+      setArtistSearch('');
+      setLiveArtists([]);
+      setLiveSearching(false);
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -270,7 +284,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     return unique.filter(a => a.toLowerCase().includes(q));
   }, [selectedCategories, artistSearch]);
 
-  const handleFinish = () => {
+  const [isFinishing, setIsFinishing] = useState(false);
+
+  const handleFinish = async () => {
+    setIsFinishing(true);
     const languages: string[] = [];
     const genres: string[] = [];
 
@@ -298,6 +315,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       }
     });
 
+    if (selectedArtists.length > 0 && liveTracksPool.length < 8) {
+      try {
+        const fetched = await fetchArtistYouTubeTracks(selectedArtists);
+        liveTracksPool.push(...fetched);
+      } catch {}
+    }
+
     const seenUrls = new Set<string>();
     const mergedTracks: Track[] = [];
 
@@ -315,16 +339,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       }
     });
 
-    if (mergedTracks.length < 15) {
-      const fallbackTracks = getStarterRecommendations(undefined) as Track[];
-      fallbackTracks.forEach(t => {
-        if (mergedTracks.length < 15 && !seenUrls.has(t.url)) {
-          seenUrls.add(t.url);
-          mergedTracks.push(t);
-        }
-      });
-    }
-
+    setIsFinishing(false);
     onComplete(prefs, mergedTracks.slice(0, 15));
   };
 
@@ -801,6 +816,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           ) : (
             <button
               onClick={handleFinish}
+              disabled={isFinishing}
               style={{
                 background: 'var(--v-accent)',
                 color: '#000',
@@ -809,7 +825,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 padding: '9px 22px',
                 fontSize: '13px',
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: isFinishing ? 'wait' : 'pointer',
+                opacity: isFinishing ? 0.8 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
@@ -817,8 +834,17 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 boxShadow: '0 0 12px rgba(57, 255, 20, 0.25)'
               }}
             >
-              <Music size={15} strokeWidth={2.5} />
-              Start Listening
+              {isFinishing ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Building Your Mix...
+                </>
+              ) : (
+                <>
+                  <Music size={15} strokeWidth={2.5} />
+                  Start Listening
+                </>
+              )}
             </button>
           )}
         </div>

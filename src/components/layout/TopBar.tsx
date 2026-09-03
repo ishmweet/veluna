@@ -54,7 +54,7 @@ export const TopBar: React.FC<TopBarProps> = React.memo(({
 
   const isSearchActive = activeNav === 'home' && (hasSearched || tracks.length > 0 || ytMusicTracks.length > 0 || videoTracks.length > 0 || isSearching);
   const isPlaylistOpen = (activeNav === 'playlists' || activeNav === 'library') && Boolean(openPlaylistId);
-  const isBackEnabled = isSearchActive || isPlaylistOpen || navHistory.length > 0;
+  const isBackEnabled = isSearchActive || isPlaylistOpen || activeNav !== 'home' || navHistory.length > 1;
 
   const handleBackClick = () => {
     if (isSearchActive) {
@@ -92,7 +92,7 @@ export const TopBar: React.FC<TopBarProps> = React.memo(({
             <span>Back</span>
           </button>
           <span className="v-topbar__crumb">
-            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : (activeNav === 'playlists' || activeNav === 'library') ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
+            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : activeNav === 'artists' ? 'Artists' : activeNav === 'artist' ? 'Artist' : (activeNav === 'playlists' || activeNav === 'library') ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
           </span>
         </div>
 

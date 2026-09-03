@@ -57,7 +57,7 @@ export type CtxMenu = {
   localTrackIndex?: number;
 };
 
-export type NavView = 'home' | 'downloads' | 'playlists' | 'library' | 'stats' | 'settings';
+export type NavView = 'home' | 'artists' | 'artist' | 'downloads' | 'playlists' | 'library' | 'stats' | 'settings';
 
 export type AudioInfo = { codec: string; bitrate: number; samplerate: number; channels: string; format: string; url: string };
 export type DiskInfo = { used_bytes: number; track_count: number };
@@ -79,4 +79,19 @@ export interface UserPreferences {
   languages: string[];
   genres: string[];
   artists: string[];
+}
+
+export interface FollowedArtist {
+  name: string;
+  avatar?: string;
+  banner?: string;
+  followedAt: string;
+}
+
+export interface ArtistPageData {
+  name: string;
+  avatar?: string;
+  banner?: string;
+  topTracks: Track[];
+  relatedArtists?: string[];
 }
