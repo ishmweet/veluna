@@ -57,7 +57,13 @@ export type CtxMenu = {
   localTrackIndex?: number;
 };
 
-export type NavView = 'home' | 'artists' | 'artist' | 'downloads' | 'playlists' | 'library' | 'stats' | 'settings';
+export type HistoryItem = {
+  id: string;
+  track: Track;
+  playedAt: string;
+};
+
+export type NavView = 'home' | 'artists' | 'artist' | 'downloads' | 'playlists' | 'library' | 'stats' | 'history' | 'settings';
 
 export type AudioInfo = { codec: string; bitrate: number; samplerate: number; channels: string; format: string; url: string };
 export type DiskInfo = { used_bytes: number; track_count: number };

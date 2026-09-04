@@ -92,7 +92,7 @@ export const TopBar: React.FC<TopBarProps> = React.memo(({
             <span>Back</span>
           </button>
           <span className="v-topbar__crumb">
-            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'settings' ? 'Settings' : activeNav === 'stats' ? 'Stats' : activeNav === 'artists' ? 'Artists' : activeNav === 'artist' ? 'Artist' : (activeNav === 'playlists' || activeNav === 'library') ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
+            {activeNav === 'home' ? 'Home' : activeNav === 'downloads' ? 'Offline' : activeNav === 'stats' ? 'Stats' : activeNav === 'history' ? 'History' : activeNav === 'settings' ? 'Settings' : activeNav === 'artists' ? 'Artists' : activeNav === 'artist' ? 'Artist' : (activeNav === 'playlists' || activeNav === 'library') ? (openPlaylistId ? 'Playlist' : 'Playlists') : activeNav}
           </span>
         </div>
 

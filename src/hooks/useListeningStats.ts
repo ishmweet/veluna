@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Track, ListeningEvent } from '../types';
+import { Track, ListeningEvent, HistoryItem } from '../types';
 import { loadLS, saveLS } from '../utils';
 import { dbRecordPlayEvent, dbClearListeningStats } from '../services/db';
 
@@ -10,6 +10,42 @@ export function useListeningStats() {
   const [dailyPlays, setDailyPlays] = useState<Record<string, number>>(() => loadLS('vg_dailyPlays', {}));
   const [listeningHistory, setListeningHistory] = useState<ListeningEvent[]>(() => loadLS('vg_listeningHistory', []));
   const [playHistory, setPlayHistory] = useState<Track[]>(() => loadLS('vg_playHistory', []));
+  const [playbackHistory, setPlaybackHistory] = useState<HistoryItem[]>(() => {
+    const saved = loadLS<HistoryItem[]>('vg_playbackHistory', []);
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      const seen = new Set<string>();
+      const deduped: HistoryItem[] = [];
+      for (const item of saved) {
+        if (!item || !item.track || !item.track.url) continue;
+        const key = item.track.url.trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduped.push(item);
+        }
+      }
+      return deduped;
+    }
+    const legacyPlays = loadLS<Track[]>('vg_playHistory', []);
+    if (legacyPlays && Array.isArray(legacyPlays) && legacyPlays.length > 0) {
+      const seen = new Set<string>();
+      const result: HistoryItem[] = [];
+      for (let i = 0; i < legacyPlays.length; i++) {
+        const t = legacyPlays[i];
+        if (!t || !t.url) continue;
+        const key = t.url.trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({
+            id: `hist-${t.url}-${Date.now() - i * 60000}`,
+            track: t,
+            playedAt: new Date(Date.now() - i * 60000).toISOString()
+          });
+        }
+      }
+      return result;
+    }
+    return [];
+  });
   const [statsTimeRange, setStatsTimeRange] = useState<'7days' | 'all'>(() => loadLS('vg_statsTimeRange', 'all'));
 
   useEffect(() => {
@@ -29,6 +65,10 @@ export function useListeningStats() {
   useEffect(() => {
     saveLS('vg_playHistory', playHistory);
   }, [playHistory]);
+
+  useEffect(() => {
+    saveLS('vg_playbackHistory', playbackHistory);
+  }, [playbackHistory]);
 
   const recordTrackPlay = useCallback((track: Track, fromQueue: boolean = false) => {
     setPlayCounts(prev => {
@@ -55,6 +95,18 @@ export function useListeningStats() {
     setListeningHistory(prev => [{ url: track.url, playedAt: new Date().toISOString(), secs: 0 }, ...prev].slice(0, 300));
     dbRecordPlayEvent(track, 0);
 
+    const histEntry: HistoryItem = {
+      id: `${track.url}-${Date.now()}`,
+      track,
+      playedAt: new Date().toISOString()
+    };
+    setPlaybackHistory(prev => {
+      const filtered = prev.filter(item => item && item.track && item.track.url !== track.url);
+      const next = [histEntry, ...filtered].slice(0, 5000);
+      saveLS('vg_playbackHistory', next);
+      return next;
+    });
+
     if (!fromQueue) {
       setPlayHistory(prev => [track, ...prev.filter(t => t.url !== track.url)].slice(0, 50));
     }
@@ -75,6 +127,21 @@ export function useListeningStats() {
     dbRecordPlayEvent({ id: 0, url, title: '', artist: '', duration: '', cover: '' }, step);
   }, []);
 
+  const clearPlaybackHistory = useCallback(() => {
+    setPlaybackHistory([]);
+    saveLS('vg_playbackHistory', []);
+    setPlayHistory([]);
+    saveLS('vg_playHistory', []);
+  }, []);
+
+  const removePlaybackHistoryItem = useCallback((id: string) => {
+    setPlaybackHistory(prev => {
+      const next = prev.filter(item => item.id !== id);
+      saveLS('vg_playbackHistory', next);
+      return next;
+    });
+  }, []);
+
   const resetAllStats = useCallback(() => {
     setPlayCounts({});
     saveLS('vg_playCounts', {});
@@ -86,6 +153,10 @@ export function useListeningStats() {
     saveLS('vg_firstSeen', {});
     setListeningHistory([]);
     saveLS('vg_listeningHistory', []);
+    setPlaybackHistory([]);
+    saveLS('vg_playbackHistory', []);
+    setPlayHistory([]);
+    saveLS('vg_playHistory', []);
     dbClearListeningStats();
   }, []);
 
@@ -109,6 +180,10 @@ export function useListeningStats() {
     setListeningHistory,
     playHistory,
     setPlayHistory,
+    playbackHistory,
+    setPlaybackHistory,
+    clearPlaybackHistory,
+    removePlaybackHistoryItem,
     statsTimeRange,
     setStatsTimeRange,
     artistThumbs,

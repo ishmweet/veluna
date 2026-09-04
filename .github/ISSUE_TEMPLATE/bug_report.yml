@@ -13,7 +13,7 @@ body:
       label: Veluna Version
       description: What version of Veluna are you running?
       options:
-        - v0.1.4 (Latest Release)
+        - v0.1.5 (Latest Release)
         - Built from source (main branch)
         - Other (specify in description)
     validations:
@@ -47,7 +47,7 @@ body:
       label: Installation Method
       description: How did you install Veluna?
       options:
-        - Native Arch package (PKGBUILD / makepkg)
+        - Native Arch package (PKGBUILD / makepkg / pkg.tar.zst)
         - Debian package (.deb)
         - RPM package (.rpm)
         - Windows installer (.exe)

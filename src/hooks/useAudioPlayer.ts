@@ -308,6 +308,7 @@ export function useAudioPlayer({
     };
     setCurrentTrack(synth);
     currentTrackRef.current = synth;
+    if (onTrackPlayed) onTrackPlayed(synth);
     setPlayHistory(prev => [synth, ...prev.filter(t => t.url !== synth.url)].slice(0, 50));
     setQuickPicks(prev => [synth, ...prev.filter(t => t.url !== synth.url)].slice(0, 20));
 

@@ -989,16 +989,18 @@ export const SettingsPanel = React.memo(function SettingsPanel({
                 <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div>
                     <p style={{fontSize:"14px",fontWeight:500,color:"#e2ddd9"}}>Default Startup View</p>
-                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : (startupNav === 'library' || startupNav === 'playlists') ? 'Playlists' : startupNav === 'last' ? 'Last Opened View' : 'Settings'}</p>
+                    <p style={{fontSize:"12px",color:"#6f6966",marginTop:"4px"}}>Currently opens on {startupNav === 'home' ? 'Home' : startupNav === 'artists' ? 'Artists' : startupNav === 'downloads' ? 'Offline' : startupNav === 'stats' ? 'Stats' : startupNav === 'history' ? 'History' : (startupNav === 'library' || startupNav === 'playlists') ? 'Playlists' : startupNav === 'last' ? 'Last Opened View' : 'Settings'}</p>
                   </div>
                   <ThemedSelect
                     value={startupNav === 'library' ? 'playlists' : startupNav}
                     onChange={handleStartupNavChange}
                     options={[
                       { value: 'home', label: 'Home' },
+                      { value: 'artists', label: 'Artists' },
                       { value: 'downloads', label: 'Offline' },
                       { value: 'playlists', label: 'Playlists' },
                       { value: 'stats', label: 'Stats' },
+                      { value: 'history', label: 'History' },
                       { value: 'settings', label: 'Settings' },
                       { value: 'last', label: 'Last Opened' },
                     ]}
@@ -1969,16 +1971,15 @@ export const SettingsPanel = React.memo(function SettingsPanel({
                     width: "52px",
                     height: "52px",
                     borderRadius: "12px",
+                    overflow: "hidden",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
                     flexShrink: 0,
                     position: "relative"
                   }}>
-                    <svg width="30" height="30" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0 }}>
-                      <rect width="28" height="28" rx="6" fill="var(--v-accent)"/>
+                    <svg width="52" height="52" viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, display: "block" }}>
+                      <rect width="28" height="28" rx="6.5" fill="var(--v-accent)"/>
                       <polygon points="4,6 8.5,6 14,21 19.5,6 24,6 14,23" fill="#0e0d0d"/>
                       <polygon points="8.5,6 11.5,6 14,16 16.5,6 19.5,6 14,21" fill="var(--v-accent)"/>
                     </svg>

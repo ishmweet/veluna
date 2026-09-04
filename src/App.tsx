@@ -56,6 +56,7 @@ import { ContextMenu } from './components/layout/ContextMenu';
 import { HomeView } from './components/views/HomeView';
 import { PlaylistsView } from './components/views/PlaylistsView';
 import { StatsView } from './components/views/StatsView';
+import { HistoryView } from './components/views/HistoryView';
 import { LyricsView } from './components/views/LyricsView';
 import { ArtistsView } from './components/views/ArtistsView';
 import { ArtistView } from './components/views/ArtistView';
@@ -99,6 +100,10 @@ export function App() {
     setPlayHistory,
     listeningHistory,
     setListeningHistory,
+    playbackHistory,
+    setPlaybackHistory,
+    clearPlaybackHistory,
+    removePlaybackHistoryItem,
     statsTimeRange,
     setStatsTimeRange,
     artistThumbs,
@@ -179,7 +184,7 @@ export function App() {
   const [discordBtnLabel, setDiscordBtnLabel] = useState<string>(() => loadLS('vg_discordBtnLabel', ''));
   const [discordBtnUrl, setDiscordBtnUrl] = useState<string>(() => loadLS('vg_discordBtnUrl', ''));
   const [autoplayEnabled, setAutoplayEnabled] = useState<boolean>(() => loadLS('vg_autoplay', true));
-  const [appVersion, setAppVersion] = useState<string>('0.1.4');
+  const [appVersion, setAppVersion] = useState<string>('0.1.5');
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
 
   const setCacheEnabled = useCallback((enabled: boolean) => {
@@ -921,17 +926,23 @@ export function App() {
 
         if (e.code === 'Digit5' || e.key === '5') {
           e.preventDefault();
-          setActiveNav('settings');
+          setActiveNav('history');
           return;
         }
 
         if (e.code === 'Digit6' || e.key === '6') {
           e.preventDefault();
+          setActiveNav('settings');
+          return;
+        }
+
+        if (e.code === 'Digit7' || e.key === '7') {
+          e.preventDefault();
           setIsQueueOpen(prev => !prev);
           return;
         }
 
-        if (e.code === 'Digit7' || e.key === '7' || e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
+        if (e.code === 'Digit8' || e.key === '8' || e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
           e.preventDefault();
           setOpenPlaylistId(null);
           setActiveNav('playlists');
@@ -1364,6 +1375,7 @@ export function App() {
       });
 
       const cleanListeningHistory = (listeningHistory || []).filter(item => item && item.url && !item.url.startsWith('local://'));
+      const cleanPlaybackHistory = (playbackHistory || []).filter(item => item && item.track && item.track.url && !item.track.url.startsWith('local://'));
 
       const data = {
         version: 2,
@@ -1377,6 +1389,7 @@ export function App() {
         searchHistory: searchHistory || [],
 
         playHistory: cleanPlayHistory,
+        playbackHistory: cleanPlaybackHistory,
         playCounts: cleanPlayCounts,
         listenSecs: cleanListenSecs,
         dailyPlays: cleanDailyPlays,
@@ -1453,7 +1466,7 @@ export function App() {
       showToast(`Backup failed: ${e}`);
     }
   }, [
-    playlists, playlistViewMode, queue, playHistory, playCounts, listenSecs, dailyPlays, firstSeen,
+    playlists, playlistViewMode, queue, playHistory, playbackHistory, playCounts, listenSecs, dailyPlays, firstSeen,
     listeningHistory, statsTimeRange, shuffle, repeatMode, volume, playbackSpeed, crossfadeSeconds, eq, downloadQuality,
     downloadFormat, downloadPath, backupPath, embedThumbnail, duplicateDetect, loudnormEnabled,
     skipSilence, autoplayEnabled, theme, customBgColor, accentColor, uiScale, performanceMode,
@@ -1507,6 +1520,9 @@ export function App() {
 
         if (Array.isArray(data.playHistory)) {
           setPlayHistory(ls('vg_playHistory', data.playHistory));
+        }
+        if (Array.isArray(data.playbackHistory)) {
+          setPlaybackHistory(ls('vg_playbackHistory', data.playbackHistory));
         }
         if (data.playCounts && typeof data.playCounts === 'object') {
           setPlayCounts(ls('vg_playCounts', data.playCounts));
@@ -1956,6 +1972,32 @@ export function App() {
             setConfirmModal={setConfirmModal}
             showToast={showToast}
             onArtistClick={openArtistPage}
+          />
+        )}
+
+        {activeNav === 'history' && (
+          <HistoryView
+            playbackHistory={playbackHistory}
+            onClearHistory={clearPlaybackHistory}
+            onRemoveHistoryItem={removePlaybackHistoryItem}
+            handlePlayTrack={handlePlayTrack}
+            handlePlayInContext={handlePlayInContext}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            loadingTrackUrl={loadingTrackUrl}
+            isLoadingTrack={isLoadingTrack}
+            hoveredTrackUrl={hoveredTrackUrl}
+            setHoveredTrackUrl={setHoveredTrackUrl}
+            toggleLikeTrack={toggleLikeTrack}
+            isTrackLiked={(t) => isTrackLiked(t.url)}
+            handleDownload={handleDownload}
+            downloadingTracks={downloadingTracks}
+            openCtx={openCtx}
+            prefetchOnHover={prefetchOnHover}
+            getTrackCover={getTrackCover}
+            onArtistClick={openArtistPage}
+            showToast={showToast}
+            setConfirmModal={setConfirmModal}
           />
         )}
 
@@ -2504,9 +2546,10 @@ export function App() {
                 ['Ctrl+2', 'Artists Hub'],
                 ['Ctrl+3', 'Offline Library'],
                 ['Ctrl+4', 'Listening Stats'],
-                ['Ctrl+5', 'Settings Panel'],
-                ['Ctrl+6', 'Toggle Play Queue'],
-                ['Ctrl+7 / Ctrl+P', 'Playlists Menu'],
+                ['Ctrl+5', 'Playback History'],
+                ['Ctrl+6', 'Settings Panel'],
+                ['Ctrl+7', 'Toggle Play Queue'],
+                ['Ctrl+8 / Ctrl+P', 'Playlists Menu'],
                 ['Alt+←', 'Back Navigation'],
                 ['Shift+1..9', 'Open Playlist 1..9'],
                 ['Ctrl+F', 'Focus Search'],

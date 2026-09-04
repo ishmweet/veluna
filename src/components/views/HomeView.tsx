@@ -529,23 +529,86 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                   </button>
                 </div>
                 {searchHistory.map((h, i) => (
-                  <button
+                  <div
                     key={i}
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
-                    onClick={e => {
-                      e.stopPropagation();
-                      setSearchQuery(h);
-                      setShowHistory(false);
-                      searchMusic(h);
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 8px 0 14px',
+                      background: 'transparent',
+                      transition: 'background .08s',
+                      boxSizing: 'border-box'
                     }}
-                    style={{width:'100%',display:'flex',alignItems:'center',gap:'10px',padding:'9px 14px',background:'transparent',border:'none',cursor:'pointer',textAlign:'left',transition:'background .08s'}}
-                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(226,221,217,0.04)')}
-                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(226,221,217,0.04)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <Clock size={12} style={{color:'#8a807c',flexShrink:0}} />
-                    <span style={{fontSize:'13px',color:'#9e9894',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{h}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        setSearchQuery(h);
+                        setShowHistory(false);
+                        searchMusic(h);
+                      }}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '9px 0',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        minWidth: 0
+                      }}
+                    >
+                      <Clock size={12} style={{ color: '#8a807c', flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', color: '#9e9894', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {h}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      title="Remove from history"
+                      onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (_removeSearchHistoryItem) {
+                          _removeSearchHistoryItem(h);
+                        } else {
+                          setSearchHistory?.(prev => prev.filter(item => item !== h));
+                        }
+                      }}
+                      style={{
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        color: '#8a807c',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        transition: 'color .12s, background .12s'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.color = '#e05555';
+                        e.currentTarget.style.background = 'rgba(224,85,85,0.14)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.color = '#8a807c';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

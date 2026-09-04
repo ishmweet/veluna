@@ -12,6 +12,7 @@ import {
   Heart,
   FileOutput,
   Mic2,
+  History,
 } from 'lucide-react';
 import { Playlist, CtxMenu, SettingsTab } from '../../types';
 
@@ -131,6 +132,12 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           className={`v-nav-btn${activeNav==='stats'?' v-nav-btn--active':''}`}>
           <span className="v-nav-icon"><BarChart2 size={18} style={activeNav==='stats'?{color:'#c8c4c0'}:{color:'#4a4644'}} /></span>
           <span>Stats</span>
+        </button>
+
+        <button onClick={() => navigateTo('history')}
+          className={`v-nav-btn${activeNav==='history'?' v-nav-btn--active':''}`}>
+          <span className="v-nav-icon"><History size={18} style={activeNav==='history'?{color:'#c8c4c0'}:{color:'#4a4644'}} /></span>
+          <span>History</span>
         </button>
 
         <button onClick={() => { navigateTo('settings'); setSettingsTab?.('playback'); }}
