@@ -69,6 +69,7 @@ export function useAudioPlayer({
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [abLoop, setAbLoop] = useState<{ a: number | null; b: number | null }>({ a: null, b: null });
   const abLoopRef = useRef<{ a: number | null; b: number | null }>({ a: null, b: null });
+  const lastAbSeekRef = useRef<number>(0);
 
   const [shuffle, setShuffle] = useState<boolean>(() => loadLS('vg_shuffle', false));
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(() => loadLS('vg_repeat', 'off'));
@@ -665,7 +666,11 @@ export function useAudioPlayer({
 
         const ab = abLoopRef.current;
         if (ab.a !== null && ab.b !== null && s.position >= ab.b) {
-          invoke('seek_audio', { time: ab.a }).catch(() => {});
+          const nowMs = performance.now();
+          if (nowMs - lastAbSeekRef.current > 350) {
+            lastAbSeekRef.current = nowMs;
+            invoke('seek_audio', { time: ab.a }).catch(() => {});
+          }
         }
 
         if (s.duration > 0 && s.duration !== trackDurationRef.current) {

@@ -219,24 +219,32 @@ veluna/
 │   │   ├── Modals.tsx         # Spotify CSV, YouTube, and M3U playlist import dialogs
 │   │   ├── OnboardingModal.tsx# Initial setup and preference selection wizard
 │   │   ├── SettingsPanel.tsx  # Audio, appearance, network, storage, and backup settings
-│   │   ├── TrackRow.tsx       # Track row component with hover actions
-│   │   └── VirtualTrackList.tsx # Windowed virtualizer for high performance on budget hardware
-│   ├── hooks/                 # Audio player, queue, search, playlists, stats, lyrics, scrobbler, theme hooks
-│   ├── services/              # SQLite, IndexedDB, and Last.fm API clients
+│   │   ├── SleepTimerPopover.tsx # Sleep timer controls and countdown popover
+│   │   ├── SpeedSelector.tsx  # Variable playback speed selector (0.5x - 2.0x)
+│   │   ├── ThemedSelect.tsx   # Custom themed dropdown component
+│   │   ├── TrackRow.tsx       # Track row component with hover actions & multi-artist navigation
+│   │   ├── VirtualTrackList.tsx # Windowed virtualizer for high performance on budget hardware
+│   │   └── WaveformBar.tsx    # Audio waveform visualization bar
+│   ├── hooks/                 # Audio player (mpv), queue, search, playlists, stats, lyrics, scrobbler, theme hooks
+│   ├── services/              # SQLite database bridge and Last.fm scrobbler API client
+│   ├── utils/                 # Sub-utilities (md5 hashing for caching/scrobbling)
+│   ├── constants.ts           # Onboarding presets, genres, audio formats, and system defaults
 │   ├── types.ts               # Core TypeScript type definitions
-│   ├── utils.ts               # Utility helpers, metadata parsers, and validators
-│   └── App.tsx                # Main view router and keyboard shortcut listeners
+│   ├── utils.ts               # Metadata parsers, artist splitting, formatters, and color utilities
+│   ├── App.css                # Global theme variables, animations, and component styles
+│   └── App.tsx                # Main view router, global shortcuts, and state orchestrator
 ├── src-tauri/
 │   ├── src/
-│   │   ├── cache.rs           # Audio cache management and LRU cleaner
-│   │   ├── db.rs              # Native SQLite persistence and analytics storage
-│   │   ├── downloader.rs      # Multi-format download pipeline and tag embedder
-│   │   ├── metadata.rs        # Audio tag extraction and waveform generator
-│   │   ├── tray.rs            # System tray icon and menu controls
-│   │   └── main.rs            # Rust audio engine, YouTube Music scraper, and Discord RPC
+│   │   ├── cache.rs           # Audio cache management and background LRU cleaner
+│   │   ├── db.rs              # Native SQLite persistence, history, and listening analytics
+│   │   ├── downloader.rs      # Multi-format download pipeline and tag embedder (ffmpeg)
+│   │   ├── metadata.rs        # Audio tag extraction, cover extraction, and waveform generator
+│   │   ├── tray.rs            # System tray icon and OS menu controls
+│   │   └── main.rs            # Native mpv audio engine, YouTube Music scraper, IPC, and Discord RPC
 │   ├── Cargo.toml             # Rust dependencies
-│   └── tauri.conf.json        # Tauri v2 native configuration
-└── packaging/                 # Linux packaging scripts (PKGBUILD, desktop file)
+│   └── tauri.conf.json        # Tauri v2 native desktop configuration
+├── packaging/                 # Linux packaging scripts (Arch PKGBUILD, .desktop file)
+└── scripts/                   # Dependency setup and automated build helpers
 ```
 
 ---
@@ -247,7 +255,7 @@ veluna/
 |---|---|---|
 | Frontend | React 19 + TypeScript | UI state, component tree, virtualized list rendering |
 | Shell | Tauri v2 | Native desktop windowing, OS integration, secure IPC bridge |
-| Audio Backend | Rust (rodio / symphonia) | Low-latency audio decoding, software EQ, gapless playback |
+| Audio Backend | mpv via Rust IPC | Low-latency audio decoding, software EQ, gapless playback |
 | Media Extractor | yt-dlp | YouTube Music search, streaming stream extraction, downloading |
 | Audio Tools | ffprobe / ffmpeg | Audio tag extraction, waveform peak generation, format transcoding |
 | Linux Integration | zbus | MPRIS2 D-Bus service (`org.mpris.MediaPlayer2.veluna`) |

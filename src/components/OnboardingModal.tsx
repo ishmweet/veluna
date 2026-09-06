@@ -34,7 +34,7 @@ const CategoryCard = React.memo(({
       style={{
         padding: '12px 14px',
         borderRadius: '10px',
-        background: isSelected ? 'rgba(57, 255, 20, 0.08)' : 'var(--v-bg2, #141212)',
+        background: isSelected ? 'rgba(var(--v-accent-rgb), 0.08)' : 'var(--v-bg2, #141212)',
         border: isSelected ? '1px solid var(--v-accent)' : '1px solid var(--v-bdr2)',
         cursor: 'pointer',
         transition: 'border-color 0.12s ease, background 0.12s ease',
@@ -581,7 +581,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                           display: 'flex',
                           alignItems: 'center',
                           gap: '12px',
-                          background: isSelected ? 'rgba(57, 255, 20, 0.08)' : 'var(--v-bg2, #141212)',
+                          background: isSelected ? 'rgba(var(--v-accent-rgb), 0.08)' : 'var(--v-bg2, #141212)',
                           border: isSelected ? '1px solid var(--v-accent)' : '1px solid var(--v-bdr2)',
                           borderRadius: '10px',
                           padding: '8px 12px',
@@ -664,8 +664,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '4px',
-                      background: 'rgba(57, 255, 20, 0.12)',
-                      border: '1px solid rgba(57, 255, 20, 0.3)',
+                      background: 'rgba(var(--v-accent-rgb), 0.12)',
+                      border: '1px solid rgba(var(--v-accent-rgb), 0.3)',
                       color: 'var(--v-accent)',
                       borderRadius: '9999px',
                       padding: '3px 10px',
@@ -702,7 +702,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    background: 'rgba(57, 255, 20, 0.12)',
+                    background: 'rgba(var(--v-accent-rgb), 0.12)',
                     border: '1px dashed var(--v-accent)',
                     color: 'var(--v-accent)',
                     borderRadius: '9999px',
@@ -727,7 +727,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: isSelected ? 'rgba(57, 255, 20, 0.1)' : 'var(--v-bg2, #141212)',
+                      background: isSelected ? 'rgba(var(--v-accent-rgb), 0.1)' : 'var(--v-bg2, #141212)',
                       border: isSelected ? '1px solid var(--v-accent)' : '1px solid var(--v-bdr2)',
                       color: isSelected ? 'var(--v-accent)' : 'var(--v-fg2)',
                       borderRadius: '9999px',
@@ -831,7 +831,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 alignItems: 'center',
                 gap: '6px',
                 transition: 'all 0.15s ease',
-                boxShadow: '0 0 12px rgba(57, 255, 20, 0.25)'
+                boxShadow: '0 0 12px rgba(var(--v-accent-rgb), 0.25)'
               }}
             >
               {isFinishing ? (

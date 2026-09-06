@@ -17,6 +17,7 @@
   --v-bdr2: rgba(255, 255, 255, 0.08);
   --v-bdr3: rgba(255, 255, 255, 0.12);
   --v-accent: #e2ddd9;
+  --v-accent-rgb: 226, 221, 217;
 }
 
 [data-theme="obsidian"] {

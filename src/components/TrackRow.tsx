@@ -1,7 +1,7 @@
 import React from 'react';
 import { Play, Music, Heart, Download, X, MoreVertical } from 'lucide-react';
 import { Track } from '../types';
-import { getTrackGradient, parseTrackMeta } from '../utils';
+import { getTrackGradient, parseTrackMeta, parseArtistParts } from '../utils';
 
 export type TrackRowProps = {
   track: Track;
@@ -87,7 +87,7 @@ export const TrackRow = React.memo(({
         </svg>
       ) : isActive && isPlaying ? (
         <div style={{display:'flex',gap:'2px',alignItems:'flex-end',height:'14px',justifyContent:'center'}}>
-          {[100,65,80].map((h,i) => <div key={i} style={{width:'2.5px',background:'#9e9894',borderRadius:'1px',height:`${h}%`,animation:`barBounce ${0.7+i*0.12}s ease-in-out ${i*110}ms infinite`,transformOrigin:'bottom'}} />)}
+          {[100,65,80].map((h,i) => <div key={i} style={{width:'2.5px',background:'var(--v-accent)',borderRadius:'1px',height:`${h}%`,animation:`barBounce ${0.7+i*0.12}s ease-in-out ${i*110}ms infinite`,transformOrigin:'bottom'}} />)}
         </div>
       ) : isHovered ? (
         <Play size={13} style={{fill:'#e2ddd9',color:'#e2ddd9',margin:'0 auto'}} />
@@ -132,35 +132,28 @@ export const TrackRow = React.memo(({
             {displayArtist && (
               <div className="v-track__artist" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
                 {(() => {
-                  const raw = displayArtist;
-                  const parts = raw.split(/(?:,\s*|;\s*|\s+ft\.\s+|\s+feat\.\s+|\s+&\s+)/i).map(s => s.trim()).filter(Boolean);
-                  if (parts.length <= 1) {
+                  const parts = parseArtistParts(displayArtist);
+                  return parts.map((part, idx) => {
+                    if (part.isSeparator) {
+                      return (
+                        <span key={idx} style={{ color: 'var(--v-fg3)', pointerEvents: 'none' }}>
+                          {part.name}
+                        </span>
+                      );
+                    }
                     return (
                       <span
-                        onClick={onArtistClick ? (e) => { e.stopPropagation(); onArtistClick(raw); } : undefined}
+                        key={idx}
+                        onClick={onArtistClick ? (e) => { e.stopPropagation(); onArtistClick(part.name); } : undefined}
                         style={onArtistClick ? { cursor: 'pointer', transition: 'color 0.12s' } : undefined}
-                        title={onArtistClick ? `View ${raw} profile` : undefined}
-                        onMouseEnter={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-accent)'; } : undefined}
-                        onMouseLeave={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-fg3)'; } : undefined}
+                        title={onArtistClick ? `View ${part.name} profile` : undefined}
+                        onMouseEnter={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-accent)'; e.currentTarget.style.textDecoration = 'underline'; } : undefined}
+                        onMouseLeave={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-fg3)'; e.currentTarget.style.textDecoration = 'none'; } : undefined}
                       >
-                        {raw}
+                        {part.name}
                       </span>
                     );
-                  }
-                  return parts.map((part, idx) => (
-                    <React.Fragment key={idx}>
-                      {idx > 0 && <span style={{ color: 'var(--v-fg3)', margin: '0 3px', pointerEvents: 'none' }}>, </span>}
-                      <span
-                        onClick={onArtistClick ? (e) => { e.stopPropagation(); onArtistClick(part); } : undefined}
-                        style={onArtistClick ? { cursor: 'pointer', transition: 'color 0.12s' } : undefined}
-                        title={onArtistClick ? `View ${part} profile` : undefined}
-                        onMouseEnter={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-accent)'; } : undefined}
-                        onMouseLeave={onArtistClick ? (e) => { e.currentTarget.style.color = 'var(--v-fg3)'; } : undefined}
-                      >
-                        {part}
-                      </span>
-                    </React.Fragment>
-                  ));
+                  });
                 })()}
               </div>
             )}

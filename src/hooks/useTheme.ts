@@ -72,6 +72,8 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--v-accent', accentColor);
+    const rgb = hexToRgb(accentColor);
+    document.documentElement.style.setProperty('--v-accent-rgb', rgb);
     saveLS('vg_accentColor', accentColor);
   }, [accentColor]);
 

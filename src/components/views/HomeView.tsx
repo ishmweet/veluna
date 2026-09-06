@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { Track, Playlist, LocalTrack, CtxMenu, SettingsTab, FollowedArtist } from '../../types';
 import { GENRES, matchGenreTrack } from '../../constants';
-import { getTrackGradient, cleanArtist } from '../../utils';
+import { invoke } from '@tauri-apps/api/core';
+import { getTrackGradient, cleanArtist, globalArtistAvatarCache } from '../../utils';
 import { TrackRow, TrackRowSkeleton } from '../TrackRow';
 import { VirtualTrackList } from '../VirtualTrackList';
 import { BatchActionBar } from '../BatchActionBar';
@@ -240,6 +241,186 @@ export const VelunaGenreIcon: React.FC<{ id: string; size?: number; style?: Reac
   }
 };
 
+const ArtistSpotlightCard: React.FC<{
+  artistName: string;
+  onArtistClick: (name: string, avatarUrl?: string) => void;
+  followedArtists?: FollowedArtist[];
+}> = React.memo(({ artistName, onArtistClick, followedArtists = [] }) => {
+  const isTrackCover = (url?: string) => !url || url.includes('/vi/') || url.includes('mqdefault') || url.includes('hqdefault') || url.includes('maxresdefault');
+
+  const [avatar, setAvatar] = React.useState<string>(() => {
+    const key = artistName.toLowerCase();
+    const cached = globalArtistAvatarCache.get(key);
+    if (cached && !isTrackCover(cached)) return cached;
+    const followed = followedArtists.find(a => a.name.toLowerCase() === key && a.avatar && !isTrackCover(a.avatar));
+    if (followed?.avatar) return followed.avatar;
+    try {
+      const thumbs = JSON.parse(localStorage.getItem('vg_artist_thumbs') || '{}');
+      if (thumbs[key] && !isTrackCover(thumbs[key])) return thumbs[key];
+    } catch {}
+    return '';
+  });
+  const [isLoading, setIsLoading] = React.useState<boolean>(!avatar);
+
+  React.useEffect(() => {
+    const key = artistName.toLowerCase();
+    const cached = globalArtistAvatarCache.get(key);
+    if (cached && !isTrackCover(cached)) {
+      setAvatar(cached);
+      setIsLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsLoading(true);
+
+    const fetchArtistPfp = async () => {
+      try {
+        const res = await invoke<string>('search_youtube_artists', { query: artistName });
+        if (isCancelled) return;
+        const lines = res.trim().split('\n').filter(Boolean);
+        let foundPfp = '';
+        for (const line of lines) {
+          const parts = line.split('====');
+          const pfp = parts[1]?.trim();
+          if (pfp && pfp.startsWith('http') && !isTrackCover(pfp)) {
+            foundPfp = pfp;
+            break;
+          }
+        }
+        if (foundPfp) {
+          globalArtistAvatarCache.set(key, foundPfp);
+          try {
+            const thumbs = JSON.parse(localStorage.getItem('vg_artist_thumbs') || '{}');
+            thumbs[key] = foundPfp;
+            localStorage.setItem('vg_artist_thumbs', JSON.stringify(thumbs));
+          } catch {}
+          if (!isCancelled) {
+            setAvatar(foundPfp);
+          }
+        }
+      } catch {
+      } finally {
+        if (!isCancelled) setIsLoading(false);
+      }
+    };
+
+    fetchArtistPfp();
+    return () => { isCancelled = true; };
+  }, [artistName]);
+
+  return (
+    <div
+      onClick={() => onArtistClick(artistName, avatar || undefined)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 18px',
+        background: 'linear-gradient(135deg, rgba(var(--v-accent-rgb), 0.08) 0%, var(--v-bg2, #141212) 100%)',
+        border: '1px solid rgba(var(--v-accent-rgb), 0.25)',
+        borderRadius: '12px',
+        marginBottom: '16px',
+        cursor: 'pointer',
+        transition: 'all 0.15s ease'
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'var(--v-accent)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'rgba(var(--v-accent-rgb), 0.25)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            overflow: 'hidden',
+            background: getTrackGradient(artistName, 'artist'),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '2px solid var(--v-accent)',
+            flexShrink: 0,
+            position: 'relative'
+          }}
+        >
+          <Music size={18} style={{ color: 'rgba(255,255,255,0.3)', position: 'absolute' }} />
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={artistName}
+              referrerPolicy="no-referrer"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+              onError={e => {
+                e.currentTarget.style.display = 'none';
+              }}
+              loading="eager"
+              decoding="async"
+            />
+          ) : isLoading ? (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,0.3)'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                border: '2px solid rgba(255,255,255,0.2)',
+                borderTopColor: 'var(--v-accent)',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+            </div>
+          ) : null}
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--v-accent)' }}>
+              Artist
+            </span>
+            <Sparkles size={11} style={{ color: 'var(--v-accent)' }} />
+          </div>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--v-fg)', marginTop: '2px' }}>
+            {artistName}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--v-fg3)', marginTop: '2px' }}>
+            View artist profile, banner & all-time top songs
+          </div>
+        </div>
+      </div>
+
+      <button
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'var(--v-accent)',
+          color: '#000',
+          border: 'none',
+          borderRadius: '9999px',
+          padding: '7px 16px',
+          fontSize: '12px',
+          fontWeight: 700,
+          cursor: 'pointer',
+          flexShrink: 0
+        }}
+      >
+        <span>View Artist</span>
+        <ChevronRight size={14} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+});
+
 export const HomeView: React.FC<HomeViewProps> = React.memo(({
   searchQuery,
   setSearchQuery,
@@ -440,6 +621,16 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
   } else {
     greeting = 'Good Evening';
   }
+
+  const hasHomeContent = useMemo(() => {
+    return (
+      quickPicks.length > 0 ||
+      recommendedTracks.length > 0 ||
+      playHistory.length > 0 ||
+      localTracks.length > 0 ||
+      playlists.length > 0
+    );
+  }, [quickPicks.length, recommendedTracks.length, playHistory.length, localTracks.length, playlists.length]);
 
   const scrollShelf = (e: React.MouseEvent, direction: 'left' | 'right') => {
     const btn = e.currentTarget as HTMLElement;
@@ -649,7 +840,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar" style={{padding:"24px 30px 140px",zIndex:10}} onClick={()=>setShowHistory(false)}>
-        {!hasSearched && !isSearching && quickPicks.length === 0 && (
+        {!hasSearched && !isSearching && !hasHomeContent && (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",minHeight:"280px",gap:"20px"}}>
             <div className="relative">
               <div style={{width:'56px',height:'56px',borderRadius:'12px',background:'var(--v-bg2)',border:'1px solid var(--v-bdr2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -666,7 +857,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
           </div>
         )}
 
-        {!hasSearched && !isSearching && quickPicks.length > 0 && isHydrated && (
+        {!hasSearched && !isSearching && hasHomeContent && isHydrated && (
           <div style={{display:"flex",flexDirection:"column",gap:"36px",paddingTop:"4px"}}>
             {/* Hero Greeting Banner */}
             <div style={{
@@ -695,7 +886,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 gap: '12px',
                 alignItems: 'center'
               }}>
-                {quickPicks.length > 0 && (
+                {quickPicks.length > 0 ? (
                   <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                     <button
                       onClick={() => handlePlayInContext(quickPicks[0], quickPicks)}
@@ -727,7 +918,39 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                       <span>Shuffle</span>
                     </button>
                   </div>
-                )}
+                ) : (recommendedTracks && recommendedTracks.length > 0) ? (
+                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <button
+                      onClick={() => handlePlayInContext(recommendedTracks[0], recommendedTracks)}
+                      style={{
+                        display:'flex',alignItems:'center',gap:'6px',padding:'7px 14px',borderRadius:'20px',
+                        background:'var(--v-accent)',color:'#0c0b0b',border:'none',fontSize:'12px',fontWeight:700,cursor:'pointer',
+                        boxShadow:'0 4px 14px rgba(0,0,0,0.4)',transition:'transform 0.15s ease'
+                      }}
+                      onMouseEnter={e=>e.currentTarget.style.transform='scale(1.04)'}
+                      onMouseLeave={e=>e.currentTarget.style.transform='none'}
+                    >
+                      <Play size={12} fill="#0c0b0b" />
+                      <span>Play Picks</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const shuffled = [...recommendedTracks].sort(() => 0.5 - Math.random());
+                        if (shuffled[0]) handlePlayInContext(shuffled[0], shuffled);
+                      }}
+                      style={{
+                        display:'flex',alignItems:'center',gap:'6px',padding:'7px 14px',borderRadius:'20px',
+                        background:'rgba(255,255,255,0.06)',color:'var(--v-fg)',border:'1px solid rgba(255,255,255,0.08)',
+                        fontSize:'12px',fontWeight:600,cursor:'pointer',transition:'background 0.15s ease'
+                      }}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.1)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+                    >
+                      <Shuffle size={12} />
+                      <span>Shuffle</span>
+                    </button>
+                  </div>
+                ) : null}
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -966,8 +1189,9 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
               </div>
             )}
 
-            <div>
-              <div style={{
+            {quickPicks && quickPicks.length > 0 && (
+              <div>
+                <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1139,6 +1363,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 })}
               </div>
             </div>
+          )}
 
             <div className="v-home-split-layout">
               <div className="v-home-main-col">
@@ -1937,7 +2162,12 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                           }}>
                             <Music size={13} style={{ position: 'absolute', color: 'rgba(255,255,255,0.25)' }} />
                             {artist.avatar && (
-                              <img src={artist.avatar} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img
+                                src={artist.avatar}
+                                alt={artist.name}
+                                referrerPolicy="no-referrer"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1990,14 +2220,14 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                           border: '1px solid rgba(255, 255, 255, 0.03)',
                           transition: 'all 0.15s ease'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(57, 255, 20, 0.04)'; e.currentTarget.style.borderColor = 'rgba(57, 255, 20, 0.2)'; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(var(--v-accent-rgb), 0.04)'; e.currentTarget.style.borderColor = 'rgba(var(--v-accent-rgb), 0.2)'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.03)'; }}
                       >
                         <div style={{
                           width: '32px',
                           height: '32px',
                           borderRadius: '8px',
-                          background: 'rgba(57, 255, 20, 0.1)',
+                          background: 'rgba(var(--v-accent-rgb), 0.1)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2168,96 +2398,13 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({
                 const detectedName = firstMatch ? cleanArtist(firstMatch.artist) : (activeTracks[0] ? cleanArtist(activeTracks[0].artist) : searchQuery.trim());
                 const isGeneric = !detectedName || ['various artists', 'unknown', 'youtube', 'various', 'artist'].includes(detectedName.toLowerCase());
                 if (isGeneric || !onArtistClick) return null;
-                const avatar = firstMatch?.cover || activeTracks[0]?.cover;
 
                 return (
-                  <div
-                    onClick={() => onArtistClick(detectedName, avatar)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 18px',
-                      background: 'linear-gradient(135deg, rgba(57, 255, 20, 0.08) 0%, var(--v-bg2, #141212) 100%)',
-                      border: '1px solid rgba(57, 255, 20, 0.25)',
-                      borderRadius: '12px',
-                      marginBottom: '16px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = 'var(--v-accent)';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = 'rgba(57, 255, 20, 0.25)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: '50%',
-                          overflow: 'hidden',
-                          background: getTrackGradient(detectedName, 'artist'),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: '2px solid var(--v-accent)',
-                          flexShrink: 0,
-                          position: 'relative'
-                        }}
-                      >
-                        <Music size={18} style={{ color: 'rgba(255,255,255,0.3)', position: 'absolute' }} />
-                        {avatar && (
-                          <img
-                            src={avatar}
-                            alt={detectedName}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
-                            onError={e => { e.currentTarget.style.display = 'none'; }}
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--v-accent)' }}>
-                            Artist
-                          </span>
-                          <Sparkles size={11} style={{ color: 'var(--v-accent)' }} />
-                        </div>
-                        <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--v-fg)', marginTop: '2px' }}>
-                          {detectedName}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--v-fg3)', marginTop: '2px' }}>
-                          View artist profile, banner & all-time top songs
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        background: 'var(--v-accent)',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '9999px',
-                        padding: '7px 16px',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        flexShrink: 0
-                      }}
-                    >
-                      <span>View Artist</span>
-                      <ChevronRight size={14} strokeWidth={2.5} />
-                    </button>
-                  </div>
+                  <ArtistSpotlightCard
+                    artistName={detectedName}
+                    onArtistClick={onArtistClick}
+                    followedArtists={followedArtists}
+                  />
                 );
               })()}
 

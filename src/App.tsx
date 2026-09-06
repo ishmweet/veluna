@@ -33,6 +33,7 @@ import {
   parseTrackMeta,
   findDuplicateTracks,
   fetchArtistYouTubeTracks,
+  globalArtistAvatarCache,
 } from './utils';
 import { getStarterRecommendations } from './constants';
 
@@ -575,11 +576,16 @@ export function App() {
       return;
     }
 
+    // Validate avatarUrl to ensure it is NOT a song cover
+    const isTrackCover = (url?: string) => !url || url.includes('/vi/') || url.includes('mqdefault') || url.includes('hqdefault') || url.includes('maxresdefault');
+    const cachedPfp = globalArtistAvatarCache.get(rawName.toLowerCase());
+    const initialAvatar = (!isTrackCover(avatarUrl) ? avatarUrl : undefined) || cachedPfp;
+
     // Set optimistic placeholder strictly for THIS artist
     setArtistPageData({
       name: rawName,
-      avatar: avatarUrl,
-      banner: avatarUrl,
+      avatar: initialAvatar,
+      banner: initialAvatar,
       topTracks: []
     });
     setIsArtistLoading(true);
@@ -591,15 +597,17 @@ export function App() {
 
       const lines = res.trim().split('\n').filter(Boolean);
       let canonicalName = rawName;
-      let finalAvatar = avatarUrl;
-      let finalBanner = avatarUrl;
+      let finalAvatar = initialAvatar;
+      let finalBanner = initialAvatar;
       const tracks: Track[] = [];
 
       lines.forEach((line, i) => {
         if (line.startsWith('ARTIST_INFO====')) {
           const parts = line.split('====');
           if (parts[1]?.trim()) canonicalName = parts[1].trim();
-          if (parts[2]?.trim() && parts[2].startsWith('http')) finalAvatar = parts[2].trim();
+          if (parts[2]?.trim() && parts[2].startsWith('http') && !isTrackCover(parts[2].trim())) {
+            finalAvatar = parts[2].trim();
+          }
           if (parts[3]?.trim() && parts[3].startsWith('http')) finalBanner = parts[3].trim();
           return;
         }
@@ -621,9 +629,35 @@ export function App() {
         });
       });
 
-      if (!finalAvatar && tracks.length > 0) {
-        finalAvatar = tracks[0].cover;
+      // If finalAvatar is missing or was a track cover, fetch the real YouTube artist profile picture
+      if (isTrackCover(finalAvatar)) {
+        const cached = globalArtistAvatarCache.get(canonicalName.toLowerCase()) || globalArtistAvatarCache.get(rawName.toLowerCase());
+        if (cached && !isTrackCover(cached)) {
+          finalAvatar = cached;
+        } else {
+          try {
+            const ytArtRes = await invoke<string>('search_youtube_artists', { query: canonicalName });
+            for (const artLine of ytArtRes.trim().split('\n')) {
+              const artParts = artLine.split('====');
+              const foundPfp = artParts[1]?.trim();
+              if (foundPfp && foundPfp.startsWith('http') && !isTrackCover(foundPfp)) {
+                finalAvatar = foundPfp;
+                globalArtistAvatarCache.set(canonicalName.toLowerCase(), foundPfp);
+                globalArtistAvatarCache.set(rawName.toLowerCase(), foundPfp);
+                break;
+              }
+            }
+          } catch {}
+        }
       }
+
+      if (isTrackCover(finalAvatar)) {
+        finalAvatar = undefined;
+      } else if (finalAvatar) {
+        globalArtistAvatarCache.set(canonicalName.toLowerCase(), finalAvatar);
+        globalArtistAvatarCache.set(rawName.toLowerCase(), finalAvatar);
+      }
+
       if (!finalBanner) {
         finalBanner = finalAvatar;
       }

@@ -54,11 +54,16 @@ export const lightenColor = (hex: string, percent: number): string => {
 };
 
 export const hexToRgb = (hex: string): string => {
-  const cleaned = hex.replace('#', '');
-  if (cleaned.length !== 6) return "0, 0, 0";
+  if (!hex || typeof hex !== 'string') return "226, 221, 217";
+  let cleaned = hex.replace('#', '').trim();
+  if (cleaned.length === 3) {
+    cleaned = cleaned.split('').map(c => c + c).join('');
+  }
+  if (cleaned.length !== 6) return "226, 221, 217";
   const r = parseInt(cleaned.substring(0, 2), 16);
   const g = parseInt(cleaned.substring(2, 4), 16);
   const b = parseInt(cleaned.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return "226, 221, 217";
   return `${r}, ${g}, ${b}`;
 };
 
@@ -77,6 +82,54 @@ export const cleanArtist = (a?: string | null): string => {
 
   return t;
 };
+
+export interface ArtistPart {
+  name: string;
+  isSeparator: boolean;
+}
+
+export function parseArtistParts(rawArtist?: string | null): ArtistPart[] {
+  if (!rawArtist) return [];
+  const cleaned = cleanArtist(rawArtist);
+  if (!cleaned) return [];
+
+  // Protect specific artist names containing commas or ampersands
+  let text = cleaned;
+  const protections: { placeholder: string; original: string }[] = [
+    { placeholder: '__TYLER_THE_CREATOR__', original: 'Tyler, The Creator' },
+    { placeholder: '__EARTH_WIND_FIRE__', original: 'Earth, Wind & Fire' },
+    { placeholder: '__CROSBY_STILLS_NASH__', original: 'Crosby, Stills & Nash' },
+    { placeholder: '__CROSBY_STILLS_NASH_YOUNG__', original: 'Crosby, Stills, Nash & Young' },
+    { placeholder: '__SIMON_GARFUNKEL__', original: 'Simon & Garfunkel' },
+  ];
+  for (const p of protections) {
+    text = text.replace(new RegExp(p.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), p.placeholder);
+  }
+
+  // Split on delimiters while capturing separators
+  const tokens = text.split(/(\s*(?:,\s*|;\s*|\s+ft\.?\s+|\s+feat\.?\s+|\s+featuring\s+|\s+&\s+|\s+\/\s+)\s*)/i);
+
+  const result: ArtistPart[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    let token = tokens[i];
+    if (!token) continue;
+    for (const p of protections) {
+      token = token.replace(new RegExp(p.placeholder, 'g'), p.original);
+    }
+    const isSeparator = i % 2 === 1;
+    if (!isSeparator && !token.trim()) continue;
+    result.push({
+      name: isSeparator ? token : token.trim(),
+      isSeparator
+    });
+  }
+
+  if (result.length === 0) {
+    return [{ name: cleaned, isSeparator: false }];
+  }
+
+  return result;
+}
 
 export function parseTrackMeta(rawTitle: string, rawArtist?: string | null): { title: string; artist: string } {
   let title = (rawTitle || '').trim();

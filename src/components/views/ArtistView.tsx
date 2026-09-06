@@ -8,6 +8,7 @@ import {
   Clock,
   Sparkles,
   Share2,
+  Check,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Track, CtxMenu, ArtistPageData, Playlist } from '../../types';
@@ -88,17 +89,20 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
     [topTracks, multiSelect.selectedUrls]
   );
 
+  const isTrackCover = (url?: string | null) => !url || url.includes('/vi/') || url.includes('mqdefault') || url.includes('hqdefault') || url.includes('maxresdefault');
+
   const avatarUrl = useMemo(() => {
-    if (currentArtistData?.avatar) return currentArtistData.avatar;
-    if (topTracks.length > 0 && topTracks[0].cover) return topTracks[0].cover;
+    if (currentArtistData?.avatar && !isTrackCover(currentArtistData.avatar)) return currentArtistData.avatar;
+    const cached = globalArtistAvatarCache.get(artistName.toLowerCase());
+    if (cached && !isTrackCover(cached)) return cached;
     return null;
-  }, [currentArtistData, topTracks]);
+  }, [currentArtistData, artistName]);
 
   const bannerUrl = useMemo(() => {
-    if (currentArtistData?.banner) return currentArtistData.banner;
-    if (topTracks.length > 0 && topTracks[0].cover) return topTracks[0].cover;
+    if (currentArtistData?.banner && !isTrackCover(currentArtistData.banner)) return currentArtistData.banner;
+    if (avatarUrl) return avatarUrl;
     return null;
-  }, [currentArtistData, topTracks]);
+  }, [currentArtistData, avatarUrl]);
 
   const similarArtists = useMemo(() => {
     const list: string[] = [];
@@ -255,6 +259,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
               <img
                 src={avatarUrl}
                 alt={artistName}
+                referrerPolicy="no-referrer"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -263,7 +268,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   inset: 0
                 }}
                 onError={e => { e.currentTarget.style.display = 'none'; }}
-                loading="lazy"
+                loading="eager"
                 decoding="async"
               />
             )}
@@ -277,7 +282,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  background: 'rgba(57, 255, 20, 0.12)',
+                  background: 'rgba(var(--v-accent-rgb), 0.12)',
                   color: 'var(--v-accent)',
                   padding: '2px 8px',
                   borderRadius: '4px',
@@ -287,7 +292,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   textTransform: 'uppercase'
                 }}
               >
-                <Sparkles size={11} strokeWidth={2.5} />
+                <Check size={11} strokeWidth={3} />
                 Verified Artist
               </span>
             </div>
@@ -332,7 +337,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   cursor: topTracks.length === 0 ? 'not-allowed' : 'pointer',
                   opacity: topTracks.length === 0 ? 0.6 : 1,
                   transition: 'all 0.15s ease',
-                  boxShadow: '0 0 16px rgba(57, 255, 20, 0.28)'
+                  boxShadow: '0 0 16px rgba(var(--v-accent-rgb), 0.28)'
                 }}
               >
                 <Play size={15} fill="currentColor" />
@@ -375,7 +380,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: isFollowed ? 'rgba(57, 255, 20, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                  background: isFollowed ? 'rgba(var(--v-accent-rgb), 0.12)' : 'rgba(255, 255, 255, 0.05)',
                   color: isFollowed ? 'var(--v-accent)' : 'var(--v-fg2)',
                   border: isFollowed ? '1px solid var(--v-accent)' : '1px solid var(--v-bdr2)',
                   borderRadius: '9999px',
@@ -638,7 +643,7 @@ export const ArtistView: React.FC<ArtistViewProps> = React.memo(({
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.borderColor = 'var(--v-accent)';
-                    e.currentTarget.style.background = 'rgba(57, 255, 20, 0.04)';
+                    e.currentTarget.style.background = 'rgba(var(--v-accent-rgb), 0.04)';
                     e.currentTarget.style.transform = 'translateY(-2px)';
                   }}
                   onMouseLeave={e => {

@@ -1080,9 +1080,16 @@ async fn get_artist_page_details(artist_name: String) -> Result<String, String> 
 
     // 2. If browse_id is available, fetch exact artist browse discography
     if !browse_id.is_empty() {
-        if let Some((b_avatar, b_banner, b_tracks)) = fetch_artist_browse_details(&browse_id).await {
-            if !b_avatar.is_empty() { avatar = b_avatar; }
-            if !b_banner.is_empty() { banner = b_banner; }
+        if let Some((b_header_img, b_banner, b_tracks)) = fetch_artist_browse_details(&browse_id).await {
+            if !b_banner.is_empty() {
+                banner = b_banner;
+            } else if !b_header_img.is_empty() {
+                banner = b_header_img;
+            }
+            // Only use browse header image as avatar if we didn't already get the artist's real circular pfp in step 1
+            if avatar.is_empty() && !banner.is_empty() {
+                avatar = banner.clone();
+            }
             if !b_tracks.is_empty() {
                 for t in b_tracks {
                     let parts: Vec<&str> = t.split("====").collect();
@@ -1157,6 +1164,20 @@ async fn get_artist_page_details(artist_name: String) -> Result<String, String> 
                     let vid = parts[3].trim();
                     if !vid.is_empty() && vid != "NA" {
                         tracks.push(line.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    if avatar.is_empty() {
+        if let Ok(yt_artists) = search_youtube_artists(canonical_name.clone()).await {
+            for line in yt_artists.trim().split('\n') {
+                let parts: Vec<&str> = line.split("====").collect();
+                if let Some(a) = parts.get(1) {
+                    if a.trim().starts_with("http") {
+                        avatar = a.trim().to_string();
+                        break;
                     }
                 }
             }

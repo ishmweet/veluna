@@ -11,7 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { FollowedArtist } from '../../types';
-import { getTrackGradient } from '../../utils';
+import { getTrackGradient, globalArtistAvatarCache } from '../../utils';
 
 interface LiveArtistItem {
   name: string;
@@ -119,39 +119,78 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
         contain: 'layout'
       }}
     >
-      {/* Header */}
+      {/* Header Banner */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '28px'
+          display: "flex",
+          alignItems: "center",
+          gap: "20px",
+          marginBottom: "24px",
+          background: "linear-gradient(135deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0) 100%)",
+          border: "1px solid var(--v-bdr)",
+          borderRadius: "16px",
+          padding: "20px",
+          position: "relative",
+          overflow: "hidden",
+          flexWrap: "wrap"
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '14px',
-              background: 'rgba(57, 255, 20, 0.1)',
-              border: '1px solid rgba(57, 255, 20, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--v-accent)'
-            }}
-          >
-            <Mic2 size={22} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--v-fg)', margin: 0, letterSpacing: '-0.02em' }}>
-              Artists
-            </h1>
-            <div style={{ fontSize: '12.5px', color: 'var(--v-fg3)', marginTop: '2px' }}>
-              {followedArtists.length} {followedArtists.length === 1 ? 'followed artist' : 'followed artists'}
+        <div style={{
+          position: "absolute",
+          top: "-50px",
+          left: "-50px",
+          width: "150px",
+          height: "150px",
+          background: "var(--v-accent)",
+          opacity: 0.02,
+          borderRadius: "50%",
+          pointerEvents: "none"
+        }} />
+        <div
+          style={{
+            width: "60px",
+            height: "60px",
+            borderRadius: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+            flexShrink: 0
+          }}
+        >
+          <Mic2 size={26} style={{ color: "var(--v-accent)" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: "220px" }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 900, color: "var(--v-fg, #fff)", margin: 0, letterSpacing: "-0.02em" }}>
+            Artists
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "11.5px",
+              color: "var(--v-fg2, #9e9894)",
+              background: "rgba(255, 255, 255, 0.02)",
+              border: "1px solid var(--v-bdr)",
+              borderRadius: "20px",
+              padding: "4px 10px"
+            }}>
+              <UserCheck size={12} style={{ color: "var(--v-accent)" }} />
+              <span>{followedArtists.length} {followedArtists.length === 1 ? 'followed artist' : 'followed artists'}</span>
+            </div>
+            <div style={{
+              fontSize: "11px",
+              color: "var(--v-fg3, #8a827e)",
+              background: "rgba(255, 255, 255, 0.01)",
+              border: "1px solid rgba(255, 255, 255, 0.04)",
+              borderRadius: "20px",
+              padding: "4px 10px",
+              fontWeight: 500
+            }}>
+              YouTube Music discovery
             </div>
           </div>
         </div>
@@ -162,24 +201,26 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid var(--v-bdr2)',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid var(--v-bdr)',
             borderRadius: '28px',
             padding: '4px 6px 4px 14px',
-            width: '340px',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
-            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+            width: '320px',
+            maxWidth: '100%',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            flexShrink: 0
           }}
           onFocus={e => {
             e.currentTarget.style.borderColor = 'var(--v-accent)';
-            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(57, 255, 20, 0.15), 0 6px 20px rgba(0, 0, 0, 0.35)';
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(var(--v-accent-rgb), 0.2), 0 6px 20px rgba(0, 0, 0, 0.35)';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
           }}
           onBlur={e => {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-              e.currentTarget.style.borderColor = 'var(--v-bdr2)';
-              e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.25)';
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+              e.currentTarget.style.borderColor = 'var(--v-bdr)';
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
             }
           }}
         >
@@ -321,18 +362,18 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                       padding: '22px 14px 18px',
                       borderRadius: '16px',
                       background: 'var(--v-bg2, #141212)',
-                      border: isFollowed ? '1px solid rgba(57, 255, 20, 0.4)' : '1px solid var(--v-bdr2)',
+                      border: isFollowed ? '1px solid rgba(var(--v-accent-rgb), 0.35)' : '1px solid var(--v-bdr2)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                       position: 'relative'
                     }}
                     onMouseEnter={e => {
                       e.currentTarget.style.borderColor = 'var(--v-accent)';
-                      e.currentTarget.style.background = 'rgba(57, 255, 20, 0.04)';
+                      e.currentTarget.style.background = 'rgba(var(--v-accent-rgb), 0.04)';
                       e.currentTarget.style.transform = 'translateY(-3px)';
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = isFollowed ? 'rgba(57, 255, 20, 0.4)' : 'var(--v-bdr2)';
+                      e.currentTarget.style.borderColor = isFollowed ? 'rgba(var(--v-accent-rgb), 0.35)' : 'var(--v-bdr2)';
                       e.currentTarget.style.background = 'var(--v-bg2, #141212)';
                       e.currentTarget.style.transform = 'translateY(0)';
                     }}
@@ -344,33 +385,25 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                         height: '104px',
                         borderRadius: '50%',
                         overflow: 'hidden',
+                        marginBottom: '14px',
+                        position: 'relative',
                         background: getTrackGradient(item.name, 'artist'),
+                        border: isFollowed ? '2px solid var(--v-accent)' : '2px solid rgba(255, 255, 255, 0.08)',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        marginBottom: '14px',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.55)',
-                        border: isFollowed ? '2px solid var(--v-accent)' : '2px solid rgba(255, 255, 255, 0.12)',
-                        position: 'relative',
                         flexShrink: 0
                       }}
                     >
-                      <Music size={32} style={{ color: 'rgba(255, 255, 255, 0.25)', position: 'absolute' }} />
+                      <Music size={32} style={{ color: 'rgba(255, 255, 255, 0.2)', position: 'absolute' }} />
                       {item.avatar && (
                         <img
                           src={item.avatar}
                           alt={item.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            position: 'absolute',
-                            inset: 0,
-                            borderRadius: '50%'
-                          }}
-                          onError={e => {
-                            e.currentTarget.style.display = 'none';
-                          }}
+                          referrerPolicy="no-referrer"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
                           loading="eager"
                           decoding="async"
                         />
@@ -383,20 +416,29 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                         fontWeight: 700,
                         color: 'var(--v-fg)',
                         textAlign: 'center',
+                        lineHeight: 1.3,
+                        marginBottom: '4px',
+                        maxWidth: '100%',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        width: '100%',
-                        marginBottom: '4px'
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       {item.name}
                     </div>
 
-                    <div style={{ fontSize: '11px', color: 'var(--v-fg3)', textAlign: 'center', marginBottom: '12px' }}>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--v-fg3)',
+                        textAlign: 'center',
+                        marginBottom: '14px'
+                      }}
+                    >
                       {item.subtitle || 'Artist'}
                     </div>
 
+                    {/* Follow / Unfollow Action Button */}
                     <button
                       onClick={e => {
                         e.stopPropagation();
@@ -406,7 +448,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '5px',
-                        background: isFollowed ? 'rgba(57, 255, 20, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                        background: isFollowed ? 'rgba(var(--v-accent-rgb), 0.15)' : 'rgba(255, 255, 255, 0.06)',
                         border: isFollowed ? '1px solid var(--v-accent)' : '1px solid var(--v-bdr2)',
                         color: isFollowed ? 'var(--v-accent)' : 'var(--v-fg2)',
                         borderRadius: '9999px',
@@ -468,7 +510,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.borderColor = 'var(--v-accent)';
-                    e.currentTarget.style.background = 'rgba(57, 255, 20, 0.04)';
+                    e.currentTarget.style.background = 'rgba(var(--v-accent-rgb), 0.04)';
                     e.currentTarget.style.transform = 'translateY(-3px)';
                   }}
                   onMouseLeave={e => {
@@ -496,25 +538,31 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                     }}
                   >
                     <Music size={32} style={{ color: 'rgba(255, 255, 255, 0.25)', position: 'absolute' }} />
-                    {artist.avatar && (
-                      <img
-                        src={artist.avatar}
-                        alt={artist.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          position: 'absolute',
-                          inset: 0,
-                          borderRadius: '50%'
-                        }}
-                        onError={e => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                        loading="eager"
-                        decoding="async"
-                      />
-                    )}
+                    {(() => {
+                      const isTrackCover = (url?: string) => !url || url.includes('/vi/') || url.includes('mqdefault') || url.includes('hqdefault');
+                      const avatarSrc = (!isTrackCover(artist.avatar) ? artist.avatar : undefined) || globalArtistAvatarCache.get(artist.name.toLowerCase());
+                      if (!avatarSrc) return null;
+                      return (
+                        <img
+                          src={avatarSrc}
+                          alt={artist.name}
+                          referrerPolicy="no-referrer"
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            position: 'absolute',
+                            inset: 0,
+                            borderRadius: '50%'
+                          }}
+                          onError={e => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                          loading="eager"
+                          decoding="async"
+                        />
+                      );
+                    })()}
                   </div>
 
                   <div
@@ -554,7 +602,7 @@ export const ArtistsView: React.FC<ArtistsViewProps> = React.memo(({
                   width: '56px',
                   height: '56px',
                   borderRadius: '50%',
-                  background: 'rgba(57, 255, 20, 0.1)',
+                  background: 'rgba(var(--v-accent-rgb), 0.12)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

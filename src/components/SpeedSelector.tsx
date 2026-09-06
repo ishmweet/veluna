@@ -26,35 +26,31 @@ export const SpeedSelector = React.memo(({ speed, onChange }: SpeedSelectorProps
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "5px",
-          padding: "5px 12px",
-          borderRadius: "8px",
+          gap: "3px",
+          padding: "5px 6px",
+          borderRadius: "6px",
           fontSize: "11px",
           fontWeight: 700,
-          border: open || speed !== 1 ? "1px solid var(--v-bdr2)" : "1px solid var(--v-bdr)",
-          background: open || speed !== 1 ? "var(--v-bg3)" : "var(--v-bg2)",
+          border: "none",
+          background: open ? "rgba(255, 255, 255, 0.08)" : "transparent",
           cursor: "pointer",
-          color: open || speed !== 1 ? "var(--v-accent)" : "var(--v-fg2)",
-          transition: "all 0.12s cubic-bezier(0.16, 1, 0.3, 1)"
+          color: (open || speed !== 1) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.45)",
+          transition: "all 0.12s ease"
         }}
         onMouseEnter={e => {
-          if (!open && speed === 1) {
-            e.currentTarget.style.color = "var(--v-fg)";
-            e.currentTarget.style.borderColor = "var(--v-bdr2)";
-            e.currentTarget.style.background = "var(--v-bg3)";
-          }
+          e.currentTarget.style.color = (open || speed !== 1) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.9)";
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+          e.currentTarget.style.transform = "scale(1.08)";
         }}
         onMouseLeave={e => {
-          if (!open && speed === 1) {
-            e.currentTarget.style.color = "var(--v-fg2)";
-            e.currentTarget.style.borderColor = "var(--v-bdr)";
-            e.currentTarget.style.background = "var(--v-bg2)";
-          }
+          e.currentTarget.style.color = (open || speed !== 1) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.45)";
+          e.currentTarget.style.background = open ? "rgba(255, 255, 255, 0.08)" : "transparent";
+          e.currentTarget.style.transform = "scale(1)";
         }}
-        title="Playback Speed"
+        title={`Playback Speed: ${speed}x`}
       >
-        <Gauge size={11} />
-        {speed}x
+        <Gauge size={13} />
+        <span>{speed}x</span>
       </button>
       {open && (
         <div

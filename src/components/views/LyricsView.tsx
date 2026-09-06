@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Track, RepeatMode, LyricsData } from '../../types';
-import { formatTime, parseTrackMeta } from '../../utils';
+import { formatTime, parseTrackMeta, parseArtistParts } from '../../utils';
 
 interface LyricsViewProps {
   showLyrics: boolean;
@@ -145,29 +145,52 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                   overflow:"hidden",
                   textOverflow:"ellipsis",
                   whiteSpace:"nowrap",
-                  cursor: onArtistClick && !currentTrack.url.startsWith('local://') ? 'pointer' : 'default',
-                  transition: 'color 0.12s ease'
-                }}
-                onClick={() => {
-                  if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                    setShowLyrics(false);
-                    onArtistClick(meta.artist || currentTrack.artist || "");
-                  }
-                }}
-                onMouseEnter={e => {
-                  if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.textDecoration = 'underline';
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                    e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
-                    e.currentTarget.style.textDecoration = 'none';
-                  }
+                  lineHeight: "1.2"
                 }}
               >
-                {meta.artist || currentTrack.artist}
+                {(() => {
+                  const artistParts = parseArtistParts(meta.artist || currentTrack.artist);
+                  const canClickAny = Boolean(onArtistClick && !currentTrack.url.startsWith('local://'));
+                  return artistParts.map((part, idx) => {
+                    if (part.isSeparator) {
+                      return (
+                        <span key={idx} style={{ color: "rgba(255,255,255,0.5)", pointerEvents: "none" }}>
+                          {part.name}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span
+                        key={idx}
+                        onClick={() => {
+                          if (canClickAny) {
+                            setShowLyrics(false);
+                            onArtistClick(part.name);
+                          }
+                        }}
+                        onMouseEnter={e => {
+                          if (canClickAny) {
+                            e.currentTarget.style.color = '#ffffff';
+                            e.currentTarget.style.textDecoration = 'underline';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (canClickAny) {
+                            e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                            e.currentTarget.style.textDecoration = 'none';
+                          }
+                        }}
+                        style={{
+                          cursor: canClickAny ? 'pointer' : 'default',
+                          transition: 'color 0.12s ease'
+                        }}
+                        title={canClickAny ? `View ${part.name}` : undefined}
+                      >
+                        {part.name}
+                      </span>
+                    );
+                  });
+                })()}
               </p>
             </div>
           );

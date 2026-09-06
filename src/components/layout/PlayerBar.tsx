@@ -18,7 +18,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { Track, AudioInfo, RepeatMode, CtxMenu } from '../../types';
-import { getTrackGradient, formatTime, parseDurationToSeconds, parseTrackMeta } from '../../utils';
+import { getTrackGradient, formatTime, parseDurationToSeconds, parseTrackMeta, parseArtistParts } from '../../utils';
 import { invoke } from '@tauri-apps/api/core';
 import { WaveformBar } from '../WaveformBar';
 import { SpeedSelector } from '../SpeedSelector';
@@ -172,7 +172,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
       )}
       {isPlaying&&!isLoadingTrack&&<div style={{position:"absolute",top:0,left:0,right:0,height:"1px",background:"rgba(226,221,217,0.06)"}}/>}
 
-      <div style={{display:"flex",alignItems:"center",gap:"12px",width:"240px",maxWidth:"30%",minWidth:"140px",flexShrink:1}}>
+      <div style={{display:"flex",alignItems:"center",gap:"12px",minWidth:0,maxWidth:"35%",flexShrink:0}}>
         {currentTrack ? (
           <>
             <div style={{
@@ -206,19 +206,50 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
                     </div>
                   : null}
             </div>
-            <div key={currentTrack.url} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:"1px",animation:"fadeIn 0.25s ease both"}}>
-              {(() => {
-                const meta = parseTrackMeta(currentTrack.title, currentTrack.artist);
-                return (
-                  <>
-                    <div style={{fontWeight:700,color:"#e2ddd9",fontSize:"14px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:"1.3"}}>{meta.title || currentTrack.title}</div>
-                    {isLoadingTrack && !isPlaying
-                      ? <div style={{display:"flex",alignItems:"center",height:"16px"}}>
-                          <div style={{display:"flex",gap:"3px",alignItems:"center",height:"12px"}}>
-                            {[0,1,2,3,4].map(i=><span key={i} style={{width:"2.5px",background:"#e2ddd9",borderRadius:"2px",height:"4px",animation:`velunaEqualizerWave 0.8s ease-in-out ${i*110}ms infinite`}}/>)}
+            <div
+              key={currentTrack.url}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                minWidth: 0,
+                animation: "fadeIn 0.25s ease both"
+              }}
+            >
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "1px",
+                minWidth: 0,
+                maxWidth: "190px"
+              }}>
+                {(() => {
+                  const meta = parseTrackMeta(currentTrack.title, currentTrack.artist);
+                  return (
+                    <>
+                      <div
+                        title={meta.title || currentTrack.title}
+                        style={{
+                          fontWeight: 700,
+                          color: "#e2ddd9",
+                          fontSize: "14px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          lineHeight: "1.3"
+                        }}
+                      >
+                        {meta.title || currentTrack.title}
+                      </div>
+                      {isLoadingTrack && !isPlaying ? (
+                        <div style={{ display: "flex", alignItems: "center", height: "16px" }}>
+                          <div style={{ display: "flex", gap: "3px", alignItems: "center", height: "12px" }}>
+                            {[0, 1, 2, 3, 4].map(i => (
+                              <span key={i} style={{ width: "2.5px", background: "#e2ddd9", borderRadius: "2px", height: "4px", animation: `velunaEqualizerWave 0.8s ease-in-out ${i * 110}ms infinite` }} />
+                            ))}
                           </div>
                         </div>
-                      : (
+                      ) : (
                         <div
                           style={{
                             fontSize: "12px",
@@ -226,69 +257,124 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            cursor: onArtistClick && !currentTrack.url.startsWith('local://') ? 'pointer' : 'default',
-                            transition: 'color 0.12s ease',
-                            width: 'fit-content',
-                            maxWidth: '100%'
-                          }}
-                          onClick={() => {
-                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                              onArtistClick(meta.artist || currentTrack.artist || "");
-                            }
-                          }}
-                          onMouseEnter={e => {
-                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                              e.currentTarget.style.color = '#e2ddd9';
-                              e.currentTarget.style.textDecoration = 'underline';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            if (onArtistClick && !currentTrack.url.startsWith('local://')) {
-                              e.currentTarget.style.color = '#8a807c';
-                              e.currentTarget.style.textDecoration = 'none';
-                            }
+                            maxWidth: "190px",
+                            lineHeight: "1.2"
                           }}
                         >
-                          {meta.artist || currentTrack.artist || ""}
+                          {(() => {
+                            const artistParts = parseArtistParts(meta.artist || currentTrack.artist);
+                            const canClickAny = Boolean(onArtistClick && !currentTrack.url.startsWith('local://'));
+                            return artistParts.map((part, idx) => {
+                              if (part.isSeparator) {
+                                return (
+                                  <span key={idx} style={{ color: "#8a807c", pointerEvents: "none" }}>
+                                    {part.name}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span
+                                  key={idx}
+                                  onClick={(e) => {
+                                    if (canClickAny) {
+                                      e.stopPropagation();
+                                      onArtistClick(part.name);
+                                    }
+                                  }}
+                                  onMouseEnter={e => {
+                                    if (canClickAny) {
+                                      e.currentTarget.style.color = '#e2ddd9';
+                                      e.currentTarget.style.textDecoration = 'underline';
+                                    }
+                                  }}
+                                  onMouseLeave={e => {
+                                    if (canClickAny) {
+                                      e.currentTarget.style.color = '#8a807c';
+                                      e.currentTarget.style.textDecoration = 'none';
+                                    }
+                                  }}
+                                  style={{
+                                    cursor: canClickAny ? 'pointer' : 'default',
+                                    transition: 'color 0.12s ease'
+                                  }}
+                                  title={canClickAny ? `View ${part.name}` : undefined}
+                                >
+                                  {part.name}
+                                </span>
+                              );
+                            });
+                          })()}
                         </div>
                       )}
-                  </>
-                );
-              })()}
-              {audioInfo&&!isLoadingTrack&&(
-                <div>
-                  <div className="v-player-codec-badge">
-                    {audioInfo.codec.toUpperCase()}{audioInfo.samplerate>0?` · ${Math.round(audioInfo.samplerate/1000)}kHz`:''}
-                  </div>
+                      {audioInfo && !isLoadingTrack && (
+                        <div style={{ display: "flex", alignItems: "center", marginTop: "2px" }}>
+                          <div className="v-player-codec-badge" style={{ flexShrink: 0, marginTop: 0, lineHeight: 1 }}>
+                            {audioInfo.codec.toUpperCase()}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              {!currentTrack.url.startsWith('local://') && (
+                <div style={{ display: "flex", alignItems: "center", gap: "1px", flexShrink: 0 }}>
+                  <button
+                    onClick={() => toggleLikeTrack(currentTrack)}
+                    title={isTrackLiked(currentTrack.url) ? "Unlike" : "Like"}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "5px",
+                      display: "flex",
+                      color: "#5c5755",
+                      transition: "color .12s, transform .1s"
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.15)")}
+                    onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                  >
+                    <Heart size={16} style={isTrackLiked(currentTrack.url) ? { color: "#e05555", fill: "#e05555" } : { color: "#5c5755" }} />
+                  </button>
+                  {(() => {
+                    const dl = downloadingTracks[currentTrack.url];
+                    return (
+                      <button
+                        onClick={() => handleDownload(currentTrack)}
+                        title={dl > 0 && dl < 100 ? `Downloading ${Math.round(dl)}% (Click to cancel)` : "Download"}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color: "#5c5755",
+                          transition: "color .12s, transform .1s"
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.1)")}
+                        onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                      >
+                        {dl > 0 ? (
+                          <>
+                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#e2ddd9", fontVariantNumeric: "tabular-nums" }}>{Math.round(dl)}%</span>
+                            <svg width="15" height="15" viewBox="0 0 14 14">
+                              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5" />
+                              <circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 5.5}`} strokeDashoffset={`${2 * Math.PI * 5.5 * (1 - Math.min(dl, 100) / 100)}`} style={{ transformOrigin: "7px 7px", transform: "rotate(-90deg)", transition: "stroke-dashoffset .25s" }} />
+                              {dl >= 100 && <path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />}
+                            </svg>
+                          </>
+                        ) : (
+                          <Download size={15} />
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
             </div>
-            {!currentTrack.url.startsWith('local://') && (
-              <div style={{display:"flex",alignItems:"center",gap:"2px",flexShrink:0}}>
-                <button onClick={()=>toggleLikeTrack(currentTrack)} style={{background:"none",border:"none",cursor:"pointer",padding:"5px",display:"flex",color:"#5c5755",transition:"color .12s,transform .1s"}}
-                  onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.15)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
-                  <Heart size={16} style={isTrackLiked(currentTrack.url)?{color:"#e05555",fill:"#e05555"}:{color:"#5c5755"}}/>
-                </button>
-                {(()=>{ const dl=downloadingTracks[currentTrack.url]; return (
-                  <button
-                    onClick={()=>handleDownload(currentTrack)}
-                    title={dl>0 && dl<100 ? `Downloading ${Math.round(dl)}% (Click to cancel)` : "Download"}
-                    style={{background:"none",border:"none",cursor:"pointer",padding:"5px",display:"flex",alignItems:"center",gap:"4px",color:"#5c5755",transition:"color .12s,transform .1s"}}
-                    onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.1)")} onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>
-                    {dl>0
-                      ? <>
-                          <span style={{fontSize:"10px",fontWeight:700,color:"#e2ddd9",fontVariantNumeric:"tabular-nums"}}>{Math.round(dl)}%</span>
-                          <svg width="15" height="15" viewBox="0 0 14 14">
-                            <circle cx="7" cy="7" r="5.5" fill="none" stroke="#2a2727" strokeWidth="1.5"/>
-                            <circle cx="7" cy="7" r="5.5" fill="none" stroke="#9e9894" strokeWidth="1.5" strokeLinecap="round" strokeDasharray={`${2*Math.PI*5.5}`} strokeDashoffset={`${2*Math.PI*5.5*(1-Math.min(dl,100)/100)}`} style={{transformOrigin:"7px 7px",transform:"rotate(-90deg)",transition:"stroke-dashoffset .25s"}}/>
-                            {dl>=100&&<path d="M4.5 7l2 2 3-3" stroke="#9e9894" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}
-                          </svg>
-                        </>
-                      : <Download size={15}/>}
-                  </button>
-                ); })()}
-              </div>
-            )}
           </>
         ) : (
           <>
@@ -304,11 +390,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
       </div>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"10px",padding:"0 16px",minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",position:"relative"}}>
-          <div style={{flex:1,display:"flex",justifyContent:"flex-end",alignItems:"center",paddingRight:"16px",minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"14px",flexShrink:0}}>
             <SpeedSelector speed={playbackSpeed} onChange={setPlaybackSpeed}/>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:"16px",flexShrink:0}}>
             <button
               onClick={toggleShuffle}
               title={`Shuffle: ${shuffle ? 'On' : 'Off'}`}
@@ -388,40 +472,94 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
                 }} />
               )}
             </button>
-          </div>
-          <div style={{flex:1,display:"flex",justifyContent:"flex-start",alignItems:"center",paddingLeft:"16px",minWidth:0}}>
             <button
-              title={abLoop.a===null?'Set A (loop start)':abLoop.b===null?'Set B (loop end)':'Clear A-B loop'}
-              onClick={()=>{
-                if(abLoop.a===null){const a=progressSecondsRef?.current ?? progressSeconds;setAbLoop({a,b:null});if(abLoopRef)abLoopRef.current={a,b:null};showToast(`Loop A: ${formatTime(a)}`);}
-                else if(abLoop.b===null){const b=progressSecondsRef?.current ?? progressSeconds;if(b>(abLoop.a??0)+1){setAbLoop(p=>({...p,b}));if(abLoopRef)abLoopRef.current={...abLoopRef.current,b};showToast(`Loop: ${formatTime(abLoop.a!)} → ${formatTime(b)}`);}else{showToast('B must be after A');}}
-                else{setAbLoop({a:null,b:null});if(abLoopRef)abLoopRef.current={a:null,b:null};showToast('Loop cleared');}
+              title={
+                abLoop.a === null
+                  ? 'Set A (loop start point)'
+                  : abLoop.b === null
+                  ? `Loop start: ${formatTime(abLoop.a)}. Click to set B (end point)`
+                  : `Loop active: ${formatTime(abLoop.a)} → ${formatTime(abLoop.b)}. Click or right-click to clear`
+              }
+              onClick={() => {
+                const curr = progressSecondsRef?.current ?? progressSeconds;
+                if (abLoop.a === null) {
+                  setAbLoop({ a: curr, b: null });
+                  if (abLoopRef) abLoopRef.current = { a: curr, b: null };
+                  showToast(`Loop A: ${formatTime(curr)}`);
+                } else if (abLoop.b === null) {
+                  const aVal = abLoop.a ?? 0;
+                  if (Math.abs(curr - aVal) >= 0.5) {
+                    const a = Math.min(aVal, curr);
+                    const b = Math.max(aVal, curr);
+                    setAbLoop({ a, b });
+                    if (abLoopRef) abLoopRef.current = { a, b };
+                    showToast(`Loop: ${formatTime(a)} → ${formatTime(b)}`);
+                  } else {
+                    showToast('Loop range must be at least 0.5s');
+                  }
+                } else {
+                  setAbLoop({ a: null, b: null });
+                  if (abLoopRef) abLoopRef.current = { a: null, b: null };
+                  showToast('Loop cleared');
+                }
+              }}
+              onContextMenu={e => {
+                e.preventDefault();
+                setAbLoop({ a: null, b: null });
+                if (abLoopRef) abLoopRef.current = { a: null, b: null };
+                showToast('Loop cleared');
               }}
               style={{
-                display:"flex",alignItems:"center",gap:"3px",padding:"3px 9px",
-                borderRadius:"8px",
-                border:`1px solid ${abLoop.b!==null ? "var(--v-accent)" : abLoop.a!==null ? "var(--v-bdr2)" : "var(--v-bdr)"}`,
-                fontSize:"10px",fontWeight:700,flexShrink:0,cursor:"pointer",
-                background:abLoop.b!==null ? "var(--v-bg3)" : abLoop.a!==null ? "var(--v-bg3)" : "var(--v-bg2)",
-                color:abLoop.b!==null ? "var(--v-accent)" : abLoop.a!==null ? "var(--v-fg)" : "var(--v-fg3)",
-                transition:"all .12s cubic-bezier(0.16, 1, 0.3, 1)",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: "2px",
+                padding: "6px",
+                borderRadius: "6px",
+                border: "none",
+                fontSize: "11px",
+                fontWeight: 700,
+                flexShrink: 0,
+                cursor: "pointer",
+                background: "none",
+                color: (abLoop.b !== null || abLoop.a !== null) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)",
+                transition: "all .12s ease",
+                lineHeight: 1
               }}
               onMouseEnter={e => {
-                if (abLoop.a === null && abLoop.b === null) {
-                  e.currentTarget.style.color = "var(--v-fg)";
-                  e.currentTarget.style.borderColor = "var(--v-bdr2)";
-                  e.currentTarget.style.background = "var(--v-bg3)";
-                }
+                e.currentTarget.style.color = (abLoop.b !== null || abLoop.a !== null) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.9)";
+                e.currentTarget.style.transform = "scale(1.1)";
               }}
               onMouseLeave={e => {
-                if (abLoop.a === null && abLoop.b === null) {
-                  e.currentTarget.style.color = "var(--v-fg3)";
-                  e.currentTarget.style.borderColor = "var(--v-bdr)";
-                  e.currentTarget.style.background = "var(--v-bg2)";
-                }
+                e.currentTarget.style.color = (abLoop.b !== null || abLoop.a !== null) ? "var(--v-accent)" : "rgba(255, 255, 255, 0.4)";
+                e.currentTarget.style.transform = "scale(1)";
               }}
             >
-              A·B{abLoop.b!==null?" ✓":abLoop.a!==null?" …":""}
+              <span>A·B</span>
+              {abLoop.b !== null ? (
+                <div style={{
+                  position: "absolute",
+                  bottom: "1px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "3px",
+                  height: "3px",
+                  borderRadius: "50%",
+                  background: "var(--v-accent)"
+                }} />
+              ) : abLoop.a !== null ? (
+                <div style={{
+                  position: "absolute",
+                  bottom: "1px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "3px",
+                  height: "3px",
+                  borderRadius: "50%",
+                  background: "rgba(255, 255, 255, 0.6)",
+                  animation: "velunaPulse 1s ease-in-out infinite"
+                }} />
+              ) : null}
             </button>
           </div>
         </div>

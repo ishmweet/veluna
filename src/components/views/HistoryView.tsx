@@ -13,7 +13,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { Track, HistoryItem, CtxMenu } from '../../types';
-import { getTrackGradient, cleanArtist } from '../../utils';
+import { getTrackGradient, cleanArtist, parseArtistParts } from '../../utils';
 import { VirtualTrackList } from '../VirtualTrackList';
 
 interface HistoryViewProps {
@@ -113,6 +113,7 @@ const HistoryTrackRow = React.memo(({
 
   return (
     <div
+      className={`v-track${isCurrent ? ' v-track--active' : ''}`}
       onClick={onPlay}
       onContextMenu={onContextMenu}
       onMouseEnter={onMouseEnter}
@@ -124,8 +125,10 @@ const HistoryTrackRow = React.memo(({
         height: '56px',
         padding: '0 12px',
         borderRadius: '10px',
-        background: isCurrent ? 'rgba(57,255,20,0.04)' : isHovered ? 'rgba(255,255,255,0.03)' : 'transparent',
-        border: isCurrent ? '1px solid rgba(57,255,20,0.15)' : '1px solid transparent',
+        background: isCurrent
+          ? (isHovered ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.06)')
+          : (isHovered ? 'rgba(255, 255, 255, 0.04)' : 'transparent'),
+        border: 'none',
         cursor: 'pointer',
         boxSizing: 'border-box',
         transition: 'background 0.1s ease',
@@ -219,28 +222,41 @@ const HistoryTrackRow = React.memo(({
         }}>
           {track.title}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-          <span
-            onClick={e => {
-              e.stopPropagation();
-              if (onArtistClick && track.artist) {
-                onArtistClick(displayArtist);
+        <div style={{ display: 'flex', alignItems: 'center', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {(() => {
+            const artistParts = parseArtistParts(displayArtist);
+            return artistParts.map((part, idx) => {
+              if (part.isSeparator) {
+                return (
+                  <span key={idx} style={{ color: 'var(--v-fg2)', fontSize: '11.5px', pointerEvents: 'none' }}>
+                    {part.name}
+                  </span>
+                );
               }
-            }}
-            style={{
-              fontSize: '11.5px',
-              color: 'var(--v-fg2)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              cursor: onArtistClick ? 'pointer' : 'default',
-              transition: 'color 0.1s ease'
-            }}
-            onMouseEnter={e => { if (onArtistClick) e.currentTarget.style.color = 'var(--v-fg)'; }}
-            onMouseLeave={e => { if (onArtistClick) e.currentTarget.style.color = 'var(--v-fg2)'; }}
-          >
-            {displayArtist}
-          </span>
+              return (
+                <span
+                  key={idx}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (onArtistClick) {
+                      onArtistClick(part.name);
+                    }
+                  }}
+                  style={{
+                    fontSize: '11.5px',
+                    color: 'var(--v-fg2)',
+                    cursor: onArtistClick ? 'pointer' : 'default',
+                    transition: 'color 0.1s ease'
+                  }}
+                  onMouseEnter={e => { if (onArtistClick) { e.currentTarget.style.color = 'var(--v-fg)'; e.currentTarget.style.textDecoration = 'underline'; } }}
+                  onMouseLeave={e => { if (onArtistClick) { e.currentTarget.style.color = 'var(--v-fg2)'; e.currentTarget.style.textDecoration = 'none'; } }}
+                  title={onArtistClick ? `View ${part.name}` : undefined}
+                >
+                  {part.name}
+                </span>
+              );
+            });
+          })()}
         </div>
       </div>
 
@@ -469,61 +485,79 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
         contain: 'layout'
       }}
     >
-      {/* Header */}
+      {/* Header Banner */}
       <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px',
-        paddingBottom: '20px',
-        borderBottom: '1px solid var(--v-bdr)'
+        display: "flex",
+        alignItems: "center",
+        gap: "20px",
+        marginBottom: "20px",
+        background: "linear-gradient(135deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0) 100%)",
+        border: "1px solid var(--v-bdr)",
+        borderRadius: "16px",
+        padding: "20px",
+        position: "relative",
+        overflow: "hidden"
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, rgba(57,255,20,0.12) 0%, rgba(255,255,255,0.02) 100%)',
-            border: '1px solid rgba(57,255,20,0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--v-accent)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
-          }}>
-            <History size={22} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{
-                fontSize: '22px',
-                fontWeight: 700,
-                color: 'var(--v-fg)',
-                letterSpacing: '-0.02em',
-                margin: 0
-              }}>Playback History</h1>
-              <span style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--v-fg3)',
-                background: 'rgba(255,255,255,0.04)',
-                padding: '2px 8px',
-                borderRadius: '10px'
-              }}>
-                {filteredHistory.length}
-              </span>
+        <div style={{
+          position: "absolute",
+          top: "-50px",
+          left: "-50px",
+          width: "150px",
+          height: "150px",
+          background: "var(--v-accent)",
+          opacity: 0.02,
+          borderRadius: "50%",
+          pointerEvents: "none"
+        }} />
+        <div style={{
+          width: "60px",
+          height: "60px",
+          borderRadius: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+          flexShrink: 0
+        }}>
+          <History size={26} style={{ color: "var(--v-accent)" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 900, color: "var(--v-fg, #fff)", margin: 0, letterSpacing: "-0.02em" }}>
+            Playback History
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "11.5px",
+              color: "var(--v-fg2, #9e9894)",
+              background: "rgba(255, 255, 255, 0.02)",
+              border: "1px solid var(--v-bdr)",
+              borderRadius: "20px",
+              padding: "4px 10px"
+            }}>
+              <Clock size={12} style={{ color: "var(--v-accent)" }} />
+              <span>{uniqueHistory.length} unique {uniqueHistory.length === 1 ? 'song' : 'songs'}</span>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--v-fg2)', marginTop: '2px' }}>
-              {uniqueHistory.length === 0
-                ? 'All tracks played since installation'
-                : `${uniqueHistory.length} unique ${uniqueHistory.length === 1 ? 'song' : 'songs'} played`}
+            <div style={{
+              fontSize: "11px",
+              color: "var(--v-fg3, #8a827e)",
+              background: "rgba(255, 255, 255, 0.01)",
+              border: "1px solid rgba(255, 255, 255, 0.04)",
+              borderRadius: "20px",
+              padding: "4px 10px",
+              fontWeight: 500
+            }}>
+              {playbackHistory.length} total plays recorded
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", flexShrink: 0 }}>
           {filteredHistory.length > 0 && (
             <>
               <button
@@ -532,7 +566,7 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '8px 16px',
+                  padding: '8px 18px',
                   borderRadius: '20px',
                   background: 'var(--v-accent)',
                   color: '#0c0b0b',
@@ -540,7 +574,7 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
                   fontWeight: 700,
                   border: 'none',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(57,255,20,0.25)',
+                  boxShadow: '0 4px 14px rgba(var(--v-accent-rgb), 0.28)',
                   transition: 'transform 0.12s ease'
                 }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
@@ -578,31 +612,34 @@ export const HistoryView: React.FC<HistoryViewProps> = React.memo(({
           {uniqueHistory.length > 0 && (
             <button
               onClick={handlePromptClear}
+              title="Clear all history"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '20px',
-                background: 'rgba(224,85,85,0.08)',
-                border: '1px solid rgba(224,85,85,0.2)',
-                color: '#e05555',
-                fontSize: '12.5px',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                border: '1px solid var(--v-bdr)',
+                background: 'rgba(255, 255, 255, 0.01)',
+                color: '#9e9894',
+                fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'all 0.12s ease'
+                transition: 'all 0.15s ease'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(224,85,85,0.18)';
-                e.currentTarget.style.borderColor = 'rgba(224,85,85,0.4)';
+                e.currentTarget.style.background = 'rgba(224, 85, 85, 0.12)';
+                e.currentTarget.style.borderColor = 'rgba(224, 85, 85, 0.3)';
+                e.currentTarget.style.color = '#e05555';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(224,85,85,0.08)';
-                e.currentTarget.style.borderColor = 'rgba(224,85,85,0.2)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.01)';
+                e.currentTarget.style.borderColor = 'var(--v-bdr)';
+                e.currentTarget.style.color = '#9e9894';
               }}
             >
-              <Trash2 size={14} />
-              <span>Clear History</span>
+              <Trash2 size={13} />
+              <span>Clear</span>
             </button>
           )}
         </div>
