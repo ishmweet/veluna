@@ -276,7 +276,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = React.memo(({
                                 <span
                                   key={idx}
                                   onClick={(e) => {
-                                    if (canClickAny) {
+                                    if (canClickAny && onArtistClick) {
                                       e.stopPropagation();
                                       onArtistClick(part.name);
                                     }

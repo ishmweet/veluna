@@ -163,7 +163,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                       <span
                         key={idx}
                         onClick={() => {
-                          if (canClickAny) {
+                          if (canClickAny && onArtistClick) {
                             setShowLyrics(false);
                             onArtistClick(part.name);
                           }
